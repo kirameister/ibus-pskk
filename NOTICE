@@ -1,0 +1,58 @@
+PSKK for IBus
+Copyright 2021 Akira K.
+https://github.com/kirameister/ibus-pskk
+
+This product includes software developed at,
+Esrille Inc. (http://www.esrille.com/).
+
+Except as otherwise noted, the content of this software are licensed
+under Apache 2.0 License.
+
+Please consult,
+    https://github.com/kirameister/ibus-pskk/issues
+for how to report problems.
+
+== Esrille Logo Marks ==
+
+Esrille logo marks are trademarks of Esrille Inc. All rights reserved.
+
+Esrille logo marks, including the es shield logo, are special trademarks
+to identify the products being developed and distributed by Esrille Inc.
+
+Esrille logo marks can be used by anyone if that use of the logo marks
+is nominative. The "nominative use" authorizes everyone (even commercial
+companies) to use the trademark of another if:
+
+  1. The product or service cannot be readily identified without use of
+     the trademark;
+  2. The user only uses as much of the mark as is necessary to identify
+     the product or service; and,
+  3. The user does nothing to suggest sponsorship or endorsement by the
+     trademark holder.
+
+== Credits ==
+
+This product uses the source code derived from,
+    ibus-tmpl - The Input Bus template project
+ibus-tmpl is released under GPLV2 with the following exception:
+
+> This is a template engine for IME developers. You could start your IME engine
+> from it.
+>
+> Ibus-tmpl was released under GPLV2. We wish ibus engine developers would release
+> new engines under open source license too, but we do not force it. We allow
+> developers start your work from ibus-tmpl and swith to other license.
+>
+> src - engine in c language
+> engine - engine in python language
+
+The original software is available from,
+    https://github.com/ibus/ibus-tmpl
+
+
+This product uses the source code derived from,
+    ibus-hiragana - Hiragana IME for iBus
+ibus-hiragana is released under Apache 2.0 license. 
+
+
+
