@@ -39,7 +39,7 @@ import sys
 
 class SetupEnginePSKK:
     def __init__(self):
-        #self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
+        self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
         self._builder = Gtk.Builder()
         self._builder.set_translation_domain(util.get_package_name())
         self._builder.add_from_file(os.path.join(os.path.dirname(__file__), 'setup.glade'))
@@ -50,8 +50,6 @@ class SetupEnginePSKK:
         self._label3 = self._builder.get_object('label3')
         self._label3.set_text(util.get_user_configdir_relative_to_home())
         self._window.show()
-        print(util.get_user_configdir_relative_to_home())
-
 
     def run(self):
         Gtk.main()
