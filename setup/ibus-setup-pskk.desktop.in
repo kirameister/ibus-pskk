@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=PSKK Setup
+Name[ja]=PSKK の設定
+Comment=Set up PSKK
+Comment[ja]=PSKK の設定を変更できます。
+Exec=${libexecdir}/ibus-setup-pskk
+Icon=ibus-setup-pskk
+NoDisplay=true
+Terminal=false
+Type=Application
+StartupNotify=true

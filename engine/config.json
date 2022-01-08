@@ -1,0 +1,9 @@
+{
+    ".logging_level": "level of the runtime logging",
+    "logging_level": "DEBUG",
+    ".layout": "the name of the json file containing the typing layout. It will be searched under ${config_dir} and then ${libexecdir}. When specified file is not found, roman.json under ${libexecdir} will be used as default",
+    ".layout_ja": "対ビング配列のレイアウトが記述されている json ファイルの名前を指定します。ファイルは ${config_dir}、そして ${libexecdir} 以下に存在するかチェックされ、見つからない場合はデフォルト値として ${libexecdir} 以下にある roman.json が使用されます。",
+    "layout": "roman.json",
+    ".dictionaries": "",
+    "dictionaries": ""
+}

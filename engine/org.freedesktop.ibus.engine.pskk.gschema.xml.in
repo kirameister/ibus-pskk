@@ -1,0 +1,16 @@
+<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<schemalist>
+  <schema id='org.freedesktop.ibus.engine.pskk' path='/org/freedesktop/ibus/engine/pskk/'>
+    <key name='mode' type='s'>
+      <choices>
+        <choice value='A'/>
+        <choice value='あ'/>
+      </choices>
+      <default>\"A\"</default>
+      <summary>Input Mode</summary>
+      <description>
+        The current input mode.
+      </description>
+    </key>
+  </schema>
+</schemalist>
