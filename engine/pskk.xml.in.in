@@ -1,20 +1,21 @@
 <?xml version=\"1.0\" encoding=\"utf-8\"?>
 <!-- filename: pskk.xml -->
 <component>
-	<name>org.freedesktop.ibus.pskk</name>
+	<name>org.freedesktop.IBus.PSKK</name>
 	<description>PSKK</description>
 	<exec>${libexecdir}/ibus-engine-pskk --ibus</exec>
 	<version>@VERSION@</version>
-	<author>Akira K.</author>
+	<author>Esrille Inc. &lt;info@esrille.com&gt;</author>
 	<license>Apache</license>
-	<homepage>https://github.com/kirameister/@PACKAGE_NAME@</homepage>
+	<homepage>https://github.com/esrille/@PACKAGE_NAME@</homepage>
 	<textdomain>@PACKAGE_NAME@</textdomain>
+
 	<engines>
 		<engine>
-			<name>PSKK</name>
+			<name>pskk</name>
 			<language>ja</language>
 			<license>Apache</license>
-			<author>Akira K.</author>
+			<author>Esrille Inc. &lt;info@esrille.com&gt;</author>
 			<icon>@PACKAGE_NAME@</icon>
 			<icon_prop_key>InputMode</icon_prop_key>
 			<layout>default</layout>

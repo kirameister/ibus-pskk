@@ -3,20 +3,18 @@ Version:    @PACKAGE_VERSION@
 Release:    1%{?dist}
 Summary:    PSKK for IBus
 License:    ASL 2.0
-URL:        http://github.com/kirameister/%{name}
-Source0:    http://github.com/kirameister/%{name}/releases/download/v%{version}/%{name}-%{version}.tar.gz
+URL:        https://github.com/esrille/%{name}
+Source0:    https://github.com/esrille/%{name}/releases/download/v%{version}/%{name}-%{version}.tar.gz
 Requires:   ibus >= 1.5.11
 Requires:   python3
 Requires:   python3-dbus
-
-BuildRequires:  ibus-devel
-BuildRequires:  libibus-1.0-dev
-BuildRequires:  libtool
-BuildRequires:  pkgconfig
-BuildRequires:  python3-devel
-
-BuildArch:      noarch
-
+Requires:   python3-pyxdg
+BuildRequires: ibus-devel
+BuildRequires: gettext-devel
+BuildRequires: libtool
+BuildRequires: pkgconfig
+BuildRequires: python3-devel
+BuildArch:  noarch
 
 %description
 PSKK for IBus.
@@ -32,8 +30,7 @@ make %{?_smp_mflags}
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make DESTDIR=${RPM_BUILD_ROOT} install
-
+make install DESTDIR=${RPM_BUILD_ROOT} install
 %find_lang %{name}
 
 %clean
@@ -41,16 +38,14 @@ rm -rf $RPM_BUILD_ROOT
 
 %files -f %{name}.lang
 %defattr(-,root,root,-)
-#%doc AUTHORS COPYING README
-# %dir %{python_sitearch}/ibus
-# %{python_sitearch}/ibus/*
-#%dir %{_datadir}/ibus-tmpl
+%doc README.md
+%license LICENSE NOTICE
 %{_datadir}/%{name}
-%{_bindir}/applications
+%{_datadir}/applications
 %{_datadir}/ibus/component/*
 %{_datadir}/glib-2.0/schemas/org.freedesktop.ibus.engine.pskk.gschema.xml
+%{_datadir}/icons
 %{_libexecdir}/ibus-engine-pskk
 %{_libexecdir}/ibus-setup-pskk
-
 
 %changelog

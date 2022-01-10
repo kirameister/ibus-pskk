@@ -1,7 +1,6 @@
-# ibus-pskk
+# ibus-pskk - PSKK for IBus
 #
-# Copyright (c) 2020, 2021 Esrille Inc. (ibus-hiragana)
-# Modifications Copyright (C) 2021 Akira K.
+# Copyright (c) 2020 Esrille Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,43 +14,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This file is a template file processed by the configure script.
+# The file name is listed in AC_CONFIG_FILES of configure.ac.
+
 import os
 import gi
 from gi.repository import GLib
 
-package_name = 'pskk'
-version = '0.01'
 
-
-def get_package_name():
+def get_name():
     return '@PACKAGE_NAME@'
-    return package_name
 
 
 def get_version():
     return '@VERSION@'
-    return version
+
+
+def get_prefix():
+    return '@prefix@'
+
+
+def get_datadir():
+    return '${pkgdatadir}'
 
 
 def get_user_datadir():
     return os.path.join(GLib.get_user_data_dir(), '@PACKAGE_NAME@')
 
 
-def get_homedir():
-    return GLib.get_home_dir()
-
-
-def get_user_configdir():
-    return os.path.join(GLib.get_user_config_dir(), get_package_name())
-
-
-def get_user_configdir_relative_to_home():
-    return get_user_configdir().replace(get_homedir(), '$' + '{HOME}')
-    #a =  get_user_configdir().replace(get_homedir(), '$' + '{HOME}')
-    #print(a)
-    #return a
-
-
 def get_localedir():
     return '${localedir}'
-

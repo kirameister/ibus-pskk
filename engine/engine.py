@@ -1,7 +1,9 @@
-# ibus-pskk
+# ibus-pskk - PSKK for IBus
 #
-# Copyright (c) 2020, 2021 Esrille Inc. (ibus-hiragana)
-# Modifications Copyright (C) 2021 Akira K.
+# Using source code derived from
+#   ibus-tmpl - The Input Bus template project
+#
+# Copyright (c) 2017-2021 Esrille Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +22,7 @@ import event
 from event import Event
 import util
 
+import gettext
 import json
 import logging
 import os
@@ -34,49 +37,118 @@ gi.require_version('IBus', '1.0')
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gio, Gtk, IBus
 
-
 keysyms = IBus
 
 logger = logging.getLogger(__name__)
 
+_ = lambda a: gettext.dgettext(util.get_name(), a)
+
+HIRAGANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんゔがぎぐげござじずぜぞだぢづでどばびぶべぼぁぃぅぇぉゃゅょっぱぴぷぺぽゎゐゑ・ーゝゞ"
+KATAKANA = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンヴガギグゲゴザジズゼゾダヂヅデドバビブベボァィゥェォャュョッパピプペポヮヰヱ・ーヽヾ"
+
+TO_KATAKANA = str.maketrans(HIRAGANA, KATAKANA)
+
+NON_DAKU = 'あいうえおかきくけこさしすせそたちつてとはひふへほやゆよアイウエオカキクケコサシスセソタチツテトハヒフヘホヤユヨぁぃぅぇぉがぎぐげござじずぜぞだぢづでどばびぶべぼゃゅょァィゥェォガギグゲゴザジズゼゾダヂヅデドバビブベボャュョゔヴゝヽゞヾ'
+DAKU = 'ぁぃぅぇぉがぎぐげござじずぜぞだぢづでどばびぶべぼゃゅょァィゥェォガギグゲゴザジズゼゾダヂヅデドバビブベボャュョあいゔえおかきくけこさしすせそたちつてとはひふへほやゆよアイヴエオカキクケコサシスセソタチツテトハヒフヘホヤユヨうウゞヾゝヽ'
+
+NON_HANDAKU = 'はひふへほハヒフヘホぱぴぷぺぽパピプペポ'
+HANDAKU = 'ぱぴぷぺぽパピプペポはひふへほハヒフヘホ'
+
+ZENKAKU = ''.join(chr(i) for i in range(0xff01, 0xff5f)) + '　〔〕［］￥？'
+HANKAKU = ''.join(chr(i) for i in range(0x21, 0x7f)) + ' ❲❳[]¥?'
+
+TO_HANKAKU = str.maketrans(ZENKAKU, HANKAKU)
+TO_ZENKAKU = str.maketrans(HANKAKU, ZENKAKU)
+
+RE_SOKUON = re.compile(r'[kstnhmyrwgzdbpfjv]')
+
 NAME_TO_LOGGING_LEVEL = {
-        'DEBUG': logging.DEBUG,
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
-        'ERROR': logging.ERROR,
-        'CRITICAL': logging.CRITICAL,
+    'DEBUG': logging.DEBUG,
+    'INFO': logging.INFO,
+    'WARNING': logging.WARNING,
+    'ERROR': logging.ERROR,
+    'CRITICAL': logging.CRITICAL,
 }
 
-INPUT_MODE_NAMES = ('A', 'あ')
+INPUT_MODE_NAMES = ('A', 'あ', 'ア', 'Ａ', 'ｱ')
 
+IAA = '\uFFF9'  # IAA (INTERLINEAR ANNOTATION ANCHOR)
+IAS = '\uFFFA'  # IAS (INTERLINEAR ANNOTATION SEPARATOR)
+IAT = '\uFFFB'  # IAT (INTERLINEAR ANNOTATION TERMINATOR)
+
+CANDIDATE_FOREGROUND_COLOR = 0x000000
+CANDIDATE_BACKGROUND_COLOR = 0xd1eaff
+
+# There are several applications that claim to support
+# IBus.Capabilite.SURROUNDING_TEXT but actually don't;
+# e.g. Google Chrome v93.0.
+# Those applications are marked as SURROUNDING_BROKEN.
+# 'focus_in', 'focus_out' and 'reset' signals from those
+# applications need to be ignored for Kana-Kanji
+# conversion in the legacy mode.
 SURROUNDING_RESET = 0
 SURROUNDING_COMMITTED = 1
 SURROUNDING_SUPPORTED = 2
 SURROUNDING_NOT_SUPPORTED = -1
 SURROUNDING_BROKEN = -2
 
-HIRAGANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんゔがぎぐげござじずぜぞだぢづでどばびぶべぼぁぃぅぇぉゃゅょっぱぴぷぺぽゎゐゑ・ーゝゞ"
-KATAKANA = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンヴガギグゲゴザジズゼゾダヂヅデドバビブベボァィゥェォャュョッパピプペポヮヰヱ・ーヽヾ"
-NON_DAKU = 'あいうえおかきくけこさしすせそたちつてとはひふへほやゆよアイウエオカキクケコサシスセソタチツテトハヒフヘホヤユヨぁぃぅぇぉがぎぐげござじずぜぞだぢづでどばびぶべぼゃゅょァィゥェォガギグゲゴザジズゼゾダヂヅデドバビブベボャュョゔヴゝヽゞヾ'
-DAKU = 'ぁぃぅぇぉがぎぐげござじずぜぞだぢづでどばびぶべぼゃゅょァィゥェォガギグゲゴザジズゼゾダヂヅデドバビブベボャュョあいゔえおかきくけこさしすせそたちつてとはひふへほやゆよアイヴエオカキクケコサシスセソタチツテトハヒフヘホヤユヨうウゞヾゝヽ'
+# Web applications running on web browsers sometimes need a short delay
+# between delete_surrounding_text() and commit_text(), and between
+# multiple forward_key_event().
+# Gmail running on Firefox 91.0.2 is an example of such an application.
+EVENT_DELAY = 0.02
 
 
-TO_KATAKANA = str.maketrans(HIRAGANA, KATAKANA)
-TO_HIRAGANA = str.maketrans(KATAKANA, HIRAGANA)
+def to_katakana(kana):
+    return kana.translate(TO_KATAKANA)
+
+
+def to_hankaku(kana):
+    s = ''
+    for c in kana:
+        c = c.translate(TO_HANKAKU)
+        s += {
+            '。': '｡', '「': '｢', '」': '｣', '、': '､', '・': '･',
+            'ヲ': 'ｦ',
+            'ァ': 'ｧ', 'ィ': 'ｨ', 'ゥ': 'ｩ', 'ェ': 'ｪ', 'ォ': 'ｫ',
+            'ャ': 'ｬ', 'ュ': 'ｭ', 'ョ': 'ｮ',
+            'ッ': 'ｯ', 'ー': 'ｰ',
+            'ア': 'ｱ', 'イ': 'ｲ', 'ウ': 'ｳ', 'エ': 'ｴ', 'オ': 'ｵ',
+            'カ': 'ｶ', 'キ': 'ｷ', 'ク': 'ｸ', 'ケ': 'ｹ', 'コ': 'ｺ',
+            'サ': 'ｻ', 'シ': 'ｼ', 'ス': 'ｽ', 'セ': 'ｾ', 'ソ': 'ｿ',
+            'タ': 'ﾀ', 'チ': 'ﾁ', 'ツ': 'ﾂ', 'テ': 'ﾃ', 'ト': 'ﾄ',
+            'ナ': 'ﾅ', 'ニ': 'ﾆ', 'ヌ': 'ﾇ', 'ネ': 'ﾈ', 'ノ': 'ﾉ',
+            'ハ': 'ﾊ', 'ヒ': 'ﾋ', 'フ': 'ﾌ', 'ヘ': 'ﾍ', 'ホ': 'ﾎ',
+            'マ': 'ﾏ', 'ミ': 'ﾐ', 'ム': 'ﾑ', 'メ': 'ﾒ', 'モ': 'ﾓ',
+            'ヤ': 'ﾔ', 'ユ': 'ﾕ', 'ヨ': 'ﾖ',
+            'ラ': 'ﾗ', 'リ': 'ﾘ', 'ル': 'ﾙ', 'レ': 'ﾚ', 'ロ': 'ﾛ',
+            #'ワ': 'ﾜ', 'ン': 'ﾝ', '゙': 'ﾞ', '゚': 'ﾟ',
+            'ガ': 'ｶﾞ', 'ギ': 'ｷﾞ', 'グ': 'ｸﾞ', 'ゲ': 'ｹﾞ', 'ゴ': 'ｺﾞ',
+            'ザ': 'ｻﾞ', 'ジ': 'ｼﾞ', 'ズ': 'ｽﾞ', 'ゼ': 'ｾﾞ', 'ゾ': 'ｿﾞ',
+            'ダ': 'ﾀﾞ', 'ヂ': 'ﾁﾞ', 'ヅ': 'ﾂﾞ', 'デ': 'ﾃﾞ', 'ド': 'ﾄﾞ',
+            'バ': 'ﾊﾞ', 'ビ': 'ﾋﾞ', 'ブ': 'ﾌﾞ', 'ベ': 'ﾍﾞ', 'ボ': 'ﾎﾞ',
+            'パ': 'ﾊﾟ', 'ピ': 'ﾋﾟ', 'プ': 'ﾌﾟ', 'ペ': 'ﾍﾟ', 'ポ': 'ﾎﾟ',
+            'ヴ': 'ｳﾞ'
+        }.get(c, c)
+    return s
+
+
+def to_zenkaku(asc):
+    return asc.translate(TO_ZENKAKU)
+
 
 class EnginePSKK(IBus.Engine):
     __gtype_name__ = 'EnginePSKK'
 
     def __init__(self):
-        logger.debug('__init__ started')
-        logger.debug('get_engine_pkgdir: ' + util.get_engine_pkgdir())
         super().__init__()
-        self._mode = 'A'
+        self._mode = 'A'  # _mode must be one of _input_mode_names
         self._override = False
 
         self._layout = dict()
+        self._to_kana = self._handle_default_layout
 
-        self._preedit_string = ''
+        self._preedit_string = ''   # in rômazi
         self._previous_text = ''
         self._shrunk = []
         self._surrounding = SURROUNDING_RESET
@@ -89,82 +161,112 @@ class EnginePSKK(IBus.Engine):
         self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
         self._settings.connect('changed', self._config_value_changed_cb)
 
-        # the only input from the settings
-        logger.debug('before calling set_mode()')
-        self.set_mode(self._load_input_mode(self._settings))
-        logger.debug('after calling set_mode()')
-
-        self._config = util.get_config_data()
-        self._layout = util.get_layout(self._config)
-        self._event = Event(self, self._layout)
-        self._logging_level = self._load_logging_level(self._config)
+        self._logging_level = self._load_logging_level(self._settings)
         self._dict = self._load_dictionary(self._settings)
-        #self._delay = self._laod_delay(self._settings)
-        #self._event = Event(self, self._delay, self._layout)
+        self._layout = self._load_layout(self._settings)
+        self._delay = self._load_delay(self._settings)
+        self._event = Event(self, self._delay, self._layout)
 
-        #self.connect('set-surrounding-text', self.set_surrounding_text_cb)
-        #self.connect('set-cursor-location', self.set_cursor_location_cb)
+        self.set_mode(self._load_input_mode(self._settings))
+        self._set_x4063_mode(self._load_x4063_mode(self._settings))
 
-        #self._about_dialog = None
+        self.connect('set-surrounding-text', self.set_surrounding_text_cb)
+        self.connect('set-cursor-location', self.set_cursor_location_cb)
+
+        self._about_dialog = None
         self._setup_proc = None
         self._q = queue.Queue()
-        logger.debug("Check end : __init__")
 
     def _init_props(self):
         self._prop_list = IBus.PropList()
-        logger.debug("init_props -- input mode : " + self._mode)
         self._input_mode_prop = IBus.Property(
-            key = 'InputMode',
-            prop_type = IBus.PropType.MENU,
-            symbol = IBus.Text.new_from_string(self._mode),
-            label = IBus.Text.new_from_string("Input Mode ({s})".format(s=self._mode)),
-            icon = None,
-            tooltip = None,
-            sensitive = True,
-            visible = True,
-            state = IBus.PropState.UNCHECKED,
-            sub_props = None)
-        logger.debug("init_props -- label : " + "Input Mode ({s})".format(s=self._mode))
+            key='InputMode',
+            prop_type=IBus.PropType.MENU,
+            symbol=IBus.Text.new_from_string(self._mode),
+            label=IBus.Text.new_from_string(_("Input mode (%s)") % self._mode),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.UNCHECKED,
+            sub_props=None)
         self._input_mode_prop.set_sub_props(self._init_input_mode_props())
         self._prop_list.append(self._input_mode_prop)
         prop = IBus.Property(
-            key = "About",
-            prop_type = IBus.PropType.NORMAL,
-            label = IBus.Text.new_from_string("About PSKK.."),
-            icon = None,
-            tooltip = None,
-            sensitive = True,
-            visible = True,
-            state = IBus.PropState.UNCHECKED,
-            sub_props = None)
+            key='Setup',
+            prop_type=IBus.PropType.NORMAL,
+            label=IBus.Text.new_from_string(_("Setup")),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.UNCHECKED,
+            sub_props=None)
+        self._prop_list.append(prop)
+        prop = IBus.Property(
+            key='About',
+            prop_type=IBus.PropType.NORMAL,
+            label=IBus.Text.new_from_string(_("About PSKK...")),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.UNCHECKED,
+            sub_props=None)
         self._prop_list.append(prop)
 
     def _init_input_mode_props(self):
-        logger.debug('_init_input_mode_props started')
         props = IBus.PropList()
         props.append(IBus.Property(key='InputMode.Alphanumeric',
-            prop_type = IBus.PropType.RADIO,
-            label = IBus.Text.new_from_string("Alphanumeric (A)"),
-            icon = None,
-            tooltip = None,
-            sensitive = True,
-            visible = True,
-            state = IBus.PropState.CHECKED,
-            sub_props = None))
+                                   prop_type=IBus.PropType.RADIO,
+                                   label=IBus.Text.new_from_string(_("Alphanumeric (A)")),
+                                   icon=None,
+                                   tooltip=None,
+                                   sensitive=True,
+                                   visible=True,
+                                   state=IBus.PropState.CHECKED,
+                                   sub_props=None))
         props.append(IBus.Property(key='InputMode.Hiragana',
-            prop_type = IBus.PropType.RADIO,
-            label = IBus.Text.new_from_string("Hiragana (あ)"),
-            icon = None,
-            tooltip = None,
-            sensitive = True,
-            visible = True,
-            state = IBus.PropState.UNCHECKED,
-            sub_props = None))
+                                   prop_type=IBus.PropType.RADIO,
+                                   label=IBus.Text.new_from_string(_("Hiragana (あ)")),
+                                   icon=None,
+                                   tooltip=None,
+                                   sensitive=True,
+                                   visible=True,
+                                   state=IBus.PropState.UNCHECKED,
+                                   sub_props=None))
+        props.append(IBus.Property(key='InputMode.Katakana',
+                                   prop_type=IBus.PropType.RADIO,
+                                   label=IBus.Text.new_from_string(_("Katakana (ア)")),
+                                   icon=None,
+                                   tooltip=None,
+                                   sensitive=True,
+                                   visible=True,
+                                   state=IBus.PropState.UNCHECKED,
+                                   sub_props=None))
+        props.append(IBus.Property(key='InputMode.WideAlphanumeric',
+                                   prop_type=IBus.PropType.RADIO,
+                                   label=IBus.Text.new_from_string(_("Wide Alphanumeric (Ａ)")),
+                                   icon=None,
+                                   tooltip=None,
+                                   sensitive=True,
+                                   visible=True,
+                                   state=IBus.PropState.UNCHECKED,
+                                   sub_props=None))
+        props.append(IBus.Property(key='InputMode.HalfWidthKatakana',
+                                   prop_type=IBus.PropType.RADIO,
+                                   label=IBus.Text.new_from_string(_("Halfwidth Katakana (ｱ)")),
+                                   icon=None,
+                                   tooltip=None,
+                                   sensitive=True,
+                                   visible=True,
+                                   state=IBus.PropState.UNCHECKED,
+                                   sub_props=None))
         return props
 
     def _update_input_mode(self):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))
-        self._input_mode_prop.set_label(IBus.Text.new_from_string("Input mode ({s})".format(s=self._mode)))
+        self._input_mode_prop.set_label(IBus.Text.new_from_string(_("Input mode (%s)") % self._mode))
         self.update_property(self._input_mode_prop)
 
     def _load_input_mode(self, settings):
@@ -175,43 +277,43 @@ class EnginePSKK(IBus.Engine):
         logger.info(f'input mode: {mode}')
         return mode
 
-    #def _load_logging_level(self, settings):
-    def _load_logging_level(self, config):
-        #level = settings.get_string('logging-level')
-        level = 'WARNING' # default value
-        if 'logging_level' in config:
-            level = config['logging_level']
+    def _load_logging_level(self, settings):
+        level = settings.get_string('logging-level')
         if level not in NAME_TO_LOGGING_LEVEL:
             level = 'WARNING'
-            #settings.reset('logging-level')
+            settings.reset('logging-level')
         logger.info(f'logging_level: {level}')
         logging.getLogger().setLevel(NAME_TO_LOGGING_LEVEL[level])
         return level
 
     def _load_dictionary(self, settings, clear_history=False):
-        #path = settings.get_string('dictionary')
-        path = "dummy path"
-        #user = settings.get_string('user-dictionary')
-        user = "dummy user"
+        path = settings.get_string('dictionary')
+        user = settings.get_string('user-dictionary')
         return Dictionary(path, user, clear_history)
 
     def _load_layout(self, settings):
-        default_layout = os.path.join(util.get_user_configdir(), 'layouts')
-        default_layout = os.path.join(default_layout, 'shingeta.json')
+        default_layout = os.path.join(util.get_datadir(), 'layouts')
+        default_layout = os.path.join(default_layout, 'roomazi.json')
         path = settings.get_string('layout')
         logger.info(f'layout: {path}')
         layout = dict()
         try:
             with open(path) as f:
                 layout = json.load(f)
-        except Exception as e:
-            logger.error(e)
+        except Exception as error:
+            logger.error(error)
         if not layout:
             try:
                 with open(default_layout) as f:
                     layout = json.load(f)
-            except Exception as e:
-                logger.error(e)
+            except Exception as error:
+                logger.error(error)
+        if layout.get('Type') == 'Kana':
+            self._to_kana = self._handle_kana_layout
+        elif 'Roomazi' in layout:
+            self._to_kana = self._handle_roomazi_layout
+        else:
+            self._to_kana = self._handle_default_layout
         return layout
 
     def _load_delay(self, settings):
@@ -219,33 +321,80 @@ class EnginePSKK(IBus.Engine):
         logger.info(f'delay: {delay}')
         return delay
 
+    def _load_x4063_mode(self, settings):
+        mode = settings.get_boolean('nn-as-jis-x-4063')
+        logger.info(f'nn_as_jis_x_4063 mode: {mode}')
+        return mode
+
     def _config_value_changed_cb(self, settings, key):
         logger.debug(f'config_value_changed("{key}")')
-        if key == 'mode':
+        if key == 'logging-level':
+            self._logging_level = self._load_logging_level(settings)
+        elif key == 'delay':
+            self._reset()
+            self._delay = self._load_delay(settings)
+            self._event = Event(self, self._delay, self._layout)
+        elif key == 'layout':
+            self._reset()
+            self._layout = self._load_layout(settings)
+            self._event = Event(self, self._delay, self._layout)
+        elif key == 'dictionary' or key == 'user-dictionary':
+            self._reset()
+            self._dict = self._load_dictionary(settings)
+        elif key == 'mode':
             self.set_mode(self._load_input_mode(settings), True)
-        #elif key == 'logging-level':
-        #    self._logging_level = self._load_logging_level(settings)
-        #elif key == 'delay':
-        #    self._reset()
-        #    self._delay = self._load_delay(settings)
-        #    self._event = Event(self, self._delay, self._layout)
-        #elif key == 'layout':
-        #    self._reset()
-        #    self._layout = self._load_layout(settings)
-        #    self._event = Event(self, self._delay, self._layout)
-        #elif key == 'dictionary':
-        #    self._reset()
-        #    self._dict = self._load_dictionary(settings)
+        elif key == 'nn-as-jis-x-4063':
+            self._set_x4063_mode(self._load_x4063_mode(settings))
 
     def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
         return self._event.chr(), ''
+
+    def _handle_kana_layout(self, preedit, keyval, state=0, modifiers=0):
+        yomi = ''
+        c = self._event.chr().lower()
+        if c == '_' and self._event._keycode == 0x59:
+            c = '¦'
+        if self._event.is_shift():
+            if 'Shift' in self._layout:
+                yomi = self._layout['Shift'].get(c, '')
+            elif modifiers & event.SHIFT_L_BIT:
+                yomi = self._layout['ShiftL'].get(c, '')
+            elif modifiers & event.SHIFT_R_BIT:
+                yomi = self._layout['ShiftR'].get(c, '')
+        else:
+            yomi = self._layout['Normal'].get(c, '')
+        return yomi, preedit
+
+    def _set_x4063_mode(self, on):
+        if on:
+            self.character_after_n = "aiueo'wyn"
+        else:
+            self.character_after_n = "aiueo'wy"
+        logger.debug(f'set_x4063_mode({on})')
+
+    def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
+        yomi = ''
+        c = self._event.chr().lower()
+        if preedit == 'n' and self.character_after_n.find(c) < 0:
+            yomi = 'ん'
+            preedit = preedit[1:]
+        preedit += c
+        if preedit in self._layout['Roomazi']:
+            yomi += self._layout['Roomazi'][preedit]
+            preedit = ''
+        elif 2 <= len(preedit) and preedit[0] == preedit[1] and RE_SOKUON.search(preedit[1]):
+            yomi += 'っ'
+            preedit = preedit[1:]
+        return yomi, preedit
 
     def _get_surrounding_text(self):
         if not (self.client_capabilities & IBus.Capabilite.SURROUNDING_TEXT):
             self._surrounding = SURROUNDING_NOT_SUPPORTED
 
         if self._surrounding != SURROUNDING_SUPPORTED:
-            self.get_surrounding_text() # may or may not be supported
+            # Call get_surrounding_text() anyway to see if the surrounding
+            # text is supported in the current client.
+            self.get_surrounding_text()
             logger.debug(f'surrounding text: "{self._previous_text}"')
             return self._previous_text, len(self._previous_text)
 
@@ -253,6 +402,19 @@ class EnginePSKK(IBus.Engine):
         text = tuple[0].get_text()
         pos = tuple[1]
 
+        # Qt reports pos as if text is in UTF-16 while GTK reports pos in sane manner.
+        # If you're using primarily Qt, use the following code to amend the issue
+        # when a character in Unicode supplementary planes is included in text.
+        #
+        # Deal with surrogate pair manually. (Qt bug?)
+        # for i in range(len(text)):
+        #     if pos <= i:
+        #         break
+        #     if 0x10000 <= ord(text[i]):
+        #         pos -= 1
+
+        # Qt seems to insert self._preedit_string to the text, while GTK doesn't.
+        # We mimic GTK's behavior here.
         preedit_len = len(self._preedit_string)
         if 0 < preedit_len and preedit_len <= pos and text[pos - preedit_len:pos] == self._preedit_string:
             text = text[:-preedit_len]
@@ -262,7 +424,7 @@ class EnginePSKK(IBus.Engine):
 
     def _delete_surrounding_text(self, size):
         if self._surrounding == SURROUNDING_SUPPORTED:
-            self.delete_surrounding_text(-size,size)
+            self.delete_surrounding_text(-size, size)
         else:
             self._previous_text = self._previous_text[:-size]
 
@@ -288,11 +450,8 @@ class EnginePSKK(IBus.Engine):
         return self._mode
 
     def set_mode(self, mode, override=False):
-        logger.debug('set_mode started')
         self._override = override
-        logger.debug('set_mode check1')
         if self._mode == mode:
-            logger.debug('set_mode check2: ' + mode)
             return False
         logger.debug(f'set_mode({mode})')
         self._preedit_string = ''
@@ -301,8 +460,10 @@ class EnginePSKK(IBus.Engine):
         self._update_preedit()
         self._update_lookup_table()
         self._update_input_mode()
-        logger.debug('set_mode ended')
         return True
+
+    def _is_roomazi_mode(self):
+        return self._to_kana == self._handle_roomazi_layout
 
     def do_process_key_event(self, keyval, keycode, state):
         return self._event.process_key_event(keyval, keycode, state)
@@ -335,19 +496,21 @@ class EnginePSKK(IBus.Engine):
 
         self._check_surrounding_support()
 
-        # Handle candidate window..
+        # Handle Candidate window
         if 0 < self._lookup_table.get_number_of_candidates():
             if keyval in (keysyms.Page_Up, keysyms.KP_Page_Up):
                 return self.do_page_up()
             elif keyval in (keysyms.Page_Down, keysyms.KP_Page_Down):
                 return self.do_page_down()
-            elif keyval == keysyms.Up:
+            elif keyval == keysyms.Up or self._event.is_muhenkan():
                 return self.do_cursor_up()
-            elif keyval == keysyms.Down:
+            elif keyval == keysyms.Down or self._event.is_henkan():
                 return self.do_cursor_down()
 
         if self._preedit_string:
             if keyval == keysyms.Return:
+                if self._preedit_string == 'n':
+                    self._preedit_string = 'ん'
                 self._commit_string(self._preedit_string)
                 self._preedit_string = ''
                 self._update_preedit()
@@ -394,9 +557,11 @@ class EnginePSKK(IBus.Engine):
             if modifiers & event.ALT_R_BIT:
                 yomi = self.handle_alt_graph(keyval, keycode, state, modifiers)
                 if yomi:
+                    if self.get_mode() != 'ｱ':
+                        yomi = to_zenkaku(yomi)
                     self._preedit_string = ''
-            #elif self.get_mode() == 'Ａ':
-            #    yomi = to_zenkaku(self._event.chr())
+            elif self.get_mode() == 'Ａ':
+                yomi = to_zenkaku(self._event.chr())
             else:
                 yomi, self._preedit_string = self._to_kana(self._preedit_string, keyval, state, modifiers)
         elif keyval == keysyms.hyphen:
@@ -411,6 +576,10 @@ class EnginePSKK(IBus.Engine):
         else:
             return False
         if yomi:
+            if self.get_mode() == 'ア':
+                yomi = to_katakana(yomi)
+            elif self.get_mode() == 'ｱ':
+                yomi = to_hankaku(to_katakana(yomi))
             self._commit_string(yomi)
         self._update_preedit()
         return True
@@ -424,6 +593,7 @@ class EnginePSKK(IBus.Engine):
         size = len(self._dict.reading())
         if 0 < size:
             if self._preedit_string == 'n':
+                # For FuriganaPad, yomi has to be committed anyway.
                 self._commit_string('ん')
             self._preedit_string = ''
             if 1 < len(self._dict.cand()):
@@ -458,11 +628,11 @@ class EnginePSKK(IBus.Engine):
             cand, size = self.lookup_dictionary(text, pos)
         elif 1 <= pos:
             assert self._event.is_muhenkan()
-            suffix = text[:pos].rfind('-')
+            suffix = text[:pos].rfind('―')
             if 0 < suffix:
-                cand, size = self.lookup_dictionary(text[suffix -1:], pos - suffix +1)
+                cand, size = self.lookup_dictionary(text[suffix - 1:], pos - suffix + 1)
             else:
-                cand, size = self.lookup_dictionary(text[pos-1], 1)
+                cand, size = self.lookup_dictionary(text[pos - 1], 1)
         if self._dict.current():
             self._shrunk = []
             self._delete_surrounding_text(size)
@@ -487,7 +657,7 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'handle_shrink: "{self._dict.current()}"')
         assert self._dict.current()
         yomi = self._dict.reading()
-        if len(yomi) <= 1 or yomi[1] == '-':
+        if len(yomi) <= 1 or yomi[1] == '―':
             return True
         text, pos = self._get_surrounding_text()
         (cand, size) = self.lookup_dictionary(yomi[1:] + text[pos:], len(yomi) - 1)
@@ -524,8 +694,11 @@ class EnginePSKK(IBus.Engine):
         if self._surrounding == SURROUNDING_COMMITTED:
             logger.debug(f'_check_surrounding_support(): "{self._previous_text}"')
             self._surrounding = SURROUNDING_BROKEN
+            # Hide preedit text for a moment so that the current client can
+            # process the backspace keys.
             self.update_preedit_text(IBus.Text.new_from_string(''), 0, 0)
-            self._forward_backspace(len(self._previous_text))
+            # Note delete_surrounding_text() doesn't work here.
+            self._forward_backspaces(len(self._previous_text))
 
     def _commit_string(self, text):
         if text == '゛':
@@ -539,7 +712,7 @@ class EnginePSKK(IBus.Engine):
         elif text == '゜':
             prev, pos = self._get_surrounding_text()
             if 0 < pos:
-                found = NON_HANDAKU.find(prev[pos-1])
+                found = NON_HANDAKU.find(prev[pos - 1])
                 if 0 <= found:
                     self._delete_surrounding_text(1)
                     text = HANDAKU[found]
@@ -611,6 +784,9 @@ class EnginePSKK(IBus.Engine):
             attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.SINGLE, previous_len, previous_len + preedit_len))
         if attrs:
             text.set_attributes(attrs)
+        # Note self.hide_preedit_text() does not seem to work as expected with Kate.
+        # cf. "Qt5 IBus input context does not implement hide_preedit_text()",
+        #     https://bugreports.qt.io/browse/QTBUG-48412
         self.update_preedit_text(text, text_len, 0 < text_len)
         self._update_lookup_table()
 
@@ -627,6 +803,7 @@ class EnginePSKK(IBus.Engine):
         self._event.reset()
         self.register_properties(self._prop_list)
         self._update_preedit()
+        # Request the initial surrounding-text in addition to the "enable" handler.
         if not self._previous_text:
             self._surrounding = SURROUNDING_RESET
         self.get_surrounding_text()
@@ -639,6 +816,7 @@ class EnginePSKK(IBus.Engine):
 
     def do_enable(self):
         logger.info('enable')
+        # Request the initial surrounding-text when enabled as documented.
         self.get_surrounding_text()
 
     def do_disable(self):
@@ -666,7 +844,7 @@ class EnginePSKK(IBus.Engine):
                 return
             self._setup_proc = None
         try:
-            filename = os.path.join(package.get_libexecdir(), 'ibus-setup-pskk')
+            filename = os.path.join(util.get_libexecdir(), 'ibus-setup-pskk')
             self._setup_proc = subprocess.Popen([filename], text=True, stdout=subprocess.PIPE)
             t = threading.Thread(target=self._readline, args=(self._setup_proc,), daemon=True)
             t.start()
@@ -687,19 +865,41 @@ class EnginePSKK(IBus.Engine):
                 if line == 'reload_dictionaries':
                     self._dict = self._load_dictionary(self._settings)
                 elif line == 'clear_input_history':
-                    self._dict = self._load_dictionary(self._settings, clear_history = True)
+                    self._dict = self._load_dictionary(self._settings, clear_history=True)
             except queue.Empty:
                 break
 
     def do_property_activate(self, prop_name, state):
         logger.info(f'property_activate({prop_name}, {state})')
-        if prop_name == 'About':
+        if prop_name == 'Setup':
             self._start_setup()
+        elif prop_name == 'About':
+            if self._about_dialog:
+                self._about_dialog.present()
+                return
+            dialog = Gtk.AboutDialog()
+            dialog.set_program_name(_("PSKK"))
+            dialog.set_copyright("Copyright 2017-2021 Esrille Inc.")
+            dialog.set_authors(["Esrille Inc."])
+            dialog.set_documenters(["Esrille Inc."])
+            dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
+            dialog.set_website_label(_("Introduction to PSKK"))
+            dialog.set_logo_icon_name(util.get_name())
+            dialog.set_default_icon_name(util.get_name())
+            dialog.set_version(util.get_version())
+            # To close the dialog when "close" is clicked, e.g. on RPi,
+            # we connect the "response" signal to about_response_callback
+            dialog.connect("response", self.about_response_callback)
+            self._about_dialog = dialog
+            dialog.show()
         elif prop_name.startswith('InputMode.'):
             if state == IBus.PropState.CHECKED:
                 mode = {
                     'InputMode.Alphanumeric': 'A',
                     'InputMode.Hiragana': 'あ',
+                    'InputMode.Katakana': 'ア',
+                    'InputMode.WideAlphanumeric': 'Ａ',
+                    'InputMode.HalfWidthKatakana': 'ｱ',
                 }.get(prop_name, 'A')
                 self.set_mode(mode, True)
 
@@ -710,24 +910,9 @@ class EnginePSKK(IBus.Engine):
     def set_surrounding_text_cb(self, engine, text, cursor_pos, anchor_pos):
         self._surrounding = SURROUNDING_SUPPORTED
         self._previous_text = ''
-        #text = self.get_plain_text(text.get_text())
+        text = self.get_plain_text(text.get_text())
         logger.debug(f'set_surrounding_text_cb("{text}", {cursor_pos}, {anchor_pos})')
 
-    def set_cursor_location_cb(self, engine, x, y, w, h):
-        logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
-        self._update_lookup_table()
-
-    def _forward_backspace(self, size):
-        logger.debug(f'_forward_backspace({size})')
-        for i in range(size):
-            self.forward_key_event(IBus.BackSpace, 14, 0)
-            time.sleep(EVENT_DELAY)
-            self.forward_key_event(IBus.BackSpace, 14, IBus.ModifierType.RELEASE_MASK)
-
-
-
-
-'''
     def get_plain_text(self, text):
         plain = ''
         in_ruby = False
@@ -741,17 +926,17 @@ class EnginePSKK(IBus.Engine):
             elif not in_ruby:
                 plain += c
         return plain
-'''
 
+    def set_cursor_location_cb(self, engine, x, y, w, h):
+        # On Raspbian, at least till Buster, the candidate window does not
+        # always follow the cursor position. The following code is not
+        # necessary on Ubuntu 18.04 or Fedora 30.
+        logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
+        self._update_lookup_table()
 
-
-
-
-
-
-
-
-
-
-
-
+    def _forward_backspaces(self, size):
+        logger.debug(f'_forward_backspaces({size})')
+        for i in range(size):
+            self.forward_key_event(IBus.BackSpace, 14, 0)
+            time.sleep(EVENT_DELAY)
+            self.forward_key_event(IBus.BackSpace, 14, IBus.ModifierType.RELEASE_MASK)

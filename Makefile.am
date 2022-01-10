@@ -1,8 +1,4 @@
-# vim:set noet ts=4:
-#
-# ibus-pskk
-#
-# Copyright (c) Copyright (C) 2021 Akira K.
+# Copyright (c) 2017-2020 Esrille Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,39 +13,39 @@
 # limitations under the License.
 
 SUBDIRS = \
+	dic \
+	dic_tools \
+	docs \
 	engine \
+	icons \
 	layouts \
+	po \
 	setup \
 	$(NULL)
 
-ACLOCAL_AMFLAGS = -I m4
-
 EXTRA_DIST = \
+	debian/changelog \
+	debian/compat \
+	debian/control \
+	debian/copyright \
+	debian/rules \
+	debian/source/format \
 	autogen.sh \
 	@PACKAGE_NAME@.spec \
 	@PACKAGE_NAME@.spec.in \
+	CONTRIBUTING.md \
 	LICENSE \
-	NOTICE \
+	NOTICE\
 	README.md \
+	README.txt \
 	$(NULL)
 
 noinst_DIST = \
 	$(NULL)
 
-
 DISTCLEANFILES = \
 	po/stamp-it \
 	$(NULL)
 
-rpm: dist @PACKAGE_NAME@.spec
-	rpmbuild -bb \
-			--define "_sourcedir `pwd`" \
-			--define "_builddir `pwd`" \
-			--define "_specdir `pwd`" \
-			--define "_rpmdir `pwd`" \
-			--define "_srcrpmdir `pwd`" \
-			@PACKAGE_NAME@.spec
-clean-rpm:
-	$(RM) -r "`uname -i`"
-
-clean-local: clean-rpm
+uninstall-hook:
+	-rmdir $(pkgdatadir)

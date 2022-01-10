@@ -1,8 +1,4 @@
-# vim:set et ts=4:
-#
-# ibus-pskk
-#
-# Copyright (c) Copyright (C) 2021 Akira K.
+# Copyright (c) 2017-2021 Esrille Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,52 +12,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# if not 1, append datestamp to the version number.
-m4_define([package_name], [ibus-pskk])
-m4_define([ibus_released], [0])
-m4_define([ibus_major_version], [0])
-m4_define([ibus_minor_version], [1])
+AC_INIT([ibus-pskk], [0.0.1], [https://github.com/kirameister/ibus-pskk/issues])
+AC_CONFIG_AUX_DIR([.])
+AM_INIT_AUTOMAKE([foreign tar-ustar])
 
-m4_define([ibus_version],
-    ibus_major_version.ibus_minor_version)
+AM_GNU_GETTEXT_REQUIRE_VERSION([0.19.8])
+AM_GNU_GETTEXT([external])
 
-AC_INIT([package_name], [ibus_version], [http://github.com/kirameister/ibus-pskk/issues], [package_name])
-#AM_INIT_AUTOMAKE([package_name],[ibus_version])
-AM_INIT_AUTOMAKE([foreign])
-
-
-# check ibus
+# Check IBus
+#   Note pskk.xml uses icon_prop_key and
+#   ibus 1.5.11 or later is required
 PKG_CHECK_MODULES(IBUS, [ibus-1.0 >= 1.5.11])
 AC_SUBST(IBUS_DATADIR, $($PKG_CONFIG --variable=datadir ibus-1.0) )
 
-# Define python version
-AC_ARG_WITH(python,
-    AS_HELP_STRING([--with-python[=PATH]],
-        [Select python2 or python3]),
-    [PYTHON=$with_python], []
-)
+# Check Python
+AM_PATH_PYTHON([3.7])
 
-#check python
-AM_PATH_PYTHON([3.5])
+# define GETTEXT_* variables
+GETTEXT_PACKAGE=AC_PACKAGE_NAME
+AC_SUBST(GETTEXT_PACKAGE)
+AC_DEFINE_UNQUOTED(
+  GETTEXT_PACKAGE, "$GETTEXT_PACKAGE",
+    [Define to the read-only architecture-independent data directory.]
+)
 
 # GSettings
 # see https://developer.gnome.org/gio/stable/GSettings.html
 GLIB_GSETTINGS
 
-
-
 # OUTPUT files
 AC_CONFIG_FILES(
-Makefile
-ibus-pskk.spec
+dic/Makefile
+dic_tools/Makefile
+docs/Makefile
 engine/pskk.xml.in
 engine/ibus-engine-pskk
 engine/Makefile
 engine/util.py.in
+icons/Makefile
 layouts/Makefile
+po/Makefile.in
 setup/Makefile
 setup/util.py.in
 setup/ibus-setup-pskk.in
+Makefile
+ibus-pskk.spec
 )
 
 AC_OUTPUT

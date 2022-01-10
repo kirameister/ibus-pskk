@@ -1,5 +1,4 @@
-# Copyright (c) 2017-2020 Esrille Inc. (ibus-hiragana)
-# Modifications Copyright (C) 2021 Akira K.
+# Copyright (c) 2017-2020 Esrille Inc.
 #
 # Using source code derived from
 #   ibus-tmpl - The Input Bus template project
@@ -21,7 +20,6 @@ engine_pskk_PYTHON = \
 	engine.py \
 	event.py \
 	main.py \
-	config.json \
 	$(NULL)
 BUILT_SOURCES = util.py
 nodist_engine_pskk_PYTHON = util.py
@@ -73,7 +71,7 @@ org.freedesktop.ibus.engine.pskk.gschema.xml: org.freedesktop.ibus.engine.pskk.g
 	$(AM_V_GEN) \
 	( \
 		pkgdatadir=${pkgdatadir}; \
-		PACKAGE=${PACKAGE}; \
+		util=${util}; \
 		s=`cat $<`; \
 		eval "echo \"$${s}\""; \
 	) > $@

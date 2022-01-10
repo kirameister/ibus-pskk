@@ -1,0 +1,7 @@
+engine/dictionary.py
+engine/engine.py
+engine/event.py
+engine/main.py
+engine/util.py
+setup/main.py
+setup/setup.glade
