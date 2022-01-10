@@ -192,6 +192,7 @@ class EnginePSKK(IBus.Engine):
             sub_props=None)
         self._input_mode_prop.set_sub_props(self._init_input_mode_props())
         self._prop_list.append(self._input_mode_prop)
+        '''
         prop = IBus.Property(
             key='Setup',
             prop_type=IBus.PropType.NORMAL,
@@ -203,6 +204,7 @@ class EnginePSKK(IBus.Engine):
             state=IBus.PropState.UNCHECKED,
             sub_props=None)
         self._prop_list.append(prop)
+        '''
         prop = IBus.Property(
             key='About',
             prop_type=IBus.PropType.NORMAL,
@@ -235,6 +237,7 @@ class EnginePSKK(IBus.Engine):
                                    visible=True,
                                    state=IBus.PropState.UNCHECKED,
                                    sub_props=None))
+        '''
         props.append(IBus.Property(key='InputMode.Katakana',
                                    prop_type=IBus.PropType.RADIO,
                                    label=IBus.Text.new_from_string(_("Katakana (ア)")),
@@ -262,6 +265,7 @@ class EnginePSKK(IBus.Engine):
                                    visible=True,
                                    state=IBus.PropState.UNCHECKED,
                                    sub_props=None))
+        '''
         return props
 
     def _update_input_mode(self):
