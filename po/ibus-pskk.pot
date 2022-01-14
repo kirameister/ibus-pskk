@@ -1,167 +1,45 @@
 # SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR Esrille Inc. <info@esrille.com>
-# This file is distributed under the same license as the ibus-pskk package.
+# Copyright (C) YEAR ORGANIZATION
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: ibus-pskk 0.0.1\n"
-"Report-Msgid-Bugs-To: https://github.com/kirameister/ibus-pskk/issues\n"
-"POT-Creation-Date: 2021-10-08 11:40+0900\n"
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2022-01-14 23:11+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
 
-#: engine/engine.py:186 engine/engine.py:269
-#, python-format
+
+#: engine/engine.py:185 engine/engine.py:230
 msgid "Input mode (%s)"
 msgstr ""
 
-#: engine/engine.py:198
-msgid "Setup"
-msgstr ""
-
-#: engine/engine.py:209
+#: engine/engine.py:197
 msgid "About PSKK..."
 msgstr ""
 
-#: engine/engine.py:222
+#: engine/engine.py:210
 msgid "Alphanumeric (A)"
 msgstr ""
 
-#: engine/engine.py:231
+#: engine/engine.py:219
 msgid "Hiragana (あ)"
 msgstr ""
 
 #: engine/engine.py:240
-msgid "Katakana (ア)"
-msgstr ""
-
-#: engine/engine.py:249
-msgid "Wide Alphanumeric (Ａ)"
-msgstr ""
-
-#: engine/engine.py:258
-msgid "Halfwidth Katakana (ｱ)"
-msgstr ""
-
-#: engine/engine.py:881
 msgid "PSKK"
 msgstr ""
 
-#: engine/engine.py:886
+#: engine/engine.py:245
 msgid "Introduction to PSKK"
 msgstr ""
 
-#: setup/main.py:59
-msgid "Rōmaji"
+#: engine/engine.py:249
+msgid "config files location : ${HOME}/.config/ibus-pskk"
 msgstr ""
 
-#: setup/main.py:60
-msgid "Kana (JIS Layout)"
-msgstr ""
-
-#: setup/main.py:61
-msgid "Kana (New Stickney Layout)"
-msgstr ""
-
-#: setup/main.py:70
-msgid "Japanese Keyboard"
-msgstr ""
-
-#: setup/main.py:71
-msgid "US Keyboard"
-msgstr ""
-
-#: setup/main.py:104
-msgid "1st grade"
-msgstr ""
-
-#: setup/main.py:105
-msgid "2nd grade"
-msgstr ""
-
-#: setup/main.py:106
-msgid "3rd grade"
-msgstr ""
-
-#: setup/main.py:107
-msgid "4th grade"
-msgstr ""
-
-#: setup/main.py:108
-msgid "5th grade"
-msgstr ""
-
-#: setup/main.py:109
-msgid "6th grade"
-msgstr ""
-
-#: setup/main.py:110
-msgid "7-9th grade"
-msgstr ""
-
-#: setup/main.py:111
-msgid "10th+ grade (Okurigana: general)"
-msgstr ""
-
-#: setup/main.py:112
-msgid "10th+ grade (Okurigana: general + permissible)"
-msgstr ""
-
-#: setup/setup.glade:8
-msgid "PSKK Setup"
-msgstr ""
-
-#: setup/setup.glade:43
-msgid "<b>Keyboard</b>"
-msgstr ""
-
-#: setup/setup.glade:74
-msgid "Typing"
-msgstr ""
-
-#: setup/setup.glade:96
-msgid "Type"
-msgstr ""
-
-#: setup/setup.glade:160
-msgid "<b>Rōmaji</b>"
-msgstr ""
-
-#: setup/setup.glade:185
-msgid "Always convert 'nn' to 'ん'"
-msgstr ""
-
-#: setup/setup.glade:225
-msgid "Keyboard"
-msgstr ""
-
-#: setup/setup.glade:252
-msgid "<b>Dictionary</b>"
-msgstr ""
-
-#: setup/setup.glade:293
-msgid "Kanji Dictionary"
-msgstr ""
-
-#: setup/setup.glade:315
-msgid "User Dictionary Name"
-msgstr ""
-
-#: setup/setup.glade:382
-msgid "Reload dictionaries"
-msgstr ""
-
-#: setup/setup.glade:417
-msgid "Clear input history"
-msgstr ""
-
-#: setup/setup.glade:460
-msgid "Dictionary"
-msgstr ""

@@ -13,152 +13,34 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
 
-#: engine/engine.py:186 engine/engine.py:269
-#, python-format
+
+#: engine/engine.py:185 engine/engine.py:230
 msgid "Input mode (%s)"
 msgstr "入力モード (%s)"
 
-#: engine/engine.py:198
-msgid "Setup"
-msgstr "設定"
-
-#: engine/engine.py:209
+#: engine/engine.py:197
 msgid "About PSKK..."
 msgstr "PSKK について..."
 
-#: engine/engine.py:222
+#: engine/engine.py:210
 msgid "Alphanumeric (A)"
 msgstr "英数 (A)"
 
-#: engine/engine.py:231
+#: engine/engine.py:219
 msgid "Hiragana (あ)"
 msgstr "ひらがな (あ)"
 
 #: engine/engine.py:240
-msgid "Katakana (ア)"
-msgstr "カタカナ (ア)"
-
-#: engine/engine.py:249
-msgid "Wide Alphanumeric (Ａ)"
-msgstr "全角英数 (Ａ)"
-
-#: engine/engine.py:258
-msgid "Halfwidth Katakana (ｱ)"
-msgstr "半角カタカナ (ｱ)"
-
-#: engine/engine.py:881
 msgid "PSKK"
 msgstr "PSKK"
 
-#: engine/engine.py:886
+#: engine/engine.py:245
 msgid "Introduction to PSKK"
 msgstr "PSKK の手びき"
 
-#: setup/main.py:59
-msgid "Rōmaji"
-msgstr "ローマ字"
+#: engine/engine.py:249
+msgid "config files location : ${HOME}/.config/ibus-pskk"
+msgstr "config ファイルの場所 : ${HOME}/.config/ibus-pskk"
 
-#: setup/main.py:60
-msgid "Kana (JIS Layout)"
-msgstr "かな(JIS配列)"
-
-#: setup/main.py:61
-msgid "Kana (New Stickney Layout)"
-msgstr "かな(ニュースティックニー配列)"
-
-#: setup/main.py:70
-msgid "Japanese Keyboard"
-msgstr "日本語キーボード"
-
-#: setup/main.py:71
-msgid "US Keyboard"
-msgstr "英語(US)キーボード"
-
-#: setup/main.py:104
-msgid "1st grade"
-msgstr "小学校１年生用"
-
-#: setup/main.py:105
-msgid "2nd grade"
-msgstr "小学校２年生用"
-
-#: setup/main.py:106
-msgid "3rd grade"
-msgstr "小学校３年生用"
-
-#: setup/main.py:107
-msgid "4th grade"
-msgstr "小学校４年生用"
-
-#: setup/main.py:108
-msgid "5th grade"
-msgstr "小学校５年生用"
-
-#: setup/main.py:109
-msgid "6th grade"
-msgstr "小学校６年生用"
-
-#: setup/main.py:110
-msgid "7-9th grade"
-msgstr "中学生用"
-
-#: setup/main.py:111
-msgid "10th+ grade (Okurigana: general)"
-msgstr "おとな用(おくりがな: 本則)"
-
-#: setup/main.py:112
-msgid "10th+ grade (Okurigana: general + permissible)"
-msgstr "おとな用(おくりがな: 本則+許容)"
-
-#: setup/setup.glade:8
-msgid "PSKK Setup"
-msgstr "PSKK の設定"
-
-#: setup/setup.glade:43
-msgid "<b>Keyboard</b>"
-msgstr "<b>キーボード</b>"
-
-#: setup/setup.glade:74
-msgid "Typing"
-msgstr "打ちかた"
-
-#: setup/setup.glade:96
-msgid "Type"
-msgstr "種類"
-
-#: setup/setup.glade:160
-msgid "<b>Rōmaji</b>"
-msgstr "<b>ローマ字</b>"
-
-#: setup/setup.glade:185
-msgid "Always convert 'nn' to 'ん'"
-msgstr "'nn'をかならず「ん」に変換する"
-
-#: setup/setup.glade:225
-msgid "Keyboard"
-msgstr "キーボード"
-
-#: setup/setup.glade:252
-msgid "<b>Dictionary</b>"
-msgstr "<b>辞書</b>"
-
-#: setup/setup.glade:293
-msgid "Kanji Dictionary"
-msgstr "漢字辞書"
-
-#: setup/setup.glade:315
-msgid "User Dictionary Name"
-msgstr "個人用辞書名"
-
-#: setup/setup.glade:382
-msgid "Reload dictionaries"
-msgstr "辞書を読みなおす"
-
-#: setup/setup.glade:417
-msgid "Clear input history"
-msgstr "入力履歴をクリアする"
-
-#: setup/setup.glade:460
-msgid "Dictionary"
-msgstr "辞書"
