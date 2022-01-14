@@ -70,7 +70,7 @@ NAME_TO_LOGGING_LEVEL = {
     'CRITICAL': logging.CRITICAL,
 }
 
-INPUT_MODE_NAMES = ('A', 'あ', 'ア', 'Ａ', 'ｱ')
+INPUT_MODE_NAMES = ('A', 'あ')
 
 IAA = '\uFFF9'  # IAA (INTERLINEAR ANNOTATION ANCHOR)
 IAS = '\uFFFA'  # IAS (INTERLINEAR ANNOTATION SEPARATOR)
@@ -174,7 +174,6 @@ class EnginePSKK(IBus.Engine):
         self.connect('set-cursor-location', self.set_cursor_location_cb)
 
         self._about_dialog = None
-        self._setup_proc = None
         self._q = queue.Queue()
 
     def _init_props(self):
@@ -192,19 +191,6 @@ class EnginePSKK(IBus.Engine):
             sub_props=None)
         self._input_mode_prop.set_sub_props(self._init_input_mode_props())
         self._prop_list.append(self._input_mode_prop)
-        '''
-        prop = IBus.Property(
-            key='Setup',
-            prop_type=IBus.PropType.NORMAL,
-            label=IBus.Text.new_from_string(_("Setup")),
-            icon=None,
-            tooltip=None,
-            sensitive=True,
-            visible=True,
-            state=IBus.PropState.UNCHECKED,
-            sub_props=None)
-        self._prop_list.append(prop)
-        '''
         prop = IBus.Property(
             key='About',
             prop_type=IBus.PropType.NORMAL,
@@ -237,41 +223,46 @@ class EnginePSKK(IBus.Engine):
                                    visible=True,
                                    state=IBus.PropState.UNCHECKED,
                                    sub_props=None))
-        '''
-        props.append(IBus.Property(key='InputMode.Katakana',
-                                   prop_type=IBus.PropType.RADIO,
-                                   label=IBus.Text.new_from_string(_("Katakana (ア)")),
-                                   icon=None,
-                                   tooltip=None,
-                                   sensitive=True,
-                                   visible=True,
-                                   state=IBus.PropState.UNCHECKED,
-                                   sub_props=None))
-        props.append(IBus.Property(key='InputMode.WideAlphanumeric',
-                                   prop_type=IBus.PropType.RADIO,
-                                   label=IBus.Text.new_from_string(_("Wide Alphanumeric (Ａ)")),
-                                   icon=None,
-                                   tooltip=None,
-                                   sensitive=True,
-                                   visible=True,
-                                   state=IBus.PropState.UNCHECKED,
-                                   sub_props=None))
-        props.append(IBus.Property(key='InputMode.HalfWidthKatakana',
-                                   prop_type=IBus.PropType.RADIO,
-                                   label=IBus.Text.new_from_string(_("Halfwidth Katakana (ｱ)")),
-                                   icon=None,
-                                   tooltip=None,
-                                   sensitive=True,
-                                   visible=True,
-                                   state=IBus.PropState.UNCHECKED,
-                                   sub_props=None))
-        '''
         return props
 
     def _update_input_mode(self):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))
         self._input_mode_prop.set_label(IBus.Text.new_from_string(_("Input mode (%s)") % self._mode))
         self.update_property(self._input_mode_prop)
+
+    def do_property_activate(self, prop_name, state):
+        logger.info(f'property_activate({prop_name}, {state})')
+        if prop_name == 'About':
+            if self._about_dialog:
+                self._about_dialog.present()
+                return
+            dialog = Gtk.AboutDialog()
+            dialog.set_program_name(_("PSKK"))
+            dialog.set_copyright("Copyright 2021-2022 Akira K.")
+            dialog.set_authors(["Akira K."])
+            dialog.set_documenters(["Akira K."])
+            dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
+            dialog.set_website_label(_("Introduction to PSKK"))
+            dialog.set_logo_icon_name(util.get_name())
+            dialog.set_default_icon_name(util.get_name())
+            dialog.set_version(util.get_version())
+            dialog.set_comments(_("config files location : ${HOME}/.config/ibus-pskk"))
+            # To close the dialog when "close" is clicked, e.g. on RPi,
+            # we connect the "response" signal to about_response_callback
+            dialog.connect("response", self.about_response_callback)
+            self._about_dialog = dialog
+            dialog.show()
+        elif prop_name.startswith('InputMode.'):
+            if state == IBus.PropState.CHECKED:
+                mode = {
+                    'InputMode.Alphanumeric': 'A',
+                    'InputMode.Hiragana': 'あ',
+                }.get(prop_name, 'A')
+                self.set_mode(mode, True)
+
+    def about_response_callback(self, dialog, response):
+        dialog.destroy()
+        self._about_dialog = None
 
     def _load_input_mode(self, settings):
         mode = settings.get_string('mode')
@@ -332,23 +323,8 @@ class EnginePSKK(IBus.Engine):
 
     def _config_value_changed_cb(self, settings, key):
         logger.debug(f'config_value_changed("{key}")')
-        if key == 'logging-level':
-            self._logging_level = self._load_logging_level(settings)
-        elif key == 'delay':
-            self._reset()
-            self._delay = self._load_delay(settings)
-            self._event = Event(self, self._delay, self._layout)
-        elif key == 'layout':
-            self._reset()
-            self._layout = self._load_layout(settings)
-            self._event = Event(self, self._delay, self._layout)
-        elif key == 'dictionary' or key == 'user-dictionary':
-            self._reset()
-            self._dict = self._load_dictionary(settings)
-        elif key == 'mode':
+        if key == 'mode':
             self.set_mode(self._load_input_mode(settings), True)
-        elif key == 'nn-as-jis-x-4063':
-            self._set_x4063_mode(self._load_x4063_mode(settings))
 
     def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
         return self._event.chr(), ''
@@ -742,7 +718,6 @@ class EnginePSKK(IBus.Engine):
             self._surrounding = SURROUNDING_RESET
         self._update_preedit()
         assert not self._dict.current()
-        self._handle_setup_proc()
 
     def _update_candidate(self):
         index = self._lookup_table.get_cursor_pos()
@@ -841,75 +816,6 @@ class EnginePSKK(IBus.Engine):
             self._q.put(line.strip())
             if process.poll() is not None:
                 return
-
-    def _start_setup(self):
-        if self._setup_proc:
-            if self._setup_proc.poll() is None:
-                return
-            self._setup_proc = None
-        try:
-            filename = os.path.join(util.get_libexecdir(), 'ibus-setup-pskk')
-            self._setup_proc = subprocess.Popen([filename], text=True, stdout=subprocess.PIPE)
-            t = threading.Thread(target=self._readline, args=(self._setup_proc,), daemon=True)
-            t.start()
-        except OSError as e:
-            logger.error(e)
-        except ValueError as e:
-            logger.error(e)
-
-    def _handle_setup_proc(self):
-        last = ''
-        while True:
-            try:
-                line = self._q.get_nowait()
-                if line == last:
-                    continue
-                last = line
-                logger.info(line)
-                if line == 'reload_dictionaries':
-                    self._dict = self._load_dictionary(self._settings)
-                elif line == 'clear_input_history':
-                    self._dict = self._load_dictionary(self._settings, clear_history=True)
-            except queue.Empty:
-                break
-
-    def do_property_activate(self, prop_name, state):
-        logger.info(f'property_activate({prop_name}, {state})')
-        if prop_name == 'Setup':
-            self._start_setup()
-        elif prop_name == 'About':
-            if self._about_dialog:
-                self._about_dialog.present()
-                return
-            dialog = Gtk.AboutDialog()
-            dialog.set_program_name(_("PSKK"))
-            dialog.set_copyright("Copyright 2017-2021 Esrille Inc.")
-            dialog.set_authors(["Esrille Inc."])
-            dialog.set_documenters(["Esrille Inc."])
-            dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
-            dialog.set_website_label(_("Introduction to PSKK"))
-            dialog.set_logo_icon_name(util.get_name())
-            dialog.set_default_icon_name(util.get_name())
-            dialog.set_version(util.get_version())
-            # To close the dialog when "close" is clicked, e.g. on RPi,
-            # we connect the "response" signal to about_response_callback
-            dialog.connect("response", self.about_response_callback)
-            self._about_dialog = dialog
-            dialog.show()
-        elif prop_name.startswith('InputMode.'):
-            if state == IBus.PropState.CHECKED:
-                mode = {
-                    'InputMode.Alphanumeric': 'A',
-                    'InputMode.Hiragana': 'あ',
-                    'InputMode.Katakana': 'ア',
-                    'InputMode.WideAlphanumeric': 'Ａ',
-                    'InputMode.HalfWidthKatakana': 'ｱ',
-                }.get(prop_name, 'A')
-                self.set_mode(mode, True)
-
-    def about_response_callback(self, dialog, response):
-        dialog.destroy()
-        self._about_dialog = None
 
     def set_surrounding_text_cb(self, engine, text, cursor_pos, anchor_pos):
         self._surrounding = SURROUNDING_SUPPORTED
