@@ -97,7 +97,8 @@ def main():
 
     # logging settings
     logfile_name = os.path.join(user_configdir, util.get_package_name() + '.log')
-    logging.basicConfig(filename=logfile_name, level=logging.DEBUG)
+    logging.basicConfig(filename=logfile_name, level=logging.DEBUG, 
+            format='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
     exec_by_ibus = False
     daemonize = False
