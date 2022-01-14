@@ -161,7 +161,8 @@ class EnginePSKK(IBus.Engine):
         self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
         self._settings.connect('changed', self._config_value_changed_cb)
 
-        self._logging_level = self._load_logging_level(self._settings)
+        self._config = util.get_config_data()
+        self._logging_level = self._load_logging_level(self._config)
         self._dict = self._load_dictionary(self._settings)
         self._layout = self._load_layout(self._settings)
         self._delay = self._load_delay(self._settings)
@@ -272,11 +273,13 @@ class EnginePSKK(IBus.Engine):
         logger.info(f'input mode: {mode}')
         return mode
 
-    def _load_logging_level(self, settings):
-        level = settings.get_string('logging-level')
+    def _load_logging_level(self, config):
+        level = 'WARNING' # default value
+        logger.info(config)
+        if 'logging_level' in config:
+            level = config['logging_level']
         if level not in NAME_TO_LOGGING_LEVEL:
             level = 'WARNING'
-            settings.reset('logging-level')
         logger.info(f'logging_level: {level}')
         logging.getLogger().setLevel(NAME_TO_LOGGING_LEVEL[level])
         return level
