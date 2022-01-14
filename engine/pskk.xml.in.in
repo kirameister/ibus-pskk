@@ -5,9 +5,9 @@
 	<description>PSKK</description>
 	<exec>${libexecdir}/ibus-engine-pskk --ibus</exec>
 	<version>@VERSION@</version>
-	<author>Esrille Inc. &lt;info@esrille.com&gt;</author>
+	<author>Akira K.</author>
 	<license>Apache</license>
-	<homepage>https://github.com/esrille/@PACKAGE_NAME@</homepage>
+	<homepage>https://github.com/kirameister/@PACKAGE_NAME@</homepage>
 	<textdomain>@PACKAGE_NAME@</textdomain>
 
 	<engines>
@@ -15,7 +15,7 @@
 			<name>pskk</name>
 			<language>ja</language>
 			<license>Apache</license>
-			<author>Esrille Inc. &lt;info@esrille.com&gt;</author>
+			<author>Akira K.</author>
 			<icon>@PACKAGE_NAME@</icon>
 			<icon_prop_key>InputMode</icon_prop_key>
 			<layout>default</layout>
