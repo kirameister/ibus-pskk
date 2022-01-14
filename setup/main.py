@@ -33,7 +33,7 @@ import locale
 import os
 import sys
 
-_ = lambda a : gettext.dgettext(util.get_name(), a)
+_ = lambda a : gettext.dgettext(util.get_package_name(), a)
 
 
 class SetupEnginePSKK:
@@ -41,7 +41,7 @@ class SetupEnginePSKK:
         self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
         self._settings.connect('changed', self.on_value_changed)
         self._builder = Gtk.Builder()
-        self._builder.set_translation_domain(util.get_name())
+        self._builder.set_translation_domain(util.get_package_name())
         self._builder.add_from_file(os.path.join(os.path.dirname(__file__), 'setup.glade'))
         self._builder.connect_signals(self)
         self._init_keyboard_layout()
@@ -228,8 +228,8 @@ def main():
 
 if __name__ == '__main__':
     try:
-        locale.bindtextdomain(util.get_name(), util.get_localedir())
+        locale.bindtextdomain(util.get_package_name(), util.get_localedir())
     except Exception:
         pass
-    gettext.bindtextdomain(util.get_name(), util.get_localedir())
+    gettext.bindtextdomain(util.get_package_name(), util.get_localedir())
     main()

@@ -41,7 +41,7 @@ keysyms = IBus
 
 logger = logging.getLogger(__name__)
 
-_ = lambda a: gettext.dgettext(util.get_name(), a)
+_ = lambda a: gettext.dgettext(util.get_package_name(), a)
 
 HIRAGANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんゔがぎぐげござじずぜぞだぢづでどばびぶべぼぁぃぅぇぉゃゅょっぱぴぷぺぽゎゐゑ・ーゝゞ"
 KATAKANA = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンヴガギグゲゴザジズゼゾダヂヅデドバビブベボァィゥェォャュョッパピプペポヮヰヱ・ーヽヾ"
@@ -243,8 +243,8 @@ class EnginePSKK(IBus.Engine):
             dialog.set_documenters(["Akira K."])
             dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
             dialog.set_website_label(_("Introduction to PSKK"))
-            dialog.set_logo_icon_name(util.get_name())
-            dialog.set_default_icon_name(util.get_name())
+            dialog.set_logo_icon_name(util.get_package_name())
+            dialog.set_default_icon_name(util.get_package_name())
             dialog.set_version(util.get_version())
             dialog.set_comments(_("config files location : ${HOME}/.config/ibus-pskk"))
             # To close the dialog when "close" is clicked, e.g. on RPi,

@@ -34,7 +34,7 @@ import gi
 gi.require_version('IBus', '1.0')
 from gi.repository import GLib, GObject, IBus
 
-_ = lambda a : gettext.dgettext(util.get_name(), a)
+_ = lambda a : gettext.dgettext(util.get_package_name(), a)
 
 
 class IMApp:
@@ -53,8 +53,8 @@ class IMApp:
                 version=util.get_version(),
                 license="Apache",
                 author="Akira K.",
-                homepage="https://github.com/kirameister/" + util.get_name(),
-                textdomain=util.get_name())
+                homepage="https://github.com/kirameister/" + util.get_package_name(),
+                textdomain=util.get_package_name())
             engine = IBus.EngineDesc(
                 name="pskk",
                 longname="PSKK",
@@ -62,7 +62,7 @@ class IMApp:
                 language="ja",
                 license="Apache",
                 author="Akira K.",
-                icon=util.get_name(),
+                icon=util.get_package_name(),
                 layout="default")
             self._component.add_engine(engine)
             self._bus.register_component(self._component)
@@ -96,7 +96,7 @@ def main():
         copyfile(os.path.join(util.get_datadir(), 'config.json'), configfile_name)
 
     # logging settings
-    logfile_name = os.path.join(user_configdir, util.get_name() + '.log')
+    logfile_name = os.path.join(user_configdir, util.get_package_name() + '.log')
     logging.basicConfig(filename = logfile_name, filemode='w', level=logging.DEBUG)
 
     exec_by_ibus = False
@@ -129,8 +129,8 @@ def main():
 
 if __name__ == "__main__":
     try:
-        locale.bindtextdomain(util.get_name(), util.get_localedir())
+        locale.bindtextdomain(util.get_package_name(), util.get_localedir())
     except Exception:
         pass
-    gettext.bindtextdomain(util.get_name(), util.get_localedir())
+    gettext.bindtextdomain(util.get_package_name(), util.get_localedir())
     main()

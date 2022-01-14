@@ -22,7 +22,7 @@ import gi
 from gi.repository import GLib
 
 
-def get_name():
+def get_package_name():
     return '@PACKAGE_NAME@'
 
 
