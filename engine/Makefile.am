@@ -20,6 +20,7 @@ engine_pskk_PYTHON = \
 	engine.py \
 	event.py \
 	main.py \
+	config.json \
 	$(NULL)
 BUILT_SOURCES = util.py
 nodist_engine_pskk_PYTHON = util.py

@@ -86,17 +86,17 @@ def main():
     os.umask(0o077)
 
     # Create user specific data directory
-    user_datadir = util.get_user_datadir()
-    os.makedirs(user_datadir, 0o700, True)
-    os.chmod(user_datadir, 0o700)   # For logfile created by v0.2.0 or earlier
+    user_configdir = util.get_user_configdir()
+    os.makedirs(user_configdir, 0o700, True)
+    os.chmod(user_configdir, 0o700)   # For logfile created by v0.2.0 or earlier
 
     # check the config file and copy it from installed directory if it does not exist
     configfile_name = os.path.join(user_configdir, 'config.json')
     if not os.path.exists(configfile_name):
-        copyfile(os.path.join(util.get_engine_pkgdir(), 'config.json'), configfile_name)
+        copyfile(os.path.join(util.get_datadir(), 'config.json'), configfile_name)
 
     # logging settings
-    logfile_name = os.path.join(user_configdir, util.get_package_name() + '.log')
+    logfile_name = os.path.join(user_configdir, util.get_name() + '.log')
     logging.basicConfig(filename = logfile_name, filemode='w', level=logging.DEBUG)
 
     exec_by_ibus = False

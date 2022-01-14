@@ -48,3 +48,39 @@ def get_libexecdir():
 
 def get_localedir():
     return '${localedir}'
+
+
+def get_user_configdir():
+    return os.path.join(GLib.get_user_config_dir(), get_name())
+
+
+def get_user_configdir_relative_to_home():
+    return get_user_configdir().replace(get_homedir(), '$' + '{HOME}')
+
+
+def get_config_data():
+    configfile_name = os.path.join(get_user_configdir(), 'config.json')
+    with open(configfile_name) as config_json:
+        return json.load(config_json)
+    logger.error(f'Error in loading config file: {configfile_name}')
+    return None
+
+
+def get_layout(config):
+    layout_file_name = config['layout']
+    layout_file_path = ''
+    if os.path.exists(os.path.join(get_user_configdir(), layout_file_name)):
+        layout_file_path = os.path.join(get_user_configdir(), layout_file_name)
+    elif os.path.exists(os.path.join(get_datadir(), 'layouts', layout_file_name)):
+        layout_file_path = os.path.join(get_datadir(), 'layouts', layout_file_name)
+    else:
+        layout_file_path = os.path.join(get_datadir(), 'layouts', 'roman.json')
+    with open(layout_file_path) as layout_json:
+        return json.load(layout_json)
+    logger.error(f'Error in loading layout file: {layout_file_path}')
+    return None
+
+
+
+
+
