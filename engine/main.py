@@ -3,7 +3,8 @@
 # Using source code derived from
 #   ibus-tmpl - The Input Bus template project
 #
-# Copyright (c) 2017-2021 Esrille Inc.
+# Copyright (c) 2017-2021 Esrille Inc. (ibus-hiragana)
+# Modifications Copyright (C) 2022 Akira K.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,12 +21,14 @@
 from engine import EnginePSKK
 import util
 
+import argparse
 import getopt
 import gettext
 import os
 import locale
 import logging
 import sys
+from shutil import copyfile
 
 import gi
 gi.require_version('IBus', '1.0')
@@ -49,8 +52,8 @@ class IMApp:
                 description="PSKK",
                 version=util.get_version(),
                 license="Apache",
-                author="Esrille Inc. <info@esrille.com>",
-                homepage="https://github.com/esrille/" + util.get_name(),
+                author="Akira K.",
+                homepage="https://github.com/kirameister/" + util.get_name(),
                 textdomain=util.get_name())
             engine = IBus.EngineDesc(
                 name="pskk",
@@ -58,7 +61,7 @@ class IMApp:
                 description="PSKK",
                 language="ja",
                 license="Apache",
-                author="Esrille Inc. <info@esrille.com>",
+                author="Akira K.",
                 icon=util.get_name(),
                 layout="default")
             self._component.add_engine(engine)
@@ -87,9 +90,14 @@ def main():
     os.makedirs(user_datadir, 0o700, True)
     os.chmod(user_datadir, 0o700)   # For logfile created by v0.2.0 or earlier
 
-    # Create a debug log file
-    logfile = os.path.join(user_datadir, util.get_name() + '.log')
-    logging.basicConfig(filename=logfile, filemode='w', level=logging.WARNING)
+    # check the config file and copy it from installed directory if it does not exist
+    configfile_name = os.path.join(user_configdir, 'config.json')
+    if not os.path.exists(configfile_name):
+        copyfile(os.path.join(util.get_engine_pkgdir(), 'config.json'), configfile_name)
+
+    # logging settings
+    logfile_name = os.path.join(user_configdir, util.get_package_name() + '.log')
+    logging.basicConfig(filename = logfile_name, filemode='w', level=logging.DEBUG)
 
     exec_by_ibus = False
     daemonize = False
@@ -116,7 +124,6 @@ def main():
     if daemonize:
         if os.fork():
             sys.exit()
-
     IMApp(exec_by_ibus).run()
 
 
