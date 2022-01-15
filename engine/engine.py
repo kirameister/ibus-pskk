@@ -165,8 +165,9 @@ class EnginePSKK(IBus.Engine):
         self._logging_level = self._load_logging_level(self._config)
         self._dict = self._load_dictionary(self._settings)
         self._layout = self._load_layout(self._settings)
-        self._delay = self._load_delay(self._settings)
-        self._event = Event(self, self._delay, self._layout)
+        #self._delay = self._load_delay(self._settings)
+        #self._event = Event(self, self._delay, self._layout)
+        self._event = Event(self, self._layout)
 
         self.set_mode(self._load_input_mode(self._settings))
         self._set_x4063_mode(self._load_x4063_mode(self._settings))
@@ -314,10 +315,10 @@ class EnginePSKK(IBus.Engine):
             self._to_kana = self._handle_default_layout
         return layout
 
-    def _load_delay(self, settings):
-        delay = settings.get_int('delay')
-        logger.info(f'delay: {delay}')
-        return delay
+    #def _load_delay(self, settings):
+    #    delay = settings.get_int('delay')
+    #    logger.info(f'delay: {delay}')
+    #    return delay
 
     def _load_x4063_mode(self, settings):
         mode = settings.get_boolean('nn-as-jis-x-4063')

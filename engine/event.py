@@ -53,9 +53,10 @@ NOT_DUAL_SPACE_BIT = SPACE_BIT << 16
 
 
 class Event:
-    def __init__(self, engine, delay, layout):
+    #def __init__(self, engine, delay, layout):
+    def __init__(self, engine, layout):
         self._engine = engine
-        self._delay = delay    # Delay for non-shift keys in milliseconds (mainly for Nicola layout)
+        #self._delay = delay    # Delay for non-shift keys in milliseconds (mainly for Nicola layout)
 
         # Set to the default values
         self._OnOffByCaps = True               # or False
@@ -323,9 +324,9 @@ class Event:
             return False
 
         if self._engine.is_enabled():
-            if 0 < self._delay:
-                GLib.timeout_add(self._delay, self.handle_key_event_timeout, keyval, keycode, state)
-                return True
+            #if 0 < self._delay:
+            #    GLib.timeout_add(self._delay, self.handle_key_event_timeout, keyval, keycode, state)
+            #    return True
             return self.handle_key_event(keyval, keycode, state)
 
         if self.is_dual_role() and alt_gr:
