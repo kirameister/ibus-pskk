@@ -165,12 +165,9 @@ class EnginePSKK(IBus.Engine):
         self._logging_level = self._load_logging_level(self._config)
         self._dict = self._load_dictionary(self._settings)
         self._layout = self._load_layout(self._settings)
-        #self._delay = self._load_delay(self._settings)
-        #self._event = Event(self, self._delay, self._layout)
         self._event = Event(self, self._layout)
 
         self.set_mode(self._load_input_mode(self._settings))
-        #self._set_x4063_mode(self._load_x4063_mode(self._settings))
         self.character_after_n = "aiueo'wy"
 
         self.connect('set-surrounding-text', self.set_surrounding_text_cb)
@@ -277,7 +274,6 @@ class EnginePSKK(IBus.Engine):
 
     def _load_logging_level(self, config):
         level = 'WARNING' # default value
-        logger.info(config)
         if 'logging_level' in config:
             level = config['logging_level']
         if level not in NAME_TO_LOGGING_LEVEL:
@@ -315,16 +311,6 @@ class EnginePSKK(IBus.Engine):
         else:
             self._to_kana = self._handle_default_layout
         return layout
-
-    #def _load_delay(self, settings):
-    #    delay = settings.get_int('delay')
-    #    logger.info(f'delay: {delay}')
-    #    return delay
-
-    def _load_x4063_mode(self, settings):
-        mode = settings.get_boolean('nn-as-jis-x-4063')
-        logger.info(f'nn_as_jis_x_4063 mode: {mode}')
-        return mode
 
     def _config_value_changed_cb(self, settings, key):
         logger.debug(f'config_value_changed("{key}")')
