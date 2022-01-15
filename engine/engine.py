@@ -170,7 +170,8 @@ class EnginePSKK(IBus.Engine):
         self._event = Event(self, self._layout)
 
         self.set_mode(self._load_input_mode(self._settings))
-        self._set_x4063_mode(self._load_x4063_mode(self._settings))
+        #self._set_x4063_mode(self._load_x4063_mode(self._settings))
+        self.character_after_n = "aiueo'wy"
 
         self.connect('set-surrounding-text', self.set_surrounding_text_cb)
         self.connect('set-cursor-location', self.set_cursor_location_cb)
@@ -349,12 +350,12 @@ class EnginePSKK(IBus.Engine):
             yomi = self._layout['Normal'].get(c, '')
         return yomi, preedit
 
-    def _set_x4063_mode(self, on):
-        if on:
-            self.character_after_n = "aiueo'wyn"
-        else:
-            self.character_after_n = "aiueo'wy"
-        logger.debug(f'set_x4063_mode({on})')
+    #def _set_x4063_mode(self, on):
+    #    if on:
+    #        self.character_after_n = "aiueo'wyn"
+    #    else:
+    #        self.character_after_n = "aiueo'wy"
+    #    logger.debug(f'set_x4063_mode({on})')
 
     def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
         yomi = ''
