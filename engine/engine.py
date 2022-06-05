@@ -161,14 +161,16 @@ class EnginePSKK(IBus.Engine):
         self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
         self._settings.connect('changed', self._config_value_changed_cb)
 
-        self._config = util.get_config_data()
-        self._logging_level = self._load_logging_level(self._config)
+        # load configs
+        self._load_configs()
+        #self._config = util.get_config_data()
+        #self._logging_level = self._load_logging_level(self._config)
         self._dict = self._load_dictionary(self._settings)
         self._layout = self._load_layout(self._settings)
         self._event = Event(self, self._layout)
 
         self.set_mode(self._load_input_mode(self._settings))
-        self.character_after_n = "aiueo'wy"
+        #self.character_after_n = "aiueo'wy"
 
         self.connect('set-surrounding-text', self.set_surrounding_text_cb)
         self.connect('set-cursor-location', self.set_cursor_location_cb)
@@ -260,6 +262,12 @@ class EnginePSKK(IBus.Engine):
                 }.get(prop_name, 'A')
                 self.set_mode(mode, True)
 
+    def _load_configs(self):
+        self._config = util.get_config_data()
+        self._logging_level = self._load_logging_level(self._config)
+        # loading layout should be part of (re-)loading config
+        # self._layout = ...
+
     def about_response_callback(self, dialog, response):
         dialog.destroy()
         self._about_dialog = None
@@ -304,13 +312,22 @@ class EnginePSKK(IBus.Engine):
                     layout = json.load(f)
             except Exception as error:
                 logger.error(error)
-        if layout.get('Type') == 'Kana':
-            self._to_kana = self._handle_kana_layout
-        elif 'Roomazi' in layout:
+        if 'Roomazi' in layout:
             self._to_kana = self._handle_roomazi_layout
         else:
             self._to_kana = self._handle_default_layout
         return layout
+
+    def _preedit_to_yomi(self, preedit, keyval, state=0, modifiers=0):
+        yomi = ''
+        c = self._evnet.chr().lower()
+        preedit += c
+        if(preedit in self._layout['layout']):
+            # FIXME why += instead of = ?
+            yomi += self._layout['layout'][preedit]
+            preedit = ''
+        return(yomi, preedit)
+
 
     def _config_value_changed_cb(self, settings, key):
         logger.debug(f'config_value_changed("{key}")')
@@ -320,35 +337,12 @@ class EnginePSKK(IBus.Engine):
     def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
         return self._event.chr(), ''
 
-    def _handle_kana_layout(self, preedit, keyval, state=0, modifiers=0):
-        yomi = ''
-        c = self._event.chr().lower()
-        if c == '_' and self._event._keycode == 0x59:
-            c = '¦'
-        if self._event.is_shift():
-            if 'Shift' in self._layout:
-                yomi = self._layout['Shift'].get(c, '')
-            elif modifiers & event.SHIFT_L_BIT:
-                yomi = self._layout['ShiftL'].get(c, '')
-            elif modifiers & event.SHIFT_R_BIT:
-                yomi = self._layout['ShiftR'].get(c, '')
-        else:
-            yomi = self._layout['Normal'].get(c, '')
-        return yomi, preedit
-
-    #def _set_x4063_mode(self, on):
-    #    if on:
-    #        self.character_after_n = "aiueo'wyn"
-    #    else:
-    #        self.character_after_n = "aiueo'wy"
-    #    logger.debug(f'set_x4063_mode({on})')
-
     def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
         yomi = ''
         c = self._event.chr().lower()
-        if preedit == 'n' and self.character_after_n.find(c) < 0:
-            yomi = 'ん'
-            preedit = preedit[1:]
+        #if preedit == 'n' and self.character_after_n.find(c) < 0:
+        #    yomi = 'ん'
+        #    preedit = preedit[1:]
         preedit += c
         if preedit in self._layout['Roomazi']:
             yomi += self._layout['Roomazi'][preedit]
