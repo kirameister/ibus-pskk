@@ -340,6 +340,8 @@ class EnginePSKK(IBus.Engine):
     def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
         yomi = ''
         c = self._event.chr().lower()
+        # most probably this part could be handled by some sort of
+        # smart algorithm..
         #if preedit == 'n' and self.character_after_n.find(c) < 0:
         #    yomi = 'ん'
         #    preedit = preedit[1:]
