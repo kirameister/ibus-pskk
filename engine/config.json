@@ -5,5 +5,9 @@
     ".layout_ja": "タイピング配列のレイアウトが記述されている json ファイルの名前を指定します。ファイルは ${config_dir}、そして ${libexecdir} 以下に存在するかチェックされ、見つからない場合はデフォルト値として ${libexecdir} 以下にある roman.json が使用されます。",
     "layout": "roman.json",
     ".dictionaries": "",
-    "dictionaries": ""
+    "dictionaries": "",
+    ".kanchoku_marker": "list of the keys which are meant to be used for typing in kanchoku (漢直) strokes while being pressed",
+    "kanchoku_marker": ["space"],
+    ".bunsetsu_marker": "list of the keys which are meant to be used for starting the bunsetsu (文節) when being pressed -- it is possible to use the same value as in kanchoku_marker",
+    "bunsetsu_marker": ["space"]
 }
