@@ -47,7 +47,6 @@ class SetupEnginePSKK:
         self._init_keyboard_layout()
         self._init_keyboard_type()
         self._init_dictionary()
-        self._init_nn_as_x4063()
         self._set_current_keyboard(self._settings.get_string('layout'))
         self._window = self._builder.get_object('SetupDialog')
         self._window.set_default_icon_name('ibus-setup-pskk')
@@ -130,11 +129,6 @@ class SetupEnginePSKK:
         self._reload_dictionaries = self._builder.get_object('ReloadDictionaries')
         self._clear_input_history = self._builder.get_object('ClearInputHistory')
 
-    def _init_nn_as_x4063(self):
-        self._nn_as_x4063 = self._builder.get_object('NnAsX4063')
-        current = self._settings.get_value('nn-as-jis-x-4063')
-        self._nn_as_x4063.set_active(current)
-
     def run(self):
         Gtk.main()
 
@@ -151,10 +145,6 @@ class SetupEnginePSKK:
             layout += model[i][1]
         layout = os.path.join(util.get_datadir(), 'layouts/' + layout + '.json')
         self._settings.set_string('layout', layout)
-
-        # nn-as-jis-x-4063
-        nn_as_x4063 = self._nn_as_x4063.get_active()
-        self._settings.set_boolean('nn-as-jis-x-4063', nn_as_x4063)
 
         # dictionary
         model = self._kanzi_dictionaries.get_model()
@@ -179,9 +169,6 @@ class SetupEnginePSKK:
         value = settings.get_value(key)
         if key == 'layout':
             self._set_current_keyboard(value.get_string())
-        elif key == 'nn-as-jis-x-4063':
-            t = value.get_boolean()
-            self._nn_as_x4063.set_active(value.get_boolean())
         elif key == 'dictionary':
             current = value.get_string()
             current = os.path.basename(current)
