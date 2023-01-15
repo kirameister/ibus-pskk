@@ -57,13 +57,17 @@ class Dictionary:
 
         # Load private dictionary
         self._dict = self._dict_base.copy()
+        logger.info('engine/dictionary.py check0')
         if user:
-            my_path = os.path.join(util.get_user_datadir(), user)
+            #my_path = os.path.join(util.get_user_datadir(), user)
+            my_path = os.path.join(util.get_user_configdir(), user)
+            logger.info(f'engine/dictionary.py init -- my_path: {my_path}')
             self._load_dict(self._dict, my_path, 'a+')
 
         base = os.path.basename(path)
         if base:
-            self._orders_path = os.path.join(util.get_user_datadir(), base)
+            #self._orders_path = os.path.join(util.get_user_datadir(), base)
+            self._orders_path = os.path.join(util.get_user_configdir(), base)
             if clear_history:
                 logger.info('clear_history')
                 with open(self._orders_path, 'w') as file:

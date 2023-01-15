@@ -97,8 +97,11 @@ def main():
 
     # logging settings
     logfile_name = os.path.join(user_configdir, util.get_package_name() + '.log')
-    logging.basicConfig(filename=logfile_name, level=logging.DEBUG,
-            format='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    logging.basicConfig(filename=logfile_name, level=logging.DEBUG, format='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    logger = logging.getLogger()
+    logger.info(f'engine/main.py user_configdir: {user_configdir}')
+    logger.info(f'engine/main.py util.get_package_name(): {util.get_package_name()}')
+    logger.info(f'engine/main.py util.get_datadir(): {util.get_datadir()}')
 
     exec_by_ibus = False
     daemonize = False
@@ -121,11 +124,15 @@ def main():
         else:
             sys.stderr.write("Unknown argument: %s\n" % o)
             print_help(1)
+    logger.info(f'daemonize? : {daemonize}')
+    logger.info(f'IBus exec? : {exec_by_ibus}')
 
     if daemonize:
         if os.fork():
             sys.exit()
+    logger.info('check8')
     IMApp(exec_by_ibus).run()
+    logger.info('check9')
 
 
 if __name__ == "__main__":
