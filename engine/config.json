@@ -1,6 +1,13 @@
 {
+    ".keycode_modkeys": "For the list of available ModKeys, see https://github.com/ibus/ibus/blob/main/data/keymaps/modifiers",
+    ".keycode_keys": "For the list of available non-ModKeys, wee https://github.com/ibus/ibus/blob/main/data/keymaps/common",
     ".logging_level": "level of the runtime logging",
     "logging_level": "DEBUG",
+
+    ".enable_hiragana": "list of the keys to enable hiragana/Japnaese typing",
+    "enable_hiragana": "["Alt_R"]",
+    ".disable_hiragana": "list of the keys to disablej hiragana/Japnaese typing",
+    "disable_hiragana": "["Alt_L"]",
     ".layout": "the name of the json file containing the typing layout. It will be searched under ${config_dir} and then ${libexecdir}. When specified file is not found, roman.json under ${libexecdir} will be used as default",
     ".layout_ja": "タイピング配列のレイアウトが記述されている json ファイルの名前を指定します。ファイルは ${config_dir}、そして ${libexecdir} 以下に存在するかチェックされ、見つからない場合はデフォルト値として ${libexecdir} 以下にある roman.json が使用されます。",
     "layout": "roman.json",

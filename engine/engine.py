@@ -312,10 +312,6 @@ class EnginePSKK(IBus.Engine):
                     layout = json.load(f)
             except Exception as error:
                 logger.error(error)
-        if 'Roomazi' in layout:
-            self._to_kana = self._handle_roomazi_layout
-        else:
-            self._to_kana = self._handle_default_layout
         return layout
 
     def _preedit_to_yomi(self, preedit, keyval, state=0, modifiers=0):
