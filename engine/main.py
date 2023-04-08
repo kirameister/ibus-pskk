@@ -112,8 +112,11 @@ def main():
     try:
         opts, args = getopt.getopt(sys.argv[1:], shortopt, longopt)
     except getopt.GetoptError as err:
-        print_help(1)
+        logger.error(err)
+        # print_help(1)
+        sys.exit(1)
 
+    # this is still required as argparse is having problem with IBus
     for o, a in opts:
         if o in ("-h", "--help"):
             print_help(0)
