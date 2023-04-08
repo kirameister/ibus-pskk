@@ -266,7 +266,8 @@ class EnginePSKK(IBus.Engine):
         self._config = util.get_config_data()
         self._logging_level = self._load_logging_level(self._config)
         # loading layout should be part of (re-)loading config
-        # self._layout = ...
+        self._layout = self._load_layout(self._settings)
+        self._event = Event(self, self._layout)
 
     def about_response_callback(self, dialog, response):
         dialog.destroy()
