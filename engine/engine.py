@@ -149,6 +149,7 @@ class EnginePSKK(IBus.Engine):
         self._shrunk = []
         self._surrounding = SURROUNDING_RESET
 
+        # This property is for confirming the kanji-kana converted string
         self._lookup_table = IBus.LookupTable.new(10, 0, True, False)
         self._lookup_table.set_orientation(IBus.Orientation.VERTICAL)
 
