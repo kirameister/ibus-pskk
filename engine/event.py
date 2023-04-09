@@ -56,7 +56,6 @@ class Event:
     #def __init__(self, engine, delay, layout):
     def __init__(self, engine, layout):
         self._engine = engine
-        #self._delay = delay    # Delay for non-shift keys in milliseconds (mainly for Nicola layout)
 
         # Set to the default values
         self._OnOffByCaps = True               # or False
@@ -69,6 +68,7 @@ class Event:
         self._Prefix = False                   # True if Shift is to be prefixed
         self._HasYen = False
         self._DualBits = DUAL_SHIFT_L_BIT
+
 
         if layout.get("Keyboard") == "109":
             self._Kana = keysyms.Hiragana_Katakana

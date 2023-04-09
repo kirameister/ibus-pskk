@@ -72,10 +72,6 @@ NAME_TO_LOGGING_LEVEL = {
 
 INPUT_MODE_NAMES = ('A', 'あ')
 
-IAA = '\uFFF9'  # IAA (INTERLINEAR ANNOTATION ANCHOR)
-IAS = '\uFFFA'  # IAS (INTERLINEAR ANNOTATION SEPARATOR)
-IAT = '\uFFFB'  # IAT (INTERLINEAR ANNOTATION TERMINATOR)
-
 CANDIDATE_FOREGROUND_COLOR = 0x000000
 CANDIDATE_BACKGROUND_COLOR = 0xd1eaff
 
@@ -172,7 +168,6 @@ class EnginePSKK(IBus.Engine):
         self.set_mode(self._load_input_mode(self._settings))
         #self.character_after_n = "aiueo'wy"
 
-        self.connect('set-surrounding-text', self.set_surrounding_text_cb)
         self.connect('set-cursor-location', self.set_cursor_location_cb)
 
         self._about_dialog = None
@@ -426,9 +421,6 @@ class EnginePSKK(IBus.Engine):
         self._update_input_mode()
         return True
 
-    def _is_roomazi_mode(self):
-        return self._to_kana == self._handle_roomazi_layout
-
     def do_process_key_event(self, keyval, keycode, state):
         return self._event.process_key_event(keyval, keycode, state)
 
@@ -448,7 +440,6 @@ class EnginePSKK(IBus.Engine):
 
     def handle_key_event(self, keyval, keycode, state, modifiers):
         logger.debug(f'handle_key_event("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x}, {modifiers:#07x})')
-
         if self._event.is_dual_role():
             pass
         elif self._event.is_modifier():
@@ -800,26 +791,6 @@ class EnginePSKK(IBus.Engine):
             self._q.put(line.strip())
             if process.poll() is not None:
                 return
-
-    def set_surrounding_text_cb(self, engine, text, cursor_pos, anchor_pos):
-        self._surrounding = SURROUNDING_SUPPORTED
-        self._previous_text = ''
-        text = self.get_plain_text(text.get_text())
-        logger.debug(f'set_surrounding_text_cb("{text}", {cursor_pos}, {anchor_pos})')
-
-    def get_plain_text(self, text):
-        plain = ''
-        in_ruby = False
-        for c in text:
-            if c == IAA:
-                in_ruby = False
-            elif c == IAS:
-                in_ruby = True
-            elif c == IAT:
-                in_ruby = False
-            elif not in_ruby:
-                plain += c
-        return plain
 
     def set_cursor_location_cb(self, engine, x, y, w, h):
         # On Raspbian, at least till Buster, the candidate window does not
