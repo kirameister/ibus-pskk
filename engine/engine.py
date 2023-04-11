@@ -236,7 +236,7 @@ class EnginePSKK(IBus.Engine):
                 return
             dialog = Gtk.AboutDialog()
             dialog.set_program_name(_("PSKK"))
-            dialog.set_copyright("Copyright 2021-2022 Akira K.")
+            dialog.set_copyright("Copyright 2021-2023 Akira K.")
             dialog.set_authors(["Akira K."])
             dialog.set_documenters(["Akira K."])
             dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
@@ -330,6 +330,7 @@ class EnginePSKK(IBus.Engine):
     def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
         return self._event.chr(), ''
 
+    ## Is this function actually used at all??
     def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
         yomi = ''
         c = self._event.chr().lower()
