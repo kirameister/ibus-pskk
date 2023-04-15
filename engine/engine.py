@@ -312,6 +312,7 @@ class EnginePSKK(IBus.Engine):
             except Exception as error:
                 logger.error(error)
         # from here, it should be experimental
+        self._max_preedit_len = 0
         for arr in layout['layout'].values():
             self._max_preedit_len = max(self._max_preedit_len, len(arr[0]))
         logger.info(f'max_preedit_len: {self._max_preedit_len}')
