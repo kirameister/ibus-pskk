@@ -142,6 +142,7 @@ class EnginePSKK(IBus.Engine):
         self._override = False
 
         self._layout = dict()
+        self._max_preedit_len = 0 # maximum len of chars in input column; updated upon load_layout
         self._to_kana = self._handle_default_layout
 
         self._preedit_string = ''   # in rômazi
@@ -301,6 +302,7 @@ class EnginePSKK(IBus.Engine):
         try:
             with open(path) as f:
                 layout = json.load(f)
+                logger.info(f'layout JSON file loaded: {path}')
         except Exception as error:
             logger.error(error)
         if not layout:
@@ -309,6 +311,11 @@ class EnginePSKK(IBus.Engine):
                     layout = json.load(f)
             except Exception as error:
                 logger.error(error)
+        # from here, it should be experimental
+        for arr in layout['layout'].values():
+            self._max_preedit_len = max(self._max_preedit_len, len(arr[0]))
+        logger.info(f'max_preedit_len: {self._max_preedit_len}')
+        # until here
         if 'Roomazi' in layout:
             self._to_kana = self._handle_roomazi_layout
         else:
@@ -324,7 +331,6 @@ class EnginePSKK(IBus.Engine):
             yomi += self._layout['layout'][preedit]
             preedit = ''
         return(yomi, preedit)
-
 
     def _config_value_changed_cb(self, settings, key):
         logger.debug(f'config_value_changed("{key}")')
