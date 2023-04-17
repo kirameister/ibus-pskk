@@ -142,7 +142,8 @@ class EnginePSKK(IBus.Engine):
         self._override = False
 
         self._layout = dict()
-        self._max_preedit_len = 0 # maximum len of chars in input column; updated upon load_layout
+        self._max_preedit_len = 0 #: maximum len of chars in input column; updated upon load_layout
+        self._layout_dict_array = []
         self._to_kana = self._handle_default_layout
 
         self._preedit_string = ''   # in rômazi
@@ -316,6 +317,27 @@ class EnginePSKK(IBus.Engine):
         for arr in layout['layout'].values():
             self._max_preedit_len = max(self._max_preedit_len, len(arr[0]))
         logger.info(f'max_preedit_len: {self._max_preedit_len}')
+        self._layout_dict_array = []
+        for i in range(self._max_preedit_len):
+            self._layout_dict_array.append(dict())
+        for l in layout.values():
+            # l is a list where the 0th element is input
+            input_len = len(l[0])
+            list_values = dict()
+            if(input_len == 0):
+                logger.warning('input str len === 0 detected; skipping..')
+                continue
+            if(l[0] != ""):
+                logger.warning('empty input str detected; skipping..')
+                continue
+            if(l[1] != ""):
+                list_values["output"] = l[1]
+            if(l[2] != ""):
+                list_values["pending"] = l[2]
+            if(len(l) > 3 and type(l[3]) == int):
+                list_values["simul_limit_ms"] = l[3]
+            self._layout_dict_array[l[0]] = list_values
+            logger.info(f'new layout entry added: {l[0]} => {list_values}')
         # until here
         if 'Roomazi' in layout:
             self._to_kana = self._handle_roomazi_layout
