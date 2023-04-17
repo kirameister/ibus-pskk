@@ -345,6 +345,7 @@ class EnginePSKK(IBus.Engine):
             self._to_kana = self._handle_default_layout
         return layout
 
+    # is this function really used at all?
     def _preedit_to_yomi(self, preedit, keyval, state=0, modifiers=0):
         yomi = ''
         c = self._evnet.chr().lower()
@@ -360,10 +361,10 @@ class EnginePSKK(IBus.Engine):
         if key == 'mode':
             self.set_mode(self._load_input_mode(settings), True)
 
+    # it seems like a way to passthrough the ascii (and similar) chars to the output?
     def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
         return self._event.chr(), ''
 
-    ## Is this function actually used at all??
     def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
         yomi = ''
         c = self._event.chr().lower()
