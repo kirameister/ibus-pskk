@@ -13,6 +13,7 @@
 # limitations under the License.
 
 dist_layouts_DATA = \
+	shingeta.json \
 	jis.109.json \
 	roomazi.json \
 	roomazi.109.json \
