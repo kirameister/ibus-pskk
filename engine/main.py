@@ -133,9 +133,7 @@ def main():
     if daemonize:
         if os.fork():
             sys.exit()
-    logger.info('check8')
     IMApp(exec_by_ibus).run()
-    logger.info('check9')
 
 
 if __name__ == "__main__":
