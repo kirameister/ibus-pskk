@@ -313,36 +313,39 @@ class EnginePSKK(IBus.Engine):
             except Exception as error:
                 logger.error(error)
         # from here, it should be experimental
-        self._max_preedit_len = 0
-        for arr in layout['layout'].values():
-            self._max_preedit_len = max(self._max_preedit_len, len(arr[0]))
-        logger.info(f'max_preedit_len: {self._max_preedit_len}')
-        self._layout_dict_array = []
-        for i in range(self._max_preedit_len):
-            self._layout_dict_array.append(dict())
-        for l in layout.values():
-            # l is a list where the 0th element is input
-            input_len = len(l[0])
-            list_values = dict()
-            if(input_len == 0):
-                logger.warning('input str len === 0 detected; skipping..')
-                continue
-            if(l[0] != ""):
-                logger.warning('empty input str detected; skipping..')
-                continue
-            if(l[1] != ""):
-                list_values["output"] = l[1]
-            if(l[2] != ""):
-                list_values["pending"] = l[2]
-            if(len(l) > 3 and type(l[3]) == int):
-                list_values["simul_limit_ms"] = l[3]
-            self._layout_dict_array[l[0]] = list_values
-            logger.info(f'new layout entry added: {l[0]} => {list_values}')
+        # self._max_preedit_len = 0
+        # for arr in layout['layout'].values():
+        #     self._max_preedit_len = max(self._max_preedit_len, len(arr[0]))
+        # logger.info(f'max_preedit_len: {self._max_preedit_len}')
+        # self._layout_dict_array = []
+        # for i in range(self._max_preedit_len):
+        #     self._layout_dict_array.append(dict())
+        # for l in layout.values():
+        #     # l is a list where the 0th element is input
+        #     input_len = len(l[0])
+        #     list_values = dict()
+        #     if(input_len == 0):
+        #         logger.warning('input str len === 0 detected; skipping..')
+        #         continue
+        #     if(l[0] != ""):
+        #         logger.warning('empty input str detected; skipping..')
+        #         continue
+        #     if(l[1] != ""):
+        #         list_values["output"] = l[1]
+        #     if(l[2] != ""):
+        #         list_values["pending"] = l[2]
+        #     if(len(l) > 3 and type(l[3]) == int):
+        #         list_values["simul_limit_ms"] = l[3]
+        #     self._layout_dict_array[l[0]] = list_values
+        #     logger.info(f'new layout entry added: {l[0]} => {list_values}')
         # until here
         if 'Roomazi' in layout:
             self._to_kana = self._handle_roomazi_layout
+            logger.info('self._to_kana = self._handle_roomazi_layout')
         else:
             self._to_kana = self._handle_default_layout
+            logger.info('self._to_kana = self._handle_default_layout')
+            self._to_kana = self._handle_roomazi_layout # eventually, the definition of roomazi_layout should be moved to default_layout
         return layout
 
     # is this function really used at all?
