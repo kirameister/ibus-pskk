@@ -38,7 +38,23 @@ _ = lambda a : gettext.dgettext(util.get_package_name(), a)
 
 
 class IMApp:
-    def __init__(self, exec_by_ibus):
+    def __init__(self, exec_by_ibus: bool) -> None:
+        """
+        Initializes a new instance of the class.
+
+        Args:
+            exec_by_ibus (bool): A boolean value indicating whether the execution should be done by IBus.
+
+        Raises:
+            TypeError: If the `exec_by_ibus` parameter is not a boolean value.
+
+        Returns:
+            None
+        """
+        if not isinstance(exec_by_ibus, bool):
+            raise TypeError("The `exec_by_ibus` parameter must be a boolean value.")
+        self.exec_by_ibus = exec_by_ibus
+
         self._mainloop = GLib.MainLoop()
         self._bus = IBus.Bus()
         self._bus.connect("disconnected", self._bus_disconnected_cb)
@@ -75,14 +91,42 @@ class IMApp:
         self._mainloop.quit()
 
 
-def print_help(v=0):
+def print_help(v: int = 0) -> None:
+    """
+    Prints out the help message for the program.
+
+    Args:
+        v (int): The exit code to use when exiting the program. Defaults to 0.
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
     print("-i, --ibus             executed by IBus.")
     print("-h, --help             show this message.")
     print("-d, --daemonize        daemonize ibus")
     sys.exit(v)
 
 
+
 def main():
+    """
+    This is the main function of the program. It serves as the entry point for the program and is responsible for coordinating the execution of the program.
+
+    Parameters:
+    None
+
+    Returns:
+    None
+
+    Raises:
+    None
+
+    Example:
+    >>> main()
+    """
     os.umask(0o077)
 
     # Create user specific data directory
