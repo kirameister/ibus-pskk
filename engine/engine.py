@@ -296,7 +296,7 @@ class EnginePSKK(IBus.Engine):
 
     def _load_layout(self, settings):
         default_layout = os.path.join(util.get_datadir(), 'layouts')
-        default_layout = os.path.join(default_layout, 'roomazi.json')
+        default_layout = os.path.join(default_layout, 'roomazi.json') # this is for testing purpose..
         path = settings.get_string('layout')
         logger.info(f'layout: {path}')
         layout = dict()
@@ -313,10 +313,10 @@ class EnginePSKK(IBus.Engine):
             except Exception as error:
                 logger.error(error)
         # from here, it should be experimental
-        # self._max_preedit_len = 0
-        # for arr in layout['layout'].values():
-        #     self._max_preedit_len = max(self._max_preedit_len, len(arr[0]))
-        # logger.info(f'max_preedit_len: {self._max_preedit_len}')
+        self._max_preedit_len = 0
+        for arr in layout['layout']:
+            self._max_preedit_len = max(self._max_preedit_len, len(arr[0]))
+        logger.info(f'max_preedit_len: {self._max_preedit_len}')
         # self._layout_dict_array = []
         # for i in range(self._max_preedit_len):
         #     self._layout_dict_array.append(dict())
