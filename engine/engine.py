@@ -344,7 +344,8 @@ class EnginePSKK(IBus.Engine):
         else:
             self._to_kana = self._handle_default_layout
             #logger.info('self._to_kana = self._handle_default_layout')
-            self._to_kana = self._handle_roomazi_layout # eventually, the definition of roomazi_layout should be moved to default_layout
+        self._to_kana = self._handle_layout # eventually, the definition of roomazi_layout should be moved to default_layout
+        logger.info('self._to_kana = self._handle_layout')
         return layout
 
     # is this function really used at all?
@@ -366,6 +367,33 @@ class EnginePSKK(IBus.Engine):
     # it seems like a way to passthrough the ascii (and similar) chars to the output?
     def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
         return self._event.chr(), ''
+
+    def _handle_layout(self, preedit, keyval, state=0, modifiers=0):
+        logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
+        yomi = ''
+        c = self._event.chr().lower()
+        preedit += c
+        logger.debug(f'_handle_layout -- preedit: "{preedit}"')
+        for i in range(min(len(preedit), self._max_preedit_len)-1, -1, -1):
+            logger.debug(f'_handle_layout loop i={i}')
+            if(preedit[:i+1] in self._layout_dict_array[i]):
+                logger.debug(f'preedit "{preedit[:i+1]}" found in {self._layout_dict_array[i]}')
+                if('output' in self._layout_dict_array[i][preedit] and 'pending' in self._layout_dict_array[i][preedit]):
+                    yomi += self._layout_dict_array[i][preedit]['output']
+                    preedit = self._layout_dict_array[i][preedit]['pending']
+                    break
+                if('output' in self._layout_dict_array[i][preedit]):
+                    yomi += self._layout_dict_array[i][preedit]['output']
+                    preedit = ''
+                    break
+                #yomi += self._layout_dict_array[i][preedit]
+                if('pending' in self._layout_dict_array[i][preedit]):
+                    preedit = self._layout_dict_array[i][preedit]['pending']
+                    yomi = ''
+                    break
+                #preedit = ''
+        return yomi, preedit
+
 
     def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
         yomi = ''
