@@ -144,6 +144,8 @@ class EnginePSKK(IBus.Engine):
         self._layout = dict()
         self._max_preedit_len = 0 #: maximum len of chars in input column; updated upon load_layout
         self._layout_dict_array = []
+        self._origin_timestamp = time.perf_counter()
+        self._previous_typed_timestamp = time.perf_counter()
         self._to_kana = self._handle_default_layout
 
         self._preedit_string = ''   # in rômazi
@@ -370,28 +372,37 @@ class EnginePSKK(IBus.Engine):
 
     def _handle_layout(self, preedit, keyval, state=0, modifiers=0):
         logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
+        current_typed_time = time.perf_counter()
         yomi = ''
         c = self._event.chr().lower()
         preedit += c
-        logger.debug(f'_handle_layout -- preedit: "{preedit}"')
+        logger.debug(f'_handle_layout 0 -- preedit: "{preedit}", yomi: "{yomi}"')
         for i in range(min(len(preedit), self._max_preedit_len)-1, -1, -1):
             logger.debug(f'_handle_layout loop i={i}')
-            if(preedit[:i+1] in self._layout_dict_array[i]):
-                logger.debug(f'preedit "{preedit[:i+1]}" found in {self._layout_dict_array[i]}')
-                if('output' in self._layout_dict_array[i][preedit] and 'pending' in self._layout_dict_array[i][preedit]):
-                    yomi += self._layout_dict_array[i][preedit]['output']
-                    preedit = self._layout_dict_array[i][preedit]['pending']
+            chunk_to_check = preedit[len(preedit)-(i+1):len(preedit)]
+            if(chunk_to_check in self._layout_dict_array[i]):
+                logger.debug(f'preedit "{chunk_to_check}" found in {self._layout_dict_array[i]}')
+                # if('simul_limit_ms' in self._layout_dict_array[i][preedit] and (current_typed_time - self._previous_typed_timestamp) * 1000 < self._layout_dict_array[i][preedit]['simul_limit_ms']):
+                #     yomi ++ 
+                if('output' in self._layout_dict_array[i][chunk_to_check] and 'pending' in self._layout_dict_array[i][preedit]):
+                    logger.debug('_handle_layout check 1')
+                    yomi += self._layout_dict_array[i][chunk_to_check]['output']
+                    preedit = self._layout_dict_array[i][chunk_to_check]['pending']
                     break
-                if('output' in self._layout_dict_array[i][preedit]):
-                    yomi += self._layout_dict_array[i][preedit]['output']
+                if('output' in self._layout_dict_array[i][chunk_to_check]):
+                    logger.debug('_handle_layout check 2')
+                    yomi += self._layout_dict_array[i][chunk_to_check]['output']
                     preedit = ''
                     break
                 #yomi += self._layout_dict_array[i][preedit]
-                if('pending' in self._layout_dict_array[i][preedit]):
-                    preedit = self._layout_dict_array[i][preedit]['pending']
-                    yomi = ''
+                if('pending' in self._layout_dict_array[i][chunk_to_check]):
+                    logger.debug('_handle_layout check 3')
+                    preedit = self._layout_dict_array[i][chunk_to_check]['pending']
+                    # yomi = ''
                     break
+                logger.debug('_handle_layout check 4')
                 #preedit = ''
+        logger.debug(f'_handle_layout 1 -- preedit: "{preedit}", yomi: "{yomi}"')
         return yomi, preedit
 
 
@@ -508,6 +519,9 @@ class EnginePSKK(IBus.Engine):
             return self._layout['\\ShiftR'].get(c, '')
 
     def handle_key_event(self, keyval, keycode, state, modifiers):
+        '''
+        This function handles all sorts of key-event..
+        '''
         logger.debug(f'handle_key_event("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x}, {modifiers:#07x})')
         if self._event.is_dual_role():
             pass
