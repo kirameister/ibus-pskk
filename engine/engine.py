@@ -148,7 +148,7 @@ class EnginePSKK(IBus.Engine):
         self._previous_typed_timestamp = time.perf_counter()
         self._to_kana = self._handle_default_layout
 
-        self._preedit_string = ''   # in rômazi
+        self._preedit_string = ''
         self._previous_text = ''
         self._shrunk = []
         self._surrounding = SURROUNDING_RESET
@@ -371,35 +371,36 @@ class EnginePSKK(IBus.Engine):
         return self._event.chr(), ''
 
     def _handle_layout(self, preedit, keyval, state=0, modifiers=0):
-        logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
         current_typed_time = time.perf_counter()
+        logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
         yomi = ''
-        c = self._event.chr().lower()
-        preedit += c
-        logger.debug(f'_handle_layout 0 -- preedit: "{preedit}", yomi: "{yomi}"')
-        for i in range(min(len(preedit), self._max_preedit_len)-1, -1, -1):
-            logger.debug(f'_handle_layout loop i={i}')
-            chunk_to_check = preedit[len(preedit)-(i+1):len(preedit)]
+        c = self._event.chr().lower() # FIXME : this line could be ignored and replaced by something fancier
+        #preedit += c
+        preedit_and_c = preedit + c
+        logger.debug(f'_handle_layout 0 -- preedit: "{preedit}", c: "{c}", yomi: "{yomi}"')
+        for i in range(min(len(preedit_and_c), self._max_preedit_len)-1, -1, -1):
+            chunk_to_check = preedit_and_c[len(preedit_and_c)-(i+1):len(preedit_and_c)]
+            logger.debug(f'_handle_layout loop i={i}, chunk_to_check={chunk_to_check}')
             if(chunk_to_check in self._layout_dict_array[i]):
-                logger.debug(f'preedit "{chunk_to_check}" found in {self._layout_dict_array[i]}')
+                logger.debug(f'preedit "{chunk_to_check}" found with {self._layout_dict_array[i][chunk_to_check]}')
                 # if('simul_limit_ms' in self._layout_dict_array[i][preedit] and (current_typed_time - self._previous_typed_timestamp) * 1000 < self._layout_dict_array[i][preedit]['simul_limit_ms']):
                 #     yomi ++ 
-                if('output' in self._layout_dict_array[i][chunk_to_check] and 'pending' in self._layout_dict_array[i][preedit]):
+                if('output' in self._layout_dict_array[i][chunk_to_check] and 'pending' in self._layout_dict_array[i][chunk_to_check]):
                     logger.debug('_handle_layout check 1')
                     yomi += self._layout_dict_array[i][chunk_to_check]['output']
                     preedit = self._layout_dict_array[i][chunk_to_check]['pending']
-                    break
+                    return yomi, preedit
                 if('output' in self._layout_dict_array[i][chunk_to_check]):
                     logger.debug('_handle_layout check 2')
                     yomi += self._layout_dict_array[i][chunk_to_check]['output']
                     preedit = ''
-                    break
+                    return yomi, preedit
                 #yomi += self._layout_dict_array[i][preedit]
                 if('pending' in self._layout_dict_array[i][chunk_to_check]):
                     logger.debug('_handle_layout check 3')
-                    preedit = self._layout_dict_array[i][chunk_to_check]['pending']
+                    preedit += self._layout_dict_array[i][chunk_to_check]['pending']
                     # yomi = ''
-                    break
+                    return yomi, preedit
                 logger.debug('_handle_layout check 4')
                 #preedit = ''
         logger.debug(f'_handle_layout 1 -- preedit: "{preedit}", yomi: "{yomi}"')
@@ -452,7 +453,7 @@ class EnginePSKK(IBus.Engine):
         # Qt seems to insert self._preedit_string to the text, while GTK doesn't.
         # We mimic GTK's behavior here.
         preedit_len = len(self._preedit_string)
-        if 0 < preedit_len and preedit_len <= pos and text[pos - preedit_len:pos] == self._preedit_string:
+        if(0 < preedit_len and preedit_len <= pos and text[pos - preedit_len:pos] == self._preedit_string):
             text = text[:-preedit_len]
             pos -= preedit_len
         logger.debug(f'surrounding text: "{text}", {pos}, "{self._previous_text}"')
@@ -524,6 +525,7 @@ class EnginePSKK(IBus.Engine):
         '''
         logger.debug(f'handle_key_event("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x}, {modifiers:#07x})')
         if self._event.is_dual_role():
+            # dual_role = SandS-like functionality? 
             pass
         elif self._event.is_modifier():
             # Ignore modifier keys
@@ -592,6 +594,7 @@ class EnginePSKK(IBus.Engine):
                 return True
             return False
         if self._event.is_ascii():
+            # the real char typed..
             if modifiers & event.ALT_R_BIT:
                 yomi = self.handle_alt_graph(keyval, keycode, state, modifiers)
                 if yomi:
@@ -600,7 +603,7 @@ class EnginePSKK(IBus.Engine):
                     self._preedit_string = ''
             elif self.get_mode() == 'Ａ':
                 yomi = to_zenkaku(self._event.chr())
-            else:
+            else: # possible ASCII-to-hiragana
                 yomi, self._preedit_string = self._to_kana(self._preedit_string, keyval, state, modifiers)
         elif keyval == keysyms.hyphen:
             yomi = '―'
@@ -613,7 +616,7 @@ class EnginePSKK(IBus.Engine):
             return True
         else:
             return False
-        if yomi:
+        if(yomi):
             if self.get_mode() == 'ア':
                 yomi = to_katakana(yomi)
             elif self.get_mode() == 'ｱ':
@@ -803,6 +806,19 @@ class EnginePSKK(IBus.Engine):
         return True
 
     def _update_preedit(self, cand=''):
+        '''
+        Updates the preedit text with the given candidate string.
+        Args:
+            cand (str): The candidate string to update the preedit text with. Defaults to an empty string.
+        Returns:
+            None
+        Raises:
+            TypeError: If the input candidate is not a string.
+        This method updates the preedit text with the given candidate string. The preedit text is the text that is currently being composed by the user, and the candidate string is a suggestion for what the user might want to type next. If the candidate string is empty, the preedit text is cleared.
+        If the input candidate is not a string, a TypeError is raised.
+        '''
+        if(not isinstance(cand, str)):
+            raise TypeError("The `cand` parameter must be a str value.")
         previous_text = self._previous_text if self._surrounding != SURROUNDING_COMMITTED else ''
         text = IBus.Text.new_from_string(previous_text + cand + self._preedit_string)
         previous_len = len(previous_text)
