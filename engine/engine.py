@@ -623,11 +623,7 @@ class EnginePSKK(IBus.Engine):
             if modifiers & event.ALT_R_BIT:
                 yomi = self.handle_alt_graph(keyval, keycode, state, modifiers)
                 if yomi:
-                    if self.get_mode() != 'ｱ':
-                        yomi = to_zenkaku(yomi)
                     self._preedit_string = ''
-            elif self.get_mode() == 'Ａ':
-                yomi = to_zenkaku(self._event.chr())
             else: # possible ASCII-to-hiragana
                 yomi, self._preedit_string = self._to_kana(self._preedit_string, keyval, state, modifiers)
         elif keyval == keysyms.hyphen:
@@ -643,10 +639,6 @@ class EnginePSKK(IBus.Engine):
             return False
         if(yomi):
             logger.debug(f'handle_key_event, if(yomi) check')
-            if self.get_mode() == 'ア':
-                yomi = to_katakana(yomi)
-            elif self.get_mode() == 'ｱ':
-                yomi = to_hankaku(to_katakana(yomi))
             self._commit_string(yomi)
         self._update_preedit()
         return True
