@@ -60,8 +60,6 @@ HANKAKU = ''.join(chr(i) for i in range(0x21, 0x7f)) + ' ❲❳[]¥?'
 TO_HANKAKU = str.maketrans(ZENKAKU, HANKAKU)
 TO_ZENKAKU = str.maketrans(HANKAKU, ZENKAKU)
 
-RE_SOKUON = re.compile(r'[kstnhmyrwgzdbpfjv]')
-
 NAME_TO_LOGGING_LEVEL = {
     'DEBUG': logging.DEBUG,
     'INFO': logging.INFO,
@@ -443,9 +441,6 @@ class EnginePSKK(IBus.Engine):
         if preedit in self._layout['Roomazi']:
             yomi += self._layout['Roomazi'][preedit]
             preedit = ''
-        elif 2 <= len(preedit) and preedit[0] == preedit[1] and RE_SOKUON.search(preedit[1]):
-            yomi += 'っ'
-            preedit = preedit[1:]
         return yomi, preedit
 
     def _get_surrounding_text(self):
