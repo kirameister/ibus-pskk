@@ -401,7 +401,7 @@ class EnginePSKK(IBus.Engine):
                 if('output' in self._layout_dict_array[-i-1][pending] and 'pending' in self._layout_dict_array[-i-1][pending]):
                     logger.debug('_handle_layout check 1')
                     preedit += self._layout_dict_array[-i-1][pending]['output'] + self._layout_dict_array[-i-1][pending]['pending']
-                    self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
+                    # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
                     return yomi, preedit
                 if('output' in self._layout_dict_array[-i-1][pending]):
@@ -409,18 +409,18 @@ class EnginePSKK(IBus.Engine):
                     # tail of existing preedit needs to be removed
                     preedit = preedit[:i+1]
                     preedit += self._layout_dict_array[-i-1][pending]['output']
-                    self._pending_negative_index = 0
+                    # self._pending_negative_index = 0
                     self._previous_typed_timestamp = current_typed_time
                     return yomi, preedit
                 if('pending' in self._layout_dict_array[-i-1][pending]):
                     logger.debug('_handle_layout check 3')
                     preedit += self._layout_dict_array[-i-1][pending]['pending']
-                    self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
+                    # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
                     return yomi, preedit
                 # match found, but no output or pending..
                 logger.debug('_handle_layout check 4')
-                self._pending_negative_index = 0
+                # self._pending_negative_index = 0
                 self._previous_typed_timestamp = current_typed_time
                 return yomi, preedit_and_c
                 #yomi += self._layout_dict_array[i][preedit]
