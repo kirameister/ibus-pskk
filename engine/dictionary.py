@@ -31,7 +31,6 @@ OKURIGANA = re.compile(r'[ぁ-ゖiIkKgsStnbmrw]+$')
 
 
 class Dictionary:
-
     def __init__(self, path, user, clear_history=False):
         logger.info(f'Dictionary("{path}", "{user}")')
 
@@ -301,11 +300,9 @@ class Dictionary:
     def confirm(self, shrunk):
         if not self._yomi:
             return
-
         # Get a copy of the original candidate list
         yomi = self._yomi
         no = self._no
-
         if self._order:
             yomi = yomi[:yomi.find('―') + 1]
             no = self._order[no]

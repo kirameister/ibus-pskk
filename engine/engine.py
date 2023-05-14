@@ -313,7 +313,6 @@ class EnginePSKK(IBus.Engine):
                     layout = json.load(f)
             except Exception as error:
                 logger.error(error)
-        # from here, it should be experimental
         # initialize..
         self._max_pending_len = 0
         for arr in layout['layout']:
@@ -338,13 +337,11 @@ class EnginePSKK(IBus.Engine):
                 list_values["simul_limit_ms"] = l[3]
             self._layout_dict_array[input_len-1][l[0]] = list_values # note that list starts with 0 index..
         logger.debug(f'Layout - self._layout_dict_array {self._layout_dict_array}')
-        # until here
         if 'Roomazi' in layout:
             self._to_kana = self._handle_roomazi_layout
             logger.info('self._to_kana = self._handle_roomazi_layout')
         else:
             self._to_kana = self._handle_default_layout
-            #logger.info('self._to_kana = self._handle_default_layout')
         self._to_kana = self._handle_layout # eventually, the definition of roomazi_layout should be moved to default_layout
         logger.info('self._to_kana = self._handle_layout')
         return layout
