@@ -141,6 +141,7 @@ def main():
 
     # logging settings
     logfile_name = os.path.join(user_configdir, util.get_package_name() + '.log')
+    # it's intentionally set to DEBUG during the development. This value should be replaced by WARNING when the product is mature enough
     logging.basicConfig(filename=logfile_name, level=logging.DEBUG, format='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     logger = logging.getLogger()
     logger.info(f'engine/main.py user_configdir: {user_configdir}')
