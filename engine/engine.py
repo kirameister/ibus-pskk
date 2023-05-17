@@ -367,6 +367,15 @@ class EnginePSKK(IBus.Engine):
         return self._event.chr(), ''
 
     def _handle_layout(self, preedit, keyval, state=0, modifiers=0):
+        '''
+        purpose of this function is to update the given preedit str
+        with a given event char ("self._event.chr()").
+        This should not be dependent whether the input mode is in
+        hiragana or in kanji-conversion (to be implemented).
+        This function also takes care of the simultaneous input,
+        which is achieved by checking and updating the value of
+        self._pending_negative_index.
+        '''
         current_typed_time = time.perf_counter()
         #logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
         yomi = ''
