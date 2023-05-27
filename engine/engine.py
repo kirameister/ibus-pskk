@@ -382,34 +382,25 @@ class EnginePSKK(IBus.Engine):
         c = self._event.chr().lower() # FIXME : this line could be ignored and replaced by something fancier
         preedit_and_c = preedit + c
         self._pending_negative_index -= 1
-        logger.debug(f'_handle_layout 0 -- preedit: "{preedit}", c: "{c}", yomi: "{yomi}"')
         for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
             pending = preedit_and_c[i:]
             if(pending in self._layout_dict_array[-i-1]):
-                logger.debug(f'pending "{pending}" found with {self._layout_dict_array[-i-1][pending]}')
                 if('simul_limit_ms' in self._layout_dict_array[-i-1][pending]):
-                    logger.debug(f'_handle_layout simul_limit_ms check 1, _pending_negative_index: {self._pending_negative_index}')
                     if((current_typed_time - self._previous_typed_timestamp)*1000 > self._layout_dict_array[-i-1][pending]['simul_limit_ms']):
                         # timeout = pending reset
-                        logger.debug(f'_handle_layout simul_limit_ms check 2 == {(current_typed_time - self._previous_typed_timestamp)*1000} > {self._layout_dict_array[-i-1][pending]["simul_limit_ms"]}')
                         self._pending_negative_index = -1 # instead of 0 because of the typed char c
-                    logger.debug(f'_handle_layout simul_limit_ms check 3, _pending_negative_index: {self._pending_negative_index}')
                     break
         for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
             # note that i will be negative value
             chunk_to_check = preedit_and_c[len(preedit_and_c)-(i+1):len(preedit_and_c)]
             pending = preedit_and_c[i:]
-            logger.debug(f'_handle_layout loop i={i}, chunk_to_check={chunk_to_check}')
-            logger.debug(f'_handle_layout loop i={i}, pending={pending}')
             if(pending in self._layout_dict_array[-i-1]):
                 if('output' in self._layout_dict_array[-i-1][pending] and 'pending' in self._layout_dict_array[-i-1][pending]):
-                    logger.debug('_handle_layout check 1')
                     preedit += self._layout_dict_array[-i-1][pending]['output'] + self._layout_dict_array[-i-1][pending]['pending']
                     # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
                     return yomi, preedit
                 if('output' in self._layout_dict_array[-i-1][pending]):
-                    logger.debug('_handle_layout check 2')
                     # tail of existing preedit needs to be removed
                     preedit = preedit[:i+1]
                     preedit += self._layout_dict_array[-i-1][pending]['output']
@@ -417,7 +408,6 @@ class EnginePSKK(IBus.Engine):
                     self._previous_typed_timestamp = current_typed_time
                     return yomi, preedit
                 if('pending' in self._layout_dict_array[-i-1][pending]):
-                    logger.debug('_handle_layout check 3')
                     preedit += self._layout_dict_array[-i-1][pending]['pending']
                     # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
