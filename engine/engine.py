@@ -436,6 +436,7 @@ class EnginePSKK(IBus.Engine):
 
 
     def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
+        ## most likely this function will need to be retired...
         yomi = ''
         c = self._event.chr().lower()
         # most probably this part could be handled by some sort of
