@@ -364,6 +364,7 @@ class EnginePSKK(IBus.Engine):
 
     # it seems like a way to passthrough the ascii (and similar) chars to the output?
     def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
+        # this is just about returning the entered char as is..
         return self._event.chr(), ''
 
     def _handle_layout(self, preedit, keyval, state=0, modifiers=0):
@@ -752,6 +753,7 @@ class EnginePSKK(IBus.Engine):
             self._forward_backspaces(len(self._previous_text))
 
     def _commit_string(self, text):
+        ## some hard-coded modifications..
         if text == '゛':
             prev, pos = self._get_surrounding_text()
             if 0 < pos:
@@ -768,6 +770,7 @@ class EnginePSKK(IBus.Engine):
                     self._delete_surrounding_text(1)
                     text = HANDAKU[found]
                     time.sleep(EVENT_DELAY)
+        # hard-coded modification ended
 
         if self._surrounding in (SURROUNDING_NOT_SUPPORTED, SURROUNDING_BROKEN):
             self._previous_text += text
@@ -902,6 +905,10 @@ class EnginePSKK(IBus.Engine):
                 return
 
     def set_cursor_location_cb(self, engine, x, y, w, h):
+        '''
+        This function detects the location of (new) position
+        of mouse pointer..
+        '''
         # On Raspbian, at least till Buster, the candidate window does not
         # always follow the cursor position. The following code is not
         # necessary on Ubuntu 18.04 or Fedora 30.
