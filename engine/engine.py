@@ -906,12 +906,11 @@ class EnginePSKK(IBus.Engine):
 
     def set_cursor_location_cb(self, engine, x, y, w, h):
         '''
-        This function detects the location of (new) position
+        This function (presumably) detects the location of (new) position
         of mouse pointer..
+        This would most likely be helpful when detecting a "pause" in the 
+        typing.. (i.e., typing intervened by mouse move)
         '''
-        # On Raspbian, at least till Buster, the candidate window does not
-        # always follow the cursor position. The following code is not
-        # necessary on Ubuntu 18.04 or Fedora 30.
         logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
         self._update_lookup_table()
 
