@@ -146,6 +146,8 @@ class EnginePSKK(IBus.Engine):
         self._origin_timestamp = time.perf_counter()
         self._previous_typed_timestamp = time.perf_counter()
         self._to_kana = self._handle_default_layout # this may really not be necessary
+        # SandS vars
+        self._sands_key_set = set()
         self._space_pressed = False # this is to hold the SandS state
 
         self._preedit_string = ''
@@ -325,7 +327,7 @@ class EnginePSKK(IBus.Engine):
                     layout = json.load(f)
             except Exception as error:
                 logger.error(error)
-        # initialize..
+        # initialize by defining empty dicts as array element
         self._max_pending_len = 0
         for arr in layout['layout']:
             self._max_pending_len = max(self._max_pending_len, len(arr[0]))
@@ -349,6 +351,8 @@ class EnginePSKK(IBus.Engine):
                 list_values["simul_limit_ms"] = l[3]
             self._layout_dict_array[input_len-1][l[0]] = list_values # note that list starts with 0 index..
         logger.debug(f'Layout - self._layout_dict_array {self._layout_dict_array}')
+        if("sands_keys" in layout):
+            self._sands_key_set = set(layout['sands_keys'])
         if 'Roomazi' in layout:
             self._to_kana = self._handle_roomazi_layout
             logger.info('self._to_kana = self._handle_roomazi_layout')
@@ -542,13 +546,17 @@ class EnginePSKK(IBus.Engine):
         This function is called when there is a key-storke event from IBus (if it's a overriding function is TBC..).
         SandS-like check is done here and relevant flag is raised/lowered.
         """
-        if(IBus.keyval_name(keyval) == 'space'):
+        if(IBus.keyval_name(keyval) in self._sands_key_set):
+            # please note that this implementation has a limitation that would not allow multiple
+            # SandS keys to be pressed and released as if "shift" is still being pressed.
+            # This is a known limitation and is not planned to be addressed unless someone really
+            # wishes so.
             if((state & IBus.ModifierType.RELEASE_MASK) == 0):
-                logger.debug('do_process_key_event -- space pressed')
+                logger.debug('do_process_key_event -- SandS-key pressed')
                 self._space_pressed = True
             else:
                 self._space_pressed = False
-                logger.debug('do_process_key_event -- space released')
+                logger.debug('do_process_key_event -- SandS-key released')
         return self._event.process_key_event(keyval, keycode, state)
 
     def handle_alt_graph(self, keyval, keycode, state, modifiers):
