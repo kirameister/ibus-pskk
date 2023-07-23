@@ -282,7 +282,7 @@ class Event:
                 self._engine.set_mode(mode)
                 return True
 
-        else:
+        else: # NOT is_press
 
             if keyval == keysyms.space:
                 if not (self._modifiers & NOT_DUAL_SPACE_BIT):
