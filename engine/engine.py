@@ -68,6 +68,7 @@ NAME_TO_LOGGING_LEVEL = {
     'CRITICAL': logging.CRITICAL,
 }
 
+# Only the direct input- and Hiragana-mode are supported (and that's intentional).
 INPUT_MODE_NAMES = ('A', 'あ')
 
 CANDIDATE_FOREGROUND_COLOR = 0x000000
