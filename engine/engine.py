@@ -145,7 +145,8 @@ class EnginePSKK(IBus.Engine):
         self._layout_dict_array = []    #: typing layout with list(dict()) structure
         self._origin_timestamp = time.perf_counter()
         self._previous_typed_timestamp = time.perf_counter()
-        self._to_kana = self._handle_default_layout
+        self._to_kana = self._handle_default_layout # this may really not be necessary
+        self._space_pressed = False # this is to hold the SandS state
 
         self._preedit_string = ''
         self._previous_text = ''
@@ -415,7 +416,7 @@ class EnginePSKK(IBus.Engine):
                     preedit += self._layout_dict_array[-i-1][pending]['output'] + self._layout_dict_array[-i-1][pending]['pending']
                     # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
-                    logger.debug(f'_handle_layout case1 -- preedit: {preedit}')
+                    logger.debug(f'_handle_layout case1 -- preedit: {preedit}, yomi: {yomi}')
                     return yomi, preedit
                 if('output' in self._layout_dict_array[-i-1][pending]):
                     # tail of existing preedit needs to be removed
@@ -423,22 +424,22 @@ class EnginePSKK(IBus.Engine):
                     preedit += self._layout_dict_array[-i-1][pending]['output']
                     # self._pending_negative_index = 0
                     self._previous_typed_timestamp = current_typed_time
-                    logger.debug(f'_handle_layout case2 -- preedit: {preedit}')
+                    logger.debug(f'_handle_layout case2 -- preedit: {preedit}, yomi: {yomi}')
                     return yomi, preedit
                 if('pending' in self._layout_dict_array[-i-1][pending]):
                     preedit += self._layout_dict_array[-i-1][pending]['pending']
                     # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
-                    logger.debug(f'_handle_layout case3 -- preedit: {preedit}')
+                    logger.debug(f'_handle_layout case3 -- preedit: {preedit}, yomi: {yomi}')
                     return yomi, preedit
                 # match found, but no output or pending..
-                logger.debug(f'_handle_layout case4 -- preedit: {preedit}')
+                logger.debug(f'_handle_layout case4 -- preedit: {preedit}, yomi: {yomi}')
                 # self._pending_negative_index = 0
                 self._previous_typed_timestamp = current_typed_time
                 return yomi, preedit_and_c
                 #yomi += self._layout_dict_array[i][preedit]
                 #preedit = ''
-            logger.debug('_handle_layout case5')
+            logger.debug('_handle_layout case5 -- preedit: {preedit}, yomi: {yomi}')
         logger.debug(f'_handle_layout case6 -- preedit: "{preedit}", yomi: "{yomi}"')
         self._previous_typed_timestamp = current_typed_time
         return yomi, preedit
@@ -537,6 +538,17 @@ class EnginePSKK(IBus.Engine):
         return self._to_kana == self._handle_roomazi_layout
 
     def do_process_key_event(self, keyval, keycode, state):
+        """
+        This function is called when there is a key-storke event from IBus (if it's a overriding function is TBC..).
+        SandS-like check is done here and relevant flag is raised/lowered.
+        """
+        if(IBus.keyval_name(keyval) == 'space'):
+            if((state & IBus.ModifierType.RELEASE_MASK) == 0):
+                logger.debug('do_process_key_event -- space pressed')
+                self._space_pressed = True
+            else:
+                self._space_pressed = False
+                logger.debug('do_process_key_event -- space released')
         return self._event.process_key_event(keyval, keycode, state)
 
     def handle_alt_graph(self, keyval, keycode, state, modifiers):
@@ -773,7 +785,7 @@ class EnginePSKK(IBus.Engine):
             self._forward_backspaces(len(self._previous_text))
 
     def _commit_string(self, text):
-        ## some hard-coded modifications..
+        ## FIXME some hard-coded modifications..
         if text == '゛':
             prev, pos = self._get_surrounding_text()
             if 0 < pos:
