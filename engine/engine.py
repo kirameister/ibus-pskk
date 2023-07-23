@@ -297,7 +297,7 @@ class EnginePSKK(IBus.Engine):
         return Dictionary(path, user, clear_history)
 
     def _load_layout(self, settings):
-        '''
+        """
         This function loads the keyboard layout, which is expected
         to be stored in the JSON format.
         This function first tries to load the JSON file specified
@@ -306,7 +306,7 @@ class EnginePSKK(IBus.Engine):
         All the layouts are meant to be stored as Romazi-like layout,
         meaning that it consists of input, output, pending, and optional
         simul_limit_ms values.
-        '''
+        """
         default_layout = os.path.join(util.get_datadir(), 'layouts')
         default_layout = os.path.join(default_layout, 'roomazi.json') # this is for testing purpose..
         path = settings.get_string('layout')
@@ -379,7 +379,7 @@ class EnginePSKK(IBus.Engine):
         return self._event.chr(), ''
 
     def _handle_layout(self, preedit, keyval, state=0, modifiers=0):
-        '''
+        """
         purpose of this function is to update the given preedit str
         with a given event char ("self._event.chr()").
         This should not be dependent whether the input mode is in
@@ -387,7 +387,7 @@ class EnginePSKK(IBus.Engine):
         This function also takes care of the simultaneous input,
         which is achieved by checking and updating the value of
         self._pending_negative_index.
-        '''
+        """
         current_typed_time = time.perf_counter()
         #logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
         yomi = ''
@@ -548,9 +548,9 @@ class EnginePSKK(IBus.Engine):
             return self._layout['\\ShiftR'].get(c, '')
 
     def handle_key_event(self, keyval, keycode, state, modifiers):
-        '''
+        """
         This function handles all sorts of key-event..
-        '''
+        """
         logger.debug(f'handle_key_event("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x}, {modifiers:#07x})')
         if self._event.is_dual_role():
             # dual_role = SandS-like functionality? 
@@ -830,7 +830,7 @@ class EnginePSKK(IBus.Engine):
         return True
 
     def _update_preedit(self, cand=''):
-        '''
+        """
         Updates the preedit text with the given candidate string.
         Args:
             cand (str): The candidate string to update the preedit text with. Defaults to an empty string.
@@ -840,7 +840,7 @@ class EnginePSKK(IBus.Engine):
             TypeError: If the input candidate is not a string.
         This method updates the preedit text with the given candidate string. The preedit text is the text that is currently being composed by the user, and the candidate string is a suggestion for what the user might want to type next. If the candidate string is empty, the preedit text is cleared.
         If the input candidate is not a string, a TypeError is raised.
-        '''
+        """
         if(not isinstance(cand, str)):
             raise TypeError("The `cand` parameter must be a str value.")
         previous_text = self._previous_text if self._surrounding != SURROUNDING_COMMITTED else ''
@@ -916,12 +916,12 @@ class EnginePSKK(IBus.Engine):
                 return
 
     def set_cursor_location_cb(self, engine, x, y, w, h):
-        '''
+        """
         This function (presumably) detects the location of (new) position
         of mouse pointer..
         This would most likely be helpful when detecting a "pause" in the 
         typing.. (i.e., typing intervened by mouse move)
-        '''
+        """
         logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
         self._update_lookup_table()
 
