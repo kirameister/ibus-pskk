@@ -296,6 +296,16 @@ class EnginePSKK(IBus.Engine):
         return Dictionary(path, user, clear_history)
 
     def _load_layout(self, settings):
+        '''
+        This function loads the keyboard layout, which is expected
+        to be stored in the JSON format.
+        This function first tries to load the JSON file specified
+        in the config file; if not specified, it defaults back to the
+        "default_layout" JSON file.
+        All the layouts are meant to be stored as Romazi-like layout,
+        meaning that it consists of input, output, pending, and optional
+        simul_limit_ms values.
+        '''
         default_layout = os.path.join(util.get_datadir(), 'layouts')
         default_layout = os.path.join(default_layout, 'roomazi.json') # this is for testing purpose..
         path = settings.get_string('layout')
