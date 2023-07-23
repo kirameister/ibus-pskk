@@ -389,28 +389,33 @@ class EnginePSKK(IBus.Engine):
         self._pending_negative_index.
         """
         current_typed_time = time.perf_counter()
-        #logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
+        logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
         yomi = ''
         c = self._event.chr().lower() # FIXME : this line could be ignored and replaced by something fancier
         preedit_and_c = preedit + c
         self._pending_negative_index -= 1
+        # First simultaneous check..
+        # layout lookup is done with descending order for the sake of O(N)
         for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
             pending = preedit_and_c[i:]
             if(pending in self._layout_dict_array[-i-1]):
                 if('simul_limit_ms' in self._layout_dict_array[-i-1][pending]):
+                    # simul_limit_ms key is found in the matched dict entry, and..
                     if((current_typed_time - self._previous_typed_timestamp)*1000 > self._layout_dict_array[-i-1][pending]['simul_limit_ms']):
-                        # timeout = pending reset
+                        # the current stroke was given *beyond* the previous stroke + simul_limit_ms => stop considering the existing str as pending
                         self._pending_negative_index = -1 # instead of 0 because of the typed char c
                     break
         for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
             # note that i will be negative value
-            chunk_to_check = preedit_and_c[len(preedit_and_c)-(i+1):len(preedit_and_c)]
+            #chunk_to_check = preedit_and_c[len(preedit_and_c)-(i+1):len(preedit_and_c)]
             pending = preedit_and_c[i:]
             if(pending in self._layout_dict_array[-i-1]):
+                # if pending had a match against layout dict of that length..
                 if('output' in self._layout_dict_array[-i-1][pending] and 'pending' in self._layout_dict_array[-i-1][pending]):
                     preedit += self._layout_dict_array[-i-1][pending]['output'] + self._layout_dict_array[-i-1][pending]['pending']
                     # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
+                    logger.debug(f'_handle_layout case1 -- preedit: {preedit}')
                     return yomi, preedit
                 if('output' in self._layout_dict_array[-i-1][pending]):
                     # tail of existing preedit needs to be removed
@@ -418,27 +423,28 @@ class EnginePSKK(IBus.Engine):
                     preedit += self._layout_dict_array[-i-1][pending]['output']
                     # self._pending_negative_index = 0
                     self._previous_typed_timestamp = current_typed_time
+                    logger.debug(f'_handle_layout case2 -- preedit: {preedit}')
                     return yomi, preedit
                 if('pending' in self._layout_dict_array[-i-1][pending]):
                     preedit += self._layout_dict_array[-i-1][pending]['pending']
                     # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
+                    logger.debug(f'_handle_layout case3 -- preedit: {preedit}')
                     return yomi, preedit
                 # match found, but no output or pending..
-                logger.debug('_handle_layout check 4')
+                logger.debug(f'_handle_layout case4 -- preedit: {preedit}')
                 # self._pending_negative_index = 0
                 self._previous_typed_timestamp = current_typed_time
                 return yomi, preedit_and_c
                 #yomi += self._layout_dict_array[i][preedit]
                 #preedit = ''
-            logger.debug('_handle_layout check 5')
-        logger.debug(f'_handle_layout 1 -- preedit: "{preedit}", yomi: "{yomi}"')
+            logger.debug('_handle_layout case5')
+        logger.debug(f'_handle_layout case6 -- preedit: "{preedit}", yomi: "{yomi}"')
         self._previous_typed_timestamp = current_typed_time
         return yomi, preedit
 
-
     def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
-        ## most likely this function will need to be retired...
+        ## FIXME most likely this function will need to be retired...
         yomi = ''
         c = self._event.chr().lower()
         # most probably this part could be handled by some sort of
@@ -648,6 +654,8 @@ class EnginePSKK(IBus.Engine):
         return True
 
     def lookup_dictionary(self, yomi, pos):
+        logger.debug(f'lookup_dictionary called: yomi: {yomi}, pos: {pos}')
+        # FIXME : are following lines really necessary? Should it not be handled more comprehensively? 
         if self._preedit_string == 'n':
             yomi = yomi[:pos] + 'ん'
             pos += 1
@@ -655,6 +663,7 @@ class EnginePSKK(IBus.Engine):
         cand = self._dict.lookup(yomi, pos)
         size = len(self._dict.reading())
         if 0 < size:
+            # FIXME same as above..
             if self._preedit_string == 'n':
                 # For FuriganaPad, yomi has to be committed anyway.
                 self._commit_string('ん')
@@ -921,6 +930,7 @@ class EnginePSKK(IBus.Engine):
         of mouse pointer..
         This would most likely be helpful when detecting a "pause" in the 
         typing.. (i.e., typing intervened by mouse move)
+        ...It seems taht this function is called periodically. It may be an idea to store the position of the mouse pointer and commit(?) the hiragana only with pointer-position value mismatch? 
         """
         logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
         self._update_lookup_table()
