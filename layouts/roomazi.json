@@ -2,6 +2,7 @@
     "Space": "Alt_R",
     "Henkan": "space",
     "Katakana": "Control_R",
+    "sands_keys": ["space"],
     "layout": [
         ["かy", "うぃ", "", 80],
         ["かu", "ぱ", "", 80],
