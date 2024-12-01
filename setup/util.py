@@ -23,7 +23,10 @@ package_name = 'pskk'
 version = '0.01'
 
 
-def get_package_name():
+def get_package_name() -> str:
+    '''
+    returns 'pskk'
+    '''
     return package_name
     #return '@PACKAGE_NAME@'
 
@@ -32,15 +35,32 @@ def get_version():
     return version
 
 
-def get_user_datadir():
+def get_user_datadir() -> str:
+    '''
+    Return the path to the data directory under $HOME.
+    Typically, it would be $HOME/.local/share/pskk
+
+    http://lazka.github.io/pgi-docs/GLib-2.0/functions.html#GLib.get_user_data_dir
+    '''
     return os.path.join(GLib.get_user_data_dir(), '@PACKAGE_NAME@')
 
 
-def get_homedir():
+def get_homedir() -> str:
+    '''
+    Return the path to the $HOME directory.
+
+    http://lazka.github.io/pgi-docs/GLib-2.0/functions.html#GLib.get_home_dir
+    '''
     return GLib.get_home_dir()
 
 
-def get_user_configdir():
+def get_user_configdir() -> str:
+    '''
+    Return the path to the config directory under $HOME.
+    Typically, it would be $HOME/.config/pskk
+
+    http://lazka.github.io/pgi-docs/GLib-2.0/functions.html#GLib.get_user_config_dir
+    '''
     return os.path.join(GLib.get_user_config_dir(), get_package_name())
 
 
@@ -50,4 +70,3 @@ def get_user_configdir_relative_to_home():
 
 def get_localedir():
     return '${localedir}'
-
