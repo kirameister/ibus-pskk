@@ -259,6 +259,7 @@ class EnginePSKK(IBus.Engine):
             dialog.show()
         elif prop_name.startswith('InputMode.'):
             if state == IBus.PropState.CHECKED:
+                # At this point, we only support direct input and Hiragana. Nothing else..
                 mode = {
                     'InputMode.Alphanumeric': 'A',
                     'InputMode.Hiragana': 'あ',
@@ -311,7 +312,7 @@ class EnginePSKK(IBus.Engine):
         simul_limit_ms values.
         """
         default_layout = os.path.join(util.get_datadir(), 'layouts')
-        default_layout = os.path.join(default_layout, 'roomazi.json') # this is for testing purpose..
+        default_layout = os.path.join(default_layout, 'roomazi.json') # FIXME this is for testing purpose..
         path = settings.get_string('layout')
         logger.info(f'layout: {path}')
         layout = dict()
@@ -668,7 +669,7 @@ class EnginePSKK(IBus.Engine):
         else:
             return False
         if(yomi):
-            logger.debug(f'handle_key_event, if(yomi) check')
+            logger.debug(f'handle_key_event, if(yomi): {yomi}')
             self._commit_string(yomi)
         self._update_preedit()
         return True
