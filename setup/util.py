@@ -18,17 +18,16 @@
 import os
 import gi
 from gi.repository import GLib
+# https://lazka.github.io/pgi-docs/GLib-2.0/functions.html
 
-package_name = 'pskk'
 version = '0.01'
 
 
 def get_package_name() -> str:
     '''
-    returns 'pskk'
+    returns 'ibus-pskk'
     '''
-    return package_name
-    #return '@PACKAGE_NAME@'
+    return '@PACKAGE_NAME@'
 
 
 def get_version():
@@ -42,7 +41,7 @@ def get_user_datadir() -> str:
 
     http://lazka.github.io/pgi-docs/GLib-2.0/functions.html#GLib.get_user_data_dir
     '''
-    return os.path.join(GLib.get_user_data_dir(), '@PACKAGE_NAME@')
+    return os.path.join(GLib.get_user_data_dir(), get_package_name())
 
 
 def get_homedir() -> str:

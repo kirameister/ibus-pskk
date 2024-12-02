@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# https://www.gnu.org/software/autoconf/manual/autoconf-2.67/html_node/Initializing-configure.html
+# AC_INIT (package, version, [bug-report], [tarname], [url])
 AC_INIT([ibus-pskk], [0.0.1], [https://github.com/kirameister/ibus-pskk/issues])
 AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([foreign tar-ustar])

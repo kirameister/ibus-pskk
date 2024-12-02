@@ -1,6 +1,7 @@
 # ibus-pskk - PSKK for IBus
 #
-# Copyright (c) 2020 Esrille Inc.
+# Copyright (c) 2020 Esrille Inc. (ibus-hiragana)
+# Modifications Copyright (C) 2021 Akira K.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +21,14 @@
 import os
 import gi
 from gi.repository import GLib
+# https://lazka.github.io/pgi-docs/GLib-2.0/functions.html
+# original values of @VAR_NAME@ are defined in configure.ac
 
 
-def get_package_name():
+def get_package_name() -> str:
+    '''
+    returns 'ibus-pskk'
+    '''
     return '@PACKAGE_NAME@'
 
 
@@ -38,8 +44,31 @@ def get_datadir():
     return '${pkgdatadir}'
 
 
-def get_user_datadir():
+def get_user_datadir() -> str:
+    '''
+    Return the path to the data directory under $HOME.
+    Typically, it would be $HOME/.local/share/pskk
+    '''
     return os.path.join(GLib.get_user_data_dir(), '@PACKAGE_NAME@')
+
+
+def get_user_configdir() -> str:
+    '''
+    Return the path to the config directory under $HOME.
+    Typically, it would be $HOME/.config/pskk
+    '''
+    return os.path.join(GLib.get_user_config_dir(), '@PACKAGE_NAME@')
+
+
+def get_homedir() -> str:
+    '''
+    Return the path to the $HOME directory.
+    '''
+    return GLib.get_home_dir()
+
+
+def get_user_configdir_relative_to_home():
+    return get_user_configdir().replace(get_homedir(), '${HOME}')
 
 
 def get_localedir():
