@@ -37,10 +37,17 @@ def get_version():
 
 
 def get_prefix():
+    '''
+    It is usually /usr/local/
+    '''
     return '@prefix@'
 
 
 def get_datadir():
+    '''
+    Return the path to the data directory under user-independent (central)
+    location (= not under the HOME)
+    '''
     return '${pkgdatadir}'
 
 
@@ -72,4 +79,7 @@ def get_user_configdir_relative_to_home():
 
 
 def get_localedir():
+    '''
+    Returns /usr/local/share/locale
+    '''
     return '${localedir}'
