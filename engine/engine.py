@@ -208,6 +208,7 @@ class EnginePSKK(IBus.Engine):
             visible=True,
             state=IBus.PropState.UNCHECKED,
             sub_props=None)
+        # This is to add the options for different modes in separate function
         self._input_mode_prop.set_sub_props(self._init_input_mode_props())
         self._prop_list.append(self._input_mode_prop)
         prop = IBus.Property(
@@ -223,6 +224,11 @@ class EnginePSKK(IBus.Engine):
         self._prop_list.append(prop)
 
     def _init_input_mode_props(self):
+        '''
+        This is a function to produce GUI (sub) component for
+        different input modes.
+        This function is meant to be only called from _init_props()
+        '''
         props = IBus.PropList()
         props.append(IBus.Property(key='InputMode.Alphanumeric',
                                    prop_type=IBus.PropType.RADIO,
