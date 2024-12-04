@@ -37,6 +37,9 @@ import gi
 gi.require_version('IBus', '1.0')
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gio, Gtk, IBus
+# http://lazka.github.io/pgi-docs/IBus-1.0/index.html?fbclid=IwY2xjawG9hapleHRuA2FlbQIxMAABHXaZwlJVVZEl9rr2SWsvIy2x85xW-XJuu32OZYxQ3gxF-E__9kWOUqGNzA_aem_2zw0hES6WqJcXPds_9CEdA
+# http://lazka.github.io/pgi-docs/Gtk-4.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHVsKSY24bv9C75Mweq54yhLsePdGA25YfLnwMwCx7vEq03oV61qn_qEntg_aem_3k1P3ltIMb17cBH0fdPr4w
+# http://lazka.github.io/pgi-docs/GLib-2.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHXaZwlJVVZEl9rr2SWsvIy2x85xW-XJuu32OZYxQ3gxF-E__9kWOUqGNzA_aem_2zw0hES6WqJcXPds_9CEdA
 
 keysyms = IBus
 
@@ -134,6 +137,9 @@ def to_zenkaku(asc):
 
 
 class EnginePSKK(IBus.Engine):
+    '''
+    http://lazka.github.io/pgi-docs/IBus-1.0/classes/Engine.html
+    '''
     __gtype_name__ = 'EnginePSKK'
 
     def __init__(self):
@@ -183,6 +189,13 @@ class EnginePSKK(IBus.Engine):
         self._q = queue.Queue()
 
     def _init_props(self):
+        '''
+        This function is called as part of the instantiation (__init__). 
+        This function creates the GUI menu list (typically top-right corner).
+
+        http://lazka.github.io/pgi-docs/IBus-1.0/classes/PropList.html
+        http://lazka.github.io/pgi-docs/IBus-1.0/classes/Property.html
+        '''
         self._prop_list = IBus.PropList()
         self._input_mode_prop = IBus.Property(
             key='InputMode',
@@ -237,6 +250,8 @@ class EnginePSKK(IBus.Engine):
         self.update_property(self._input_mode_prop)
 
     def do_property_activate(self, prop_name, state):
+        '''
+        '''
         logger.info(f'property_activate({prop_name}, {state})')
         if prop_name == 'About':
             if self._about_dialog:
