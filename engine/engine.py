@@ -549,6 +549,11 @@ class EnginePSKK(IBus.Engine):
         return self._mode
 
     def set_mode(self, mode, override=False):
+        '''
+        This is the function to set the IME mode
+        This function is supposed to be called from
+        multiple places.
+        '''
         self._override = override
         if self._mode == mode:
             return False
