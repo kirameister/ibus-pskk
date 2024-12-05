@@ -4,7 +4,7 @@
 #   ibus-tmpl - The Input Bus template project
 #
 # Copyright (c) 2017-2021 Esrille Inc. (ibus-hiragana)
-# Modifications Copyright (C) 2023 Akira K.
+# Modifications Copyright (C) 2021-2024 Akira K.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -265,7 +265,7 @@ class EnginePSKK(IBus.Engine):
                 return
             dialog = Gtk.AboutDialog()
             dialog.set_program_name(_("PSKK"))
-            dialog.set_copyright("Copyright 2021-2023 Akira K.")
+            dialog.set_copyright("Copyright 2021-2024 Akira K.")
             dialog.set_authors(["Akira K."])
             dialog.set_documenters(["Akira K."])
             dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
