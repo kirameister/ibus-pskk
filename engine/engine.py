@@ -312,10 +312,16 @@ class EnginePSKK(IBus.Engine):
         return mode
 
     def _load_logging_level(self, config):
+        '''
+        This function sets the logging level
+        which can be obtained from the config.json
+        When the value is not present (or incorrect) in config.json,
+        warning is used as default.
+        '''
         level = 'WARNING' # default value
-        if 'logging_level' in config:
+        if('logging_level' in config):
             level = config['logging_level']
-        if level not in NAME_TO_LOGGING_LEVEL:
+        if(level not in NAME_TO_LOGGING_LEVEL):
             level = 'WARNING'
         logger.info(f'logging_level: {level}')
         logging.getLogger().setLevel(NAME_TO_LOGGING_LEVEL[level])
