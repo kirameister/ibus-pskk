@@ -289,6 +289,10 @@ class EnginePSKK(IBus.Engine):
                 self.set_mode(mode, True)
 
     def _load_configs(self):
+        '''
+        This function loads the necessary (and optional) configs from the config JSON file
+        The logging level value would be set to WARNING, if it's absent in the config JSON.
+        '''
         self._config = util.get_config_data()
         self._logging_level = self._load_logging_level(self._config)
         # loading layout should be part of (re-)loading config
