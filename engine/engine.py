@@ -322,6 +322,7 @@ class EnginePSKK(IBus.Engine):
         if('logging_level' in config):
             level = config['logging_level']
         if(level not in NAME_TO_LOGGING_LEVEL):
+            logger.warning(f'Specified logging level {level} is not recognized. Using the default WARNING level.')
             level = 'WARNING'
         logger.info(f'logging_level: {level}')
         logging.getLogger().setLevel(NAME_TO_LOGGING_LEVEL[level])
