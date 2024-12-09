@@ -304,6 +304,7 @@ class EnginePSKK(IBus.Engine):
         self._about_dialog = None
 
     def _load_input_mode(self, settings):
+        # FIXME this should be coming from the config file, not settings...
         mode = settings.get_string('mode')
         if mode not in INPUT_MODE_NAMES:
             mode = 'A'
