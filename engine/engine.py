@@ -346,7 +346,7 @@ class EnginePSKK(IBus.Engine):
         simul_limit_ms values.
         """
         default_layout = os.path.join(util.get_datadir(), 'layouts')
-        default_layout = os.path.join(default_layout, 'roomazi.json') # FIXME this is for testing purpose..
+        default_layout = os.path.join(default_layout, 'roomazi.json') # FIXME this is for testing purpose.. eventually I'd like to have this value taken from the config.json. 
         path = settings.get_string('layout')
         logger.info(f'layout: {path}')
         layout = dict()

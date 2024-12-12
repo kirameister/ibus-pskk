@@ -69,7 +69,6 @@ class Event:
         self._HasYen = False
         self._DualBits = DUAL_SHIFT_L_BIT
 
-
         if layout.get("Keyboard") == "109":
             self._Kana = keysyms.Hiragana_Katakana
             self._Eisuu = keysyms.Eisu_toggle
