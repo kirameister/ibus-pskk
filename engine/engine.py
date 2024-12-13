@@ -295,6 +295,8 @@ class EnginePSKK(IBus.Engine):
         '''
         self._config = util.get_config_data()
         self._logging_level = self._load_logging_level(self._config)
+        logger.debug('config.json loaded')
+        logger.debug(self._config)
         # loading layout should be part of (re-)loading config
         self._layout = self._load_layout(self._settings)
         self._event = Event(self, self._layout)
@@ -345,13 +347,16 @@ class EnginePSKK(IBus.Engine):
         meaning that it consists of input, output, pending, and optional
         simul_limit_ms values.
         """
-        default_layout = os.path.join(util.get_datadir(), 'layouts')
+        path = ""
         if('layout' in self._config):
-            default_layout = os.path.join(default_layout, self._config['layout'])
-        else:
-            default_layout = os.path.join(default_layout, 'roman.json') # FIXME this is for testing purpose.. eventually I'd like to have this value taken from the config.json.
-        path = settings.get_string('layout')
-        logger.info(f'layout: {path}')
+            if(os.path.exists(os.path.join(util.get_user_configdir(), self._config['layout']))):
+                path = os.path.join(util.get_user_configdir(), self._config['layout'])
+            elif(os.path.exists(os.path.join(util.get_datadir(), self._config['layout']))):
+                path = os.path.join(util.get_datadir(), 'layouts', self._config['layout'])
+            else:
+                path = os.path.join(util.get_datadir(), 'layouts', 'roman.json')
+            logger.info(f'layout: {path}')
+        default_layout = os.path.join(util.get_datadir(), 'layouts', 'roman.json')
         layout = dict()
         try:
             with open(path) as f:
@@ -359,7 +364,7 @@ class EnginePSKK(IBus.Engine):
                 logger.info(f'layout JSON file loaded: {path}')
         except Exception as error:
             logger.error(error)
-        if not layout:
+        if(not layout):
             try:
                 with open(default_layout) as f:
                     layout = json.load(f)

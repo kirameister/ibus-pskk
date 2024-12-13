@@ -15,6 +15,7 @@
 dist_layouts_DATA = \
 	shingeta.json \
 	jis.109.json \
+	roman.json \
 	roomazi.json \
 	roomazi.109.json \
 	new_stickney.json \

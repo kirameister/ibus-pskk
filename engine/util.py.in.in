@@ -71,7 +71,7 @@ def get_localedir():
 def get_user_configdir():
     '''
     Return the path to the config directory under $HOME.
-    Typically, it would be $HOME/.config/pskk
+    Typically, it would be $HOME/.config/ibus-pskk
     '''
     return os.path.join(GLib.get_user_config_dir(), get_package_name())
 
