@@ -148,7 +148,7 @@ class EnginePSKK(IBus.Engine):
         self._override = False
 
         self._layout = dict()
-        self._max_pending_len = 0       #: maximum len of chars in input column; updated upon load_layout
+        self._max_pending_len = 0       #: maximum len of chars in input column; updated upon self._load_layout()
         self._layout_dict_array = []    #: typing layout with list(dict()) structure
         self._origin_timestamp = time.perf_counter()
         self._previous_typed_timestamp = time.perf_counter()
@@ -379,6 +379,17 @@ class EnginePSKK(IBus.Engine):
         for i in range(self._max_pending_len):
             self._layout_dict_array.append(dict())
         # initialize ended
+        # Following is an example of romaji - nothing special at this point
+        '''
+        _layout_dict_array[0] = {
+                "a": {"output": "あ"},
+                ...
+        }
+        _layout_dict_array[1] = {
+                "ka": {"output": "か"},
+                "kk": {"output": "っ", "pending": "k"}
+        }
+        '''
         for l in layout['layout']:
             # l is a list where the 0th element is input
             input_len = len(l[0])
