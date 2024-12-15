@@ -351,8 +351,10 @@ class EnginePSKK(IBus.Engine):
         if('layout' in self._config):
             if(os.path.exists(os.path.join(util.get_user_configdir(), self._config['layout']))):
                 path = os.path.join(util.get_user_configdir(), self._config['layout'])
-            elif(os.path.exists(os.path.join(util.get_datadir(), self._config['layout']))):
+                logger.debug(f"Specified layout {self._config['layout']} found in {util.get_user_configdir()}")
+            elif(os.path.exists(os.path.join(util.get_datadir(), 'layouts', self._config['layout']))):
                 path = os.path.join(util.get_datadir(), 'layouts', self._config['layout'])
+                logger.debug(f"Specified layout {self._config['layout']} found in {util.get_datadir()}")
             else:
                 path = os.path.join(util.get_datadir(), 'layouts', 'roman.json')
             logger.info(f'layout: {path}')
@@ -411,6 +413,7 @@ class EnginePSKK(IBus.Engine):
             self._to_kana = self._handle_roomazi_layout
             logger.info('self._to_kana = self._handle_roomazi_layout')
         else:
+            # just passthrough.. nothing fancy at all..
             self._to_kana = self._handle_default_layout
         self._to_kana = self._handle_layout # eventually, the definition of roomazi_layout should be moved to default_layout
         logger.info('self._to_kana = self._handle_layout')
@@ -422,9 +425,13 @@ class EnginePSKK(IBus.Engine):
         with a given event char ("self._event.chr()").
         This should not be dependent whether the input mode is in
         hiragana or in kanji-conversion (to be implemented).
+
         This function also takes care of the simultaneous input,
         which is achieved by checking and updating the value of
         self._pending_negative_index.
+
+        This function returns the Yomi output and preedit char/s, 
+        depending on the _layout_dict_array and value of c.
         """
         current_typed_time = time.perf_counter()
         logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
@@ -434,6 +441,7 @@ class EnginePSKK(IBus.Engine):
         self._pending_negative_index -= 1
         # First simultaneous check..
         # layout lookup is done with descending order for the sake of O(N)
+        # Following for-loop is to update _pending_negative_index, if applicable.
         for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
             pending = preedit_and_c[i:]
             if(pending in self._layout_dict_array[-i-1]):

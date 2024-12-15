@@ -1,5 +1,6 @@
 {
     "roman": true,
+    "Katakana": "Control_R",
     "layout": [
         ["qq","っ", "q"],
         ["vv","っ", "v"],
