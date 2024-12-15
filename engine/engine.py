@@ -450,9 +450,10 @@ class EnginePSKK(IBus.Engine):
         c = self._event.chr().lower() # FIXME : this line could be ignored and replaced by something fancier
         preedit_and_c = preedit + c
         self._pending_negative_index -= 1
+        logger.debug(f'_handle_layout == self._pending_negative_index : {self._pending_negative_index}')
         # First simultaneous check..
         # layout lookup is done with descending order for the sake of O(N)
-        # Following for-loop is to update _pending_negative_index, if applicable.
+        # Following for-loop is to force only the previous pending to be considered, if sismultaneous conditions are not met.
         for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
             pending = preedit_and_c[i:]
             if(pending in self._layout_dict_array[-i-1]):
@@ -462,6 +463,7 @@ class EnginePSKK(IBus.Engine):
                         # the current stroke was given *beyond* the previous stroke + simul_limit_ms => stop considering the existing str as pending
                         self._pending_negative_index = -1 # instead of 0 because of the typed char c
                     break
+        logger.debug(f'_handle_layout (after simul check) == self._pending_negative_index : {self._pending_negative_index}')
         for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
             # note that i will be negative value
             #chunk_to_check = preedit_and_c[len(preedit_and_c)-(i+1):len(preedit_and_c)]
