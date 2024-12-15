@@ -416,27 +416,6 @@ class EnginePSKK(IBus.Engine):
         logger.info('self._to_kana = self._handle_layout')
         return layout
 
-    # is this function really used at all?
-    def _preedit_to_yomi(self, preedit, keyval, state=0, modifiers=0):
-        yomi = ''
-        c = self._evnet.chr().lower()
-        preedit += c
-        if(preedit in self._layout['layout']):
-            # FIXME why += instead of = ?
-            yomi += self._layout['layout'][preedit]
-            preedit = ''
-        return(yomi, preedit)
-
-    def _config_value_changed_cb(self, settings, key):
-        logger.debug(f'config_value_changed("{key}")')
-        if key == 'mode':
-            self.set_mode(self._load_input_mode(settings), True)
-
-    # it seems like a way to passthrough the ascii (and similar) chars to the output?
-    def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
-        # this is just about returning the entered char as is..
-        return self._event.chr(), ''
-
     def _handle_layout(self, preedit, keyval, state=0, modifiers=0):
         """
         purpose of this function is to update the given preedit str
@@ -501,6 +480,27 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'_handle_layout case6 -- preedit: "{preedit}", yomi: "{yomi}"')
         self._previous_typed_timestamp = current_typed_time
         return yomi, preedit
+
+    # is this function really used at all?
+    def _preedit_to_yomi(self, preedit, keyval, state=0, modifiers=0):
+        yomi = ''
+        c = self._evnet.chr().lower()
+        preedit += c
+        if(preedit in self._layout['layout']):
+            # FIXME why += instead of = ?
+            yomi += self._layout['layout'][preedit]
+            preedit = ''
+        return(yomi, preedit)
+
+    def _config_value_changed_cb(self, settings, key):
+        logger.debug(f'config_value_changed("{key}")')
+        if key == 'mode':
+            self.set_mode(self._load_input_mode(settings), True)
+
+    # it seems like a way to passthrough the ascii (and similar) chars to the output?
+    def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
+        # this is just about returning the entered char as is..
+        return self._event.chr(), ''
 
     def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
         ## FIXME most likely this function will need to be retired...
