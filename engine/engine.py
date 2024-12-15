@@ -174,10 +174,8 @@ class EnginePSKK(IBus.Engine):
 
         # load configs
         self._load_configs()
-        #self._config = util.get_config_data()
-        #self._logging_level = self._load_logging_level(self._config)
         self._dict = self._load_dictionary(self._settings)
-        self._layout = self._load_layout(self._settings)
+        self._layout = self._load_layout()
         self._event = Event(self, self._layout)
 
         self.set_mode(self._load_input_mode(self._settings))
@@ -298,7 +296,7 @@ class EnginePSKK(IBus.Engine):
         logger.debug('config.json loaded')
         logger.debug(self._config)
         # loading layout should be part of (re-)loading config
-        self._layout = self._load_layout(self._settings)
+        self._layout = self._load_layout()
         self._event = Event(self, self._layout)
 
     def about_response_callback(self, dialog, response):
@@ -336,7 +334,7 @@ class EnginePSKK(IBus.Engine):
         user = settings.get_string('user-dictionary')
         return Dictionary(path, user, clear_history)
 
-    def _load_layout(self, settings):
+    def _load_layout(self):
         """
         This function loads the keyboard layout, which is expected
         to be stored in the JSON format.
@@ -392,6 +390,17 @@ class EnginePSKK(IBus.Engine):
                 "kk": {"output": "っ", "pending": "k"}
         }
         '''
+        '''
+        _layout_dict_array[0] = {
+                "k": {"pending": "い", "simul_limit_ms": 0}, # "pending" instead of "output" because there is still a change this "pending" value couldbe used as part of output
+                ...
+        }
+        _layout_dict_array[1] = {
+                "いa": {"output": "ほ", "simul_limit_ms": 80}, # "い" was already given by previous stroke
+                ...
+        }
+        '''
+        # Following is an example of shingeta
         for l in layout['layout']:
             # l is a list where the 0th element is input
             input_len = len(l[0])
