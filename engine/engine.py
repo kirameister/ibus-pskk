@@ -453,7 +453,7 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'_handle_layout == self._pending_negative_index : {self._pending_negative_index}')
         # First simultaneous check..
         # layout lookup is done with descending order for the sake of O(N)
-        # Following for-loop is to force only the previous pending to be considered, if sismultaneous conditions are not met.
+        # Following for-loop is to force only the previous pending to be considered, if simultaneous conditions are not met.
         for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
             pending = preedit_and_c[i:]
             if(pending in self._layout_dict_array[-i-1]):
@@ -470,6 +470,7 @@ class EnginePSKK(IBus.Engine):
             pending = preedit_and_c[i:]
             if(pending in self._layout_dict_array[-i-1]):
                 # if pending had a match against layout dict of that length..
+                # At this point, it doesn't matter if it is simultaneous-condition; this check was already done above.
                 if('output' in self._layout_dict_array[-i-1][pending] and 'pending' in self._layout_dict_array[-i-1][pending]):
                     preedit += self._layout_dict_array[-i-1][pending]['output'] + self._layout_dict_array[-i-1][pending]['pending']
                     # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
