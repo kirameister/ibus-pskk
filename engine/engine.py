@@ -473,35 +473,31 @@ class EnginePSKK(IBus.Engine):
                 # At this point, it doesn't matter if it is simultaneous-condition; this check was already done above.
                 if('output' in self._layout_dict_array[-i-1][pending] and 'pending' in self._layout_dict_array[-i-1][pending]):
                     preedit += self._layout_dict_array[-i-1][pending]['output'] + self._layout_dict_array[-i-1][pending]['pending']
-                    # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
                     logger.debug(f'_handle_layout case1 -- preedit: {preedit}, yomi: {yomi}')
-                    return yomi, preedit
+                    return(yomi, preedit)
                 if('output' in self._layout_dict_array[-i-1][pending]):
                     # tail of existing preedit needs to be removed
                     preedit = preedit[:i+1]
                     preedit += self._layout_dict_array[-i-1][pending]['output']
-                    # self._pending_negative_index = 0
                     self._previous_typed_timestamp = current_typed_time
                     logger.debug(f'_handle_layout case2 -- preedit: {preedit}, yomi: {yomi}')
-                    return yomi, preedit
+                    return(yomi, preedit)
                 if('pending' in self._layout_dict_array[-i-1][pending]):
                     preedit += self._layout_dict_array[-i-1][pending]['pending']
-                    # self._pending_negative_index = -1 * len(self._layout_dict_array[-i-1][pending]['pending'])
                     self._previous_typed_timestamp = current_typed_time
                     logger.debug(f'_handle_layout case3 -- preedit: {preedit}, yomi: {yomi}')
-                    return yomi, preedit
+                    return(yomi, preedit)
                 # match found, but no output or pending..
                 logger.debug(f'_handle_layout case4 -- preedit: {preedit}, yomi: {yomi}')
-                # self._pending_negative_index = 0
                 self._previous_typed_timestamp = current_typed_time
-                return yomi, preedit_and_c
+                return(yomi, preedit_and_c)
                 #yomi += self._layout_dict_array[i][preedit]
                 #preedit = ''
             logger.debug('_handle_layout case5 -- preedit: {preedit}, yomi: {yomi}')
         logger.debug(f'_handle_layout case6 -- preedit: "{preedit}", yomi: "{yomi}"')
         self._previous_typed_timestamp = current_typed_time
-        return yomi, preedit
+        return(yomi, preedit)
 
     # is this function really used at all?
     def _preedit_to_yomi(self, preedit, keyval, state=0, modifiers=0):
