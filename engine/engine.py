@@ -418,12 +418,14 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'Layout - self._layout_dict_array {self._layout_dict_array}')
         if("sands_keys" in layout):
             self._sands_key_set = set(layout['sands_keys'])
+        ''' following lines are not doing anything
         if 'Roomazi' in layout:
             self._to_kana = self._handle_roomazi_layout
             logger.info('self._to_kana = self._handle_roomazi_layout')
         else:
             # just passthrough.. nothing fancy at all..
             self._to_kana = self._handle_default_layout
+        '''
         self._to_kana = self._handle_layout # eventually, the definition of roomazi_layout should be moved to default_layout
         logger.info('self._to_kana = self._handle_layout')
         return layout
