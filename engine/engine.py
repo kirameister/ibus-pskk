@@ -176,6 +176,7 @@ class EnginePSKK(IBus.Engine):
         self._load_configs()
         self._dict = self._load_dictionary(self._settings)
         self._layout = self._load_layout()
+        # This will create an object defined in event.py
         self._event = Event(self, self._layout)
 
         self.set_mode(self._load_input_mode(self._settings))
@@ -297,7 +298,7 @@ class EnginePSKK(IBus.Engine):
         logger.debug(self._config)
         # loading layout should be part of (re-)loading config
         self._layout = self._load_layout()
-        self._event = Event(self, self._layout)
+        self._event = Event(self, self._layout) # most probably this is not necessary, as it is instantiated by __init__()
 
     def about_response_callback(self, dialog, response):
         dialog.destroy()
@@ -707,7 +708,7 @@ class EnginePSKK(IBus.Engine):
                 return True
 
         # Handle Japanese text
-        if (self._event.is_henkan() or self._event.is_muhenkan()) and not(modifiers & event.ALT_R_BIT):
+        if((self._event.is_henkan() or self._event.is_muhenkan()) and not(modifiers & event.ALT_R_BIT)):
             return self.handle_replace()
         if self._dict.current():
             self._commit()

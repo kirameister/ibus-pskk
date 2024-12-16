@@ -372,7 +372,7 @@ class Event:
         processed = self._engine.handle_key_event(keyval, keycode, state, self._modifiers)
         if state & IBus.ModifierType.RELEASE_MASK:
             self._modifiers &= ~PREFIX_BIT
-        if keyval == keysyms.Alt_R and self._capture_alt_r:
+        if(keyval == keysyms.Alt_R and self._capture_alt_r):
             return True
         if self.is_dual_role():
             # Modifiers have to be further processed.
