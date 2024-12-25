@@ -146,20 +146,20 @@ class EnginePSKK(IBus.Engine):
         super().__init__()
         self._mode = 'A'  # _mode must be one of _input_mode_names
         self._override = False
+        self._layout_data = dict() # this is complete data of layout JSON
+        self._layout = dict() # this is the modified layout of JSON
+        # _layout[INPUT]: {"output": OUTPUT_STR, "pending": PENDING_STR, "simul_limit_ms": INT}
+        self._simul_candidate_char_set = set()
+        self._if_simul_condition_met = False
 
-        self._layout = dict()
-        self._max_pending_len = 0       #: maximum len of chars in input column; updated upon self._load_layout()
-        self._layout_dict_array = []    #: typing layout with list(dict()) structure
         self._origin_timestamp = time.perf_counter()
         self._previous_typed_timestamp = time.perf_counter()
-        self._to_kana = self._handle_default_layout # this may really not be necessary
         # SandS vars
         self._sands_key_set = set()
         self._space_pressed = False # this is to hold the SandS state
 
         self._preedit_string = ''
         self._previous_text = ''
-        self._pending_negative_index = 0    #: index (to be 0 or negative integer) to indicate the index of pending (sub)str
         self._shrunk = []
         self._surrounding = SURROUNDING_RESET
 
@@ -175,9 +175,9 @@ class EnginePSKK(IBus.Engine):
         # load configs
         self._load_configs()
         self._dict = self._load_dictionary(self._settings)
-        self._layout = self._load_layout()
+        self._layout_data = self._load_layout() # this will also update self._layout
         # This will create an object defined in event.py
-        self._event = Event(self, self._layout)
+        self._event = Event(self, self._layout_data)
 
         self.set_mode(self._load_input_mode(self._settings))
         #self.character_after_n = "aiueo'wy"
@@ -297,8 +297,8 @@ class EnginePSKK(IBus.Engine):
         logger.debug('config.json loaded')
         logger.debug(self._config)
         # loading layout should be part of (re-)loading config
-        self._layout = self._load_layout()
-        self._event = Event(self, self._layout) # most probably this is not necessary, as it is instantiated by __init__()
+        self._layout_data = self._load_layout()
+        self._event = Event(self, self._layout_data) # most probably this is not necessary, as it is instantiated by __init__()
 
     def about_response_callback(self, dialog, response):
         dialog.destroy()
@@ -344,7 +344,12 @@ class EnginePSKK(IBus.Engine):
         "default_layout" JSON file.
         All the layouts are meant to be stored as Romazi-like layout,
         meaning that it consists of input, output, pending, and optional
-        simul_limit_ms values.
+        simul_limit_ms values. However, the layout is assumed to be simultaneous
+        layout, as opposed to the sequential-typing layout like the normal Romazi.
+        Therefore, the max len of input char is 2. 
+
+        This method returns a dict, which is the complete JSON data of specified layout file.
+        However, it also stores dict-type layout property.
         """
         path = ""
         if('layout' in self._config):
@@ -355,83 +360,49 @@ class EnginePSKK(IBus.Engine):
                 path = os.path.join(util.get_datadir(), 'layouts', self._config['layout'])
                 logger.debug(f"Specified layout {self._config['layout']} found in {util.get_datadir()}")
             else:
-                path = os.path.join(util.get_datadir(), 'layouts', 'roman.json')
+                path = os.path.join(util.get_datadir(), 'layouts', 'shingeta.json')
             logger.info(f'layout: {path}')
-        default_layout = os.path.join(util.get_datadir(), 'layouts', 'roman.json')
-        layout = dict()
+        default_layout_path = os.path.join(util.get_datadir(), 'layouts', 'shingeta.json')
+        layout_data = dict()
         try:
             with open(path) as f:
-                layout = json.load(f)
+                layout_data = json.load(f)
                 logger.info(f'layout JSON file loaded: {path}')
         except Exception as error:
             logger.error(error)
-        if(not layout):
+        if(len(layout_data) == 0):
             try:
-                with open(default_layout) as f:
-                    layout = json.load(f)
+                with open(default_layout_path) as f:
+                    layout_data = json.load(f)
+                    logger.info(f'default layout JSON file loaded: {default_layout_path}')
             except Exception as error:
                 logger.error(error)
-        # initialize by defining empty dicts as array element
-        self._max_pending_len = 0
-        for arr in layout['layout']:
-            self._max_pending_len = max(self._max_pending_len, len(arr[0]))
-        logger.info(f'max_pending_len: {self._max_pending_len}')
-        self._layout_dict_array = []
-        for i in range(self._max_pending_len):
-            self._layout_dict_array.append(dict())
-        # initialize ended
-        # Following is an example of romaji - nothing special at this point
-        '''
-        _layout_dict_array[0] = {
-                "a": {"output": "あ"},
-                ...
-        }
-        _layout_dict_array[1] = {
-                "ka": {"output": "か"},
-                "kk": {"output": "っ", "pending": "k"}
-        }
-        '''
-        '''
-        _layout_dict_array[0] = {
-                "k": {"pending": "い", "simul_limit_ms": 0}, # "pending" instead of "output" because there is still a change this "pending" value couldbe used as part of output
-                ...
-        }
-        _layout_dict_array[1] = {
-                "いa": {"output": "ほ", "simul_limit_ms": 80}, # "い" was already given by previous stroke
-                ...
-        }
-        '''
-        # Following is an example of shingeta
-        for l in layout['layout']:
+        # add simultaneous chars..
+        for l in layout_data['layout']:
             # l is a list where the 0th element is input
             input_len = len(l[0])
+            input_str = l[0]
             list_values = dict()
             if(input_len == 0):
                 logger.warning('input str len == 0 detected; skipping..')
                 continue
-            if(l[1] != ""):
-                list_values["output"] = l[1]
-            if(l[2] != ""):
-                list_values["pending"] = l[2]
-            if(len(l) > 3 and type(l[3]) == int):
+            if(input_len > 2):
+                logger.warning(f'len of input str is bigger than 2; skipping.. : {l}')
+                continue
+            list_values["output"] = str(l[1])
+            list_values["pending"] = str(l[2])
+            if(len(l) == 4 and type(l[3]) == int):
                 list_values["simul_limit_ms"] = l[3]
-            self._layout_dict_array[input_len-1][l[0]] = list_values # note that list starts with 0 index..
-        logger.debug(f'Layout - self._layout_dict_array {self._layout_dict_array}')
-        if("sands_keys" in layout):
-            self._sands_key_set = set(layout['sands_keys'])
-        ''' following lines are not doing anything
-        if 'Roomazi' in layout:
-            self._to_kana = self._handle_roomazi_layout
-            logger.info('self._to_kana = self._handle_roomazi_layout')
-        else:
-            # just passthrough.. nothing fancy at all..
-            self._to_kana = self._handle_default_layout
-        '''
-        self._to_kana = self._handle_layout # eventually, the definition of roomazi_layout should be moved to default_layout
-        logger.info('self._to_kana = self._handle_layout')
-        return layout
+            else:
+                list_values["simul_limit_ms"] = 0
+            self._layout[input_str] = list_values
+            if(input_len == 2):
+                self._simul_candidate_char_set.add(input_str[0])
+        if("sands_keys" in layout_data):
+            self._sands_key_set = set(layout_data['sands_keys'])
+        return layout_data
 
-    def _handle_layout(self, preedit, keyval, state=0, modifiers=0):
+    def _handle_input_to_yomi(self, preedit, keyval):
         """
         purpose of this function is to update the given preedit str
         with a given event char ("self._event.chr()").
@@ -440,74 +411,51 @@ class EnginePSKK(IBus.Engine):
 
         This function also takes care of the simultaneous input,
         which is achieved by checking and updating the value of
-        self._pending_negative_index.
+        self._if_simul_condition_met.
 
         This function returns the Yomi output and preedit char/s, 
         depending on the _layout_dict_array and value of c.
         """
         current_typed_time = time.perf_counter()
-        logger.debug(f'_handle_layout -- preedit: "{preedit}", keyval: "{keyval}"')
-        yomi = ''
+        logger.debug(f'_handle_input_to_yomi -- preedit: "{preedit}", keyval: "{keyval}"')
         c = self._event.chr().lower() # FIXME : this line could be ignored and replaced by something fancier
         preedit_and_c = preedit + c
-        self._pending_negative_index -= 1
-        logger.debug(f'_handle_layout == self._pending_negative_index : {self._pending_negative_index}')
-        # First simultaneous check..
-        # layout lookup is done with descending order for the sake of O(N)
-        # Following for-loop is to force only the previous pending to be considered, if simultaneous conditions are not met.
-        for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
-            pending = preedit_and_c[i:]
-            if(pending in self._layout_dict_array[-i-1]):
-                if('simul_limit_ms' in self._layout_dict_array[-i-1][pending]):
-                    # simul_limit_ms key is found in the matched dict entry, and..
-                    if((current_typed_time - self._previous_typed_timestamp)*1000 > self._layout_dict_array[-i-1][pending]['simul_limit_ms']):
-                        # the current stroke was given *beyond* the previous stroke + simul_limit_ms => stop considering the existing str as pending
-                        self._pending_negative_index = -1 # instead of 0 because of the typed char c
-                    break
-        logger.debug(f'_handle_layout (after simul check) == self._pending_negative_index : {self._pending_negative_index}')
-        for i in range(-1 * min(-1 * self._pending_negative_index, self._max_pending_len), 0):
-            # note that i will be negative value
-            #chunk_to_check = preedit_and_c[len(preedit_and_c)-(i+1):len(preedit_and_c)]
-            pending = preedit_and_c[i:]
-            if(pending in self._layout_dict_array[-i-1]):
-                # if pending had a match against layout dict of that length..
-                # At this point, it doesn't matter if it is simultaneous-condition; this check was already done above.
-                if('output' in self._layout_dict_array[-i-1][pending] and 'pending' in self._layout_dict_array[-i-1][pending]):
-                    preedit += self._layout_dict_array[-i-1][pending]['output'] + self._layout_dict_array[-i-1][pending]['pending']
-                    self._previous_typed_timestamp = current_typed_time
-                    logger.debug(f'_handle_layout case1 -- preedit: {preedit}, yomi: {yomi}')
-                    return(yomi, preedit)
-                if('output' in self._layout_dict_array[-i-1][pending]):
-                    # tail of existing preedit needs to be removed
-                    preedit = preedit[:i+1]
-                    preedit += self._layout_dict_array[-i-1][pending]['output']
-                    self._previous_typed_timestamp = current_typed_time
-                    logger.debug(f'_handle_layout case2 -- preedit: {preedit}, yomi: {yomi}')
-                    return(yomi, preedit)
-                if('pending' in self._layout_dict_array[-i-1][pending]):
-                    preedit += self._layout_dict_array[-i-1][pending]['pending']
-                    self._previous_typed_timestamp = current_typed_time
-                    logger.debug(f'_handle_layout case3 -- preedit: {preedit}, yomi: {yomi}')
-                    return(yomi, preedit)
-                # match found, but no output or pending..
-                logger.debug(f'_handle_layout case4 -- preedit: {preedit}, yomi: {yomi}')
+        # make the string committed if it's not found in the layout
+        if(preedit_and_c not in self._layout):
+            return(preedit_and_c, "")
+        if(c not in self._layout):
+            return(preedit_and_c, "")
+        # simul process
+        if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
+            if((current_typed_time - self._previous_typed_timestamp)*1000 < self._layout[preedit_and_c]['simul_limit_ms']):
                 self._previous_typed_timestamp = current_typed_time
-                return(yomi, preedit_and_c)
-                #yomi += self._layout_dict_array[i][preedit]
-                #preedit = ''
-            logger.debug('_handle_layout case5 -- preedit: {preedit}, yomi: {yomi}')
-        logger.debug(f'_handle_layout case6 -- preedit: "{preedit}", yomi: "{yomi}"')
-        self._previous_typed_timestamp = current_typed_time
-        return(yomi, preedit)
+                return(self._layout[preedit_and_c], "")
+        # ordinary process
+        if(preedit_and_c in self._layout):
+            # simul is already false.. 
+            if(c not in self._layout):
+                self._previous_typed_timestamp = current_typed_time
+                return(self._layout[preedit_and_c]["output"], self._layout[preedit_and_c]["pending"])
+            if(self._layout[c]['pending'] != ""):
+                self._previous_typed_timestamp = current_typed_time
+                return(preedit, self._layout[c]["pending"])
+            else:
+                self._previous_typed_timestamp = current_typed_time
+                return(self._layout[preedit_and_c], "")
+        else:
+            # we only need to worry about 'c'
+            self._previous_typed_timestamp = current_typed_time
+            return(preedit + self._layout[c]["output"], self._layout[c]["pending"])
+
 
     # is this function really used at all?
     def _preedit_to_yomi(self, preedit, keyval, state=0, modifiers=0):
         yomi = ''
         c = self._evnet.chr().lower()
         preedit += c
-        if(preedit in self._layout['layout']):
+        if(preedit in self._layout):
             # FIXME why += instead of = ?
-            yomi += self._layout['layout'][preedit]
+            yomi += self._layout[preedit]
             preedit = ''
         return(yomi, preedit)
 
@@ -520,21 +468,6 @@ class EnginePSKK(IBus.Engine):
     def _handle_default_layout(self, preedit, keyval, state=0, modifiers=0):
         # this is just about returning the entered char as is..
         return self._event.chr(), ''
-
-    def _handle_roomazi_layout(self, preedit, keyval, state=0, modifiers=0):
-        ## FIXME most likely this function will need to be retired...
-        yomi = ''
-        c = self._event.chr().lower()
-        # most probably this part could be handled by some sort of
-        # smart algorithm..
-        #if preedit == 'n' and self.character_after_n.find(c) < 0:
-        #    yomi = 'ん'
-        #    preedit = preedit[1:]
-        preedit += c
-        if preedit in self._layout['Roomazi']:
-            yomi += self._layout['Roomazi'][preedit]
-            preedit = ''
-        return yomi, preedit
 
     def _get_surrounding_text(self):
         if not (self.client_capabilities & IBus.Capabilite.SURROUNDING_TEXT):
@@ -616,9 +549,6 @@ class EnginePSKK(IBus.Engine):
         self._update_input_mode()
         return True
 
-    def _is_roomaji_mode(self):
-        return self._to_kana == self._handle_roomazi_layout
-
     def do_process_key_event(self, keyval, keycode, state):
         """
         This function is called when there is a key-storke event from IBus (if it's a overriding function is TBC..).
@@ -643,13 +573,13 @@ class EnginePSKK(IBus.Engine):
         if not c:
             return c
         if not self._event.is_shift():
-            return self._layout['\\Normal'].get(c, '')
-        if '\\Shift' in self._layout:
-            return self._layout['\\Shift'].get(c, '')
+            return self._layout_data['\\Normal'].get(c, '')
+        if '\\Shift' in self._layout_data:
+            return self._layout_data['\\Shift'].get(c, '')
         if modifiers & event.SHIFT_L_BIT:
-            return self._layout['\\ShiftL'].get(c, '')
+            return self._layout_data['\\ShiftL'].get(c, '')
         if modifiers & event.SHIFT_R_BIT:
-            return self._layout['\\ShiftR'].get(c, '')
+            return self._layout_data['\\ShiftR'].get(c, '')
 
     def handle_key_event(self, keyval, keycode, state, modifiers):
         """
@@ -733,7 +663,7 @@ class EnginePSKK(IBus.Engine):
                 if yomi:
                     self._preedit_string = ''
             else: # possible ASCII-to-hiragana
-                yomi, self._preedit_string = self._to_kana(self._preedit_string, keyval, state, modifiers)
+                yomi, self._preedit_string = self._handle_input_to_yomi(self._preedit_string, keyval)
         elif keyval == keysyms.hyphen:
             yomi = '―'
         elif self._previous_text:
@@ -747,6 +677,7 @@ class EnginePSKK(IBus.Engine):
             return False
         if(yomi):
             logger.debug(f'handle_key_event, if(yomi): {yomi}')
+            # This is where the yomi is sent to the IBus as committed string.
             self._commit_string(yomi)
         self._update_preedit()
         return True
