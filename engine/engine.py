@@ -145,6 +145,7 @@ class EnginePSKK(IBus.Engine):
     def __init__(self):
         super().__init__()
         self._mode = 'A'  # _mode must be one of _input_mode_names
+        self._mode = 'あ'  # I do not like to click extra...
         self._override = False
         self._layout_data = dict() # this is complete data of layout JSON
         self._layout = dict() # this is the modified layout of JSON
@@ -180,6 +181,7 @@ class EnginePSKK(IBus.Engine):
         self._event = Event(self, self._layout_data)
 
         self.set_mode(self._load_input_mode(self._settings))
+        self.set_mode('あ')
         #self.character_after_n = "aiueo'wy"
 
         self.connect('set-cursor-location', self.set_cursor_location_cb)
@@ -386,8 +388,8 @@ class EnginePSKK(IBus.Engine):
             if(input_len == 0):
                 logger.warning('input str len == 0 detected; skipping..')
                 continue
-            if(input_len > 2):
-                logger.warning(f'len of input str is bigger than 2; skipping.. : {l}')
+            if(input_len > 3):
+                logger.warning(f'len of input str is bigger than 3; skipping.. : {l}')
                 continue
             list_values["output"] = str(l[1])
             list_values["pending"] = str(l[2])
@@ -396,10 +398,12 @@ class EnginePSKK(IBus.Engine):
             else:
                 list_values["simul_limit_ms"] = 0
             self._layout[input_str] = list_values
-            if(input_len == 2):
-                self._simul_candidate_char_set.add(input_str[0])
+            logger.debug(f'_load_layout -- layout element added {input_str} => {list_values}')
+            if(input_len >= 2):
+                self._simul_candidate_char_set.add(input_str[:-1])
         if("sands_keys" in layout_data):
             self._sands_key_set = set(layout_data['sands_keys'])
+        logger.debug(f'_simul_candidate_char_set:  {self._simul_candidate_char_set}')
         return layout_data
 
     def _handle_input_to_yomi(self, preedit, keyval):
@@ -417,33 +421,35 @@ class EnginePSKK(IBus.Engine):
         depending on the _layout_dict_array and value of c.
         """
         current_typed_time = time.perf_counter()
-        logger.debug(f'_handle_input_to_yomi -- preedit: "{preedit}", keyval: "{keyval}"')
         c = self._event.chr().lower() # FIXME : this line could be ignored and replaced by something fancier
+        logger.debug(f'_handle_input_to_yomi -- preedit: "{preedit}", char: "{c}"')
         preedit_and_c = preedit + c
-        # make the string committed if it's not found in the layout
-        if(preedit_and_c not in self._layout):
-            return(preedit_and_c, "")
+        # sanity-check -- make the whole string committed if it's not found in the layout
         if(c not in self._layout):
+            logger.debug(f'_handle_input_to_yomi -- "{c}" not found in layout input at all => committing {preedit_and_c}')
             return(preedit_and_c, "")
         # simul process
         if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
+            timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
+            logger.debug('_handle_input_to_yomi -- simul-check : ' + str(timing_diff) +"  vs  " + str(self._layout[preedit_and_c]['simul_limit_ms']))
             if((current_typed_time - self._previous_typed_timestamp)*1000 < self._layout[preedit_and_c]['simul_limit_ms']):
+                logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
                 self._previous_typed_timestamp = current_typed_time
-                return(self._layout[preedit_and_c], "")
+                return(self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
         # ordinary process
         if(preedit_and_c in self._layout):
             # simul is already false.. 
-            if(c not in self._layout):
-                self._previous_typed_timestamp = current_typed_time
-                return(self._layout[preedit_and_c]["output"], self._layout[preedit_and_c]["pending"])
             if(self._layout[c]['pending'] != ""):
+                logger.debug(f'_handle_input_to_yomi -- "{c}" found with pending while having "{preedit}" => '+ preedit + self._layout[c]["pending"])
                 self._previous_typed_timestamp = current_typed_time
                 return(preedit, self._layout[c]["pending"])
             else:
+                logger.debug('case3')
                 self._previous_typed_timestamp = current_typed_time
                 return(self._layout[preedit_and_c], "")
         else:
             # we only need to worry about 'c'
+            logger.debug(f'_handle_input_to_yomi -- "{preedit_and_c}" not found in layout => ' + preedit + self._layout[c]["output"] +' / '+ self._layout[c]["pending"])
             self._previous_typed_timestamp = current_typed_time
             return(preedit + self._layout[c]["output"], self._layout[c]["pending"])
 
@@ -676,7 +682,7 @@ class EnginePSKK(IBus.Engine):
         else:
             return False
         if(yomi):
-            logger.debug(f'handle_key_event, if(yomi): {yomi}')
+            logger.debug(f'handle_key_event -- if(yomi): {yomi}')
             # This is where the yomi is sent to the IBus as committed string.
             self._commit_string(yomi)
         self._update_preedit()
@@ -822,12 +828,13 @@ class EnginePSKK(IBus.Engine):
         # hard-coded modification ended
 
         if self._surrounding in (SURROUNDING_NOT_SUPPORTED, SURROUNDING_BROKEN):
-            self._previous_text += text
+            #self._previous_text += text
+            self.commit_text(IBus.Text.new_from_string(text))
             logger.debug(f'_commit_string({text}): legacy ({self._previous_text})')
         else:
             if self._surrounding != SURROUNDING_SUPPORTED:
                 self._surrounding = SURROUNDING_COMMITTED
-                self._previous_text += text
+                #self._previous_text += text
             self.commit_text(IBus.Text.new_from_string(text))
             logger.debug(f'_commit_string({text}): modeless ({self._surrounding}, {self._previous_text})')
 
@@ -879,6 +886,7 @@ class EnginePSKK(IBus.Engine):
         This method updates the preedit text with the given candidate string. The preedit text is the text that is currently being composed by the user, and the candidate string is a suggestion for what the user might want to type next. If the candidate string is empty, the preedit text is cleared.
         If the input candidate is not a string, a TypeError is raised.
         """
+        logger.debug('_update_preedit --')
         if(not isinstance(cand, str)):
             raise TypeError("The `cand` parameter must be a str value.")
         previous_text = self._previous_text if self._surrounding != SURROUNDING_COMMITTED else ''
