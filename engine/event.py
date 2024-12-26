@@ -193,6 +193,8 @@ class Event:
 
         self._modifiers &= ~DUAL_BITS
         is_press = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
+        if(not is_press):
+            logger.debug(f'process_key_event -- key released {IBus.keyval_name(keyval)}')
         if is_press:
             if keyval == keysyms.space:
                 if self._modifiers & MODIFIER_BITS:
