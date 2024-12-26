@@ -239,10 +239,12 @@ class Event:
                 self._modifiers |= NOT_DUAL_ALT_R_BIT
 
             # Check CAPS LOCK for IME on/off
+            '''
             if self._OnOffByCaps:
                 if keyval == keysyms.Caps_Lock:
                     # Note CAPS LOCK LED is turned off after the key release event.
                     if state & IBus.ModifierType.LOCK_MASK:
+                        logger.debug(f'process_key_event -- state')
                         self._engine.disable_ime()
                     else:
                         self._engine.enable_ime()
@@ -251,7 +253,9 @@ class Event:
                     if state & IBus.ModifierType.LOCK_MASK:
                         self._engine.enable_ime()
                     else:
+                        logger.debug(f'process_key_event -- engine is_overridden')
                         self._engine.disable_ime()
+            '''
 
             if keyval in (keysyms.Muhenkan, keysyms.Hangul_Hanja):
                 # [無変換], [A]
