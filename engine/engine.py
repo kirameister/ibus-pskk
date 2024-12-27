@@ -421,37 +421,49 @@ class EnginePSKK(IBus.Engine):
         depending on the _layout_dict_array and value of c.
         """
         current_typed_time = time.perf_counter()
+        stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         c = self._event.chr().lower() # FIXME : this line could be ignored and replaced by something fancier
         logger.debug(f'_handle_input_to_yomi -- preedit: "{preedit}", char: "{c}"')
-        preedit_and_c = preedit + c
         # sanity-check -- make the whole string committed if it's not found in the layout
         if(c not in self._layout):
-            logger.debug(f'_handle_input_to_yomi -- "{c}" not found in layout input at all => committing {preedit_and_c}')
-            return(preedit_and_c, "")
-        # simul process
-        if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
-            timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
-            logger.debug('_handle_input_to_yomi -- simul-check : ' + str(timing_diff) +"  vs  " + str(self._layout[preedit_and_c]['simul_limit_ms']))
-            if((current_typed_time - self._previous_typed_timestamp)*1000 < self._layout[preedit_and_c]['simul_limit_ms']):
-                logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
-                self._previous_typed_timestamp = current_typed_time
-                return(self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
-        # ordinary process
-        if(preedit_and_c in self._layout):
-            # simul is already false.. 
-            if(self._layout[c]['pending'] != ""):
-                logger.debug(f'_handle_input_to_yomi -- "{c}" found with pending while having "{preedit}" => '+ preedit + self._layout[c]["pending"])
-                self._previous_typed_timestamp = current_typed_time
-                return(preedit, self._layout[c]["pending"])
-            else:
-                logger.debug('case3')
-                self._previous_typed_timestamp = current_typed_time
-                return(self._layout[preedit_and_c], "")
-        else:
-            # we only need to worry about 'c'
-            logger.debug(f'_handle_input_to_yomi -- "{preedit_and_c}" not found in layout => ' + preedit + self._layout[c]["output"] +' / '+ self._layout[c]["pending"])
-            self._previous_typed_timestamp = current_typed_time
-            return(preedit + self._layout[c]["output"], self._layout[c]["pending"])
+            logger.debug(f'_handle_input_to_yomi -- "{c}" not found in layout input at all => committing {preedit} + {c}')
+            return(preedit + c, "")
+        # following implementation is very much goofy, but is probably easier to understand as we only consider max of len(preedit)==2
+        preedit_prefix = ""
+        preedit_and_c = preedit + c
+        # first, we do the simultaneous check (from longest to shortest)
+        if(len(preedit)==2):
+            if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
+                logger.debug(f'_handle_input_to_yomi -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
+                if(stroke_timing_diff < self._layout[preedit_and_c]['simul_limit_ms']):
+                    logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
+                    self._previous_typed_timestamp = current_typed_time
+                    return(self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
+            # at this point, 3-key-stroke simul-check was negative, we now go for 2-key-stroke simul-check
+            # the following code is to handle cases like /abc/ => "aB" where we only have /bc/=>"B" simul rule
+            preedit_prefix = preedit[0]
+            preedit_and_c = preedit[1] + c
+            if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
+                logger.debug(f'_handle_input_to_yomi -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
+                if(stroke_timing_diff < self._layout[preedit_and_c]['simul_limit_ms']):
+                    logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
+                    self._previous_typed_timestamp = current_typed_time
+                    return(preedit_prefix + self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
+        if(len(preedit)==1):
+            # this is still simul-check in case we only have 1-char preedit (which should be most of the case)
+            if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
+                logger.debug(f'_handle_input_to_yomi -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
+                if(stroke_timing_diff < self._layout[preedit_and_c]['simul_limit_ms']):
+                    logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
+                    self._previous_typed_timestamp = current_typed_time
+                    return(self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
+        # at this point, all the simul-check is completed (and got negative)
+        # because we do not need to think of changing the preedit value
+        # outside of the simultaneous strokes in shingeta context, the rest should be simple
+        preedit_and_c = preedit + c
+        logger.debug(f'_handle_input_to_yomi -- "{preedit_and_c}" not found in layout or simul rejected => ' + preedit + self._layout[c]["output"] +' / '+ self._layout[c]["pending"])
+        self._previous_typed_timestamp = current_typed_time
+        return(preedit + self._layout[c]["output"], self._layout[c]["pending"])
 
 
     # is this function really used at all?
