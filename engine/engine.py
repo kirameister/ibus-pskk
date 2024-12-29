@@ -917,12 +917,15 @@ class EnginePSKK(IBus.Engine):
         if 0 < preedit_len:
             assert cand_len == 0
             attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.SINGLE, previous_len, previous_len + preedit_len))
+            # Follownig version is to suppress the underline in the preedit string. We do not use this for the time being for debug purpose. 
+            #attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.NONE, previous_len, previous_len + preedit_len))
         if attrs:
             text.set_attributes(attrs)
         # Note self.hide_preedit_text() does not seem to work as expected with Kate.
         # cf. "Qt5 IBus input context does not implement hide_preedit_text()",
         #     https://bugreports.qt.io/browse/QTBUG-48412
-        self.update_preedit_text(text, text_len, 0 < text_len)
+        #self.update_preedit_text(text, text_len, 0 < text_len)
+        self.update_preedit_text_with_mode(text, text_len, 0 < text_len, IBus.PreeditFocusMode.COMMIT)
         self._update_lookup_table()
 
     def _update_lookup_table(self):
