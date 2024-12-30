@@ -57,10 +57,12 @@ class IMApp:
 
         self._mainloop = GLib.MainLoop()
         self._bus = IBus.Bus()
+        # http://lazka.github.io/pgi-docs/GObject-2.0/classes/Object.html#GObject.Object.connect
         self._bus.connect("disconnected", self._bus_disconnected_cb)
         self._factory = IBus.Factory(self._bus)
         self._factory.add_engine("pskk", GObject.type_from_name("EnginePSKK"))
         if exec_by_ibus:
+            # http://lazka.github.io/pgi-docs/IBus-1.0/classes/Bus.html#IBus.Bus.request_name
             self._bus.request_name("org.freedesktop.IBus.PSKK", 0)
         else:
             self._component = IBus.Component(
@@ -80,14 +82,17 @@ class IMApp:
                 author="Akira K.",
                 icon=util.get_package_name(),
                 layout="default")
+            # http://lazka.github.io/pgi-docs/IBus-1.0/classes/Component.html#IBus.Component.add_engine
             self._component.add_engine(engine)
+            # http://lazka.github.io/pgi-docs/IBus-1.0/classes/Bus.html#IBus.Bus.register_component
             self._bus.register_component(self._component)
+            # http://lazka.github.io/pgi-docs/IBus-1.0/classes/Bus.html#IBus.Bus.set_global_engine_async
             self._bus.set_global_engine_async("pskk", -1, None, None, None)
 
     def run(self):
         self._mainloop.run()
 
-    def _bus_disconnected_cb(self, bus):
+    def _bus_disconnected_cb(self, bus=None):
         self._mainloop.quit()
 
 
@@ -108,7 +113,6 @@ def print_help(v: int = 0) -> None:
     print("-h, --help             show this message.")
     print("-d, --daemonize        daemonize ibus")
     sys.exit(v)
-
 
 
 def main():
