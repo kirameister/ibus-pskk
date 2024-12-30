@@ -601,7 +601,10 @@ class EnginePSKK(IBus.Engine):
 
     def handle_key_event(self, keyval, keycode, state, modifiers):
         """
-        This function handles all sorts of key-event..
+        This function handles almost all sorts of key-events.
+        This is called from Event.handle_key_event(), which is called from
+        Event.process_key_event(), which is again called from
+        Engine.do_process_key_event(), which is override of IBus class.
         """
         logger.debug(f'handle_key_event("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x}, {modifiers:#07x})')
         if self._event.is_dual_role():
