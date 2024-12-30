@@ -177,6 +177,9 @@ class Event:
         return self._modifiers & DUAL_BITS
 
     def process_key_event(self, keyval, keycode, state):
+        '''
+        This function is called from Engine.do_process_key_event()
+        '''
         logger.debug(f'process_key_event("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x}) {self._modifiers:#07x}')
         alt_gr = False
 
@@ -386,6 +389,11 @@ class Event:
         return processed
 
     def chr(self):
+        '''
+        This function is returning the chr value of
+        the current keyval, which is originally
+        given by the Engine.do_process_key_event()
+        '''
         c = ''
         if self.is_ascii():
             if self.is_space():
