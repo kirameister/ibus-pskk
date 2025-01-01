@@ -41,8 +41,6 @@ from gi.repository import Gio, Gtk, IBus
 # http://lazka.github.io/pgi-docs/Gtk-4.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHVsKSY24bv9C75Mweq54yhLsePdGA25YfLnwMwCx7vEq03oV61qn_qEntg_aem_3k1P3ltIMb17cBH0fdPr4w
 # http://lazka.github.io/pgi-docs/GLib-2.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHXaZwlJVVZEl9rr2SWsvIy2x85xW-XJuu32OZYxQ3gxF-E__9kWOUqGNzA_aem_2zw0hES6WqJcXPds_9CEdA
 
-keysyms = IBus
-
 logger = logging.getLogger(__name__)
 
 _ = lambda a: gettext.dgettext(util.get_package_name(), a)
@@ -402,7 +400,11 @@ class EnginePSKK(IBus.Engine):
             if(input_len >= 2):
                 self._simul_candidate_char_set.add(input_str[:-1])
         if("sands_keys" in layout_data):
+            # Note that element/s of this set is str, not keyval
             self._sands_key_set = set(layout_data['sands_keys'])
+        else:
+            # By default, we apply SandS because it is cool
+            self._sands_key_set.add('space')
         logger.debug(f'_simul_candidate_char_set:  {self._simul_candidate_char_set}')
         return layout_data
 
@@ -532,7 +534,7 @@ class EnginePSKK(IBus.Engine):
         return self._override
 
     def is_enabled(self):
-        return self.get_mode() != 'A'
+        return(self.get_mode() != 'A')
 
     def enable_ime(self, override=False):
         if not self.is_enabled():
@@ -569,21 +571,79 @@ class EnginePSKK(IBus.Engine):
 
     def do_process_key_event(self, keyval, keycode, state):
         """
-        This function is called when there is a key-storke event from IBus (if it's a overriding function is TBC..).
-        SandS-like check is done here and relevant flag is raised/lowered.
+        This function is called when there is a key-storke event from IBus.
+        This is almost a wrapper function to process_key_event()
         """
+        #return self._event.process_key_event(keyval, keycode, state)
+        is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
+        if(is_press_action):
+            logger.debug(f'do_process_key_event -- press ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
+        else:
+            logger.debug(f'do_process_key_event -- release ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
+        # 変換 / 無変換
+        if(keyval == IBus.Muhenkan):
+            if(is_press_action): # this extra if-clause is necessary not to cascade release signal to further function.
+                logger.debug(f'do_process_key_event -- IME set disabled via Muhenkan')
+                self.set_mode('A', True)
+            return(True)
+        if(keyval == IBus.Henkan or keyval == IBus.Henkan_Mode):
+            if(is_press_action):
+                logger.debug(f'do_process_key_event -- IME set enabled via Henkan')
+                self.set_mode('あ', True)
+            self._space_pressed = False # when the IME is newly enabled, this value needs to be False
+            return(True)
+        return(self.process_key_event(keyval, keycode, state))
+
+    def process_key_event(self, keyval, keycode, state):
+        """
+        This function is the actual implementation of the do_process_key_event()
+        This function could be considered as the core part of the IME
+        This function not only detects the type/state of the key, but also identify 
+        which (internal) state the IME is supposed to be. 
+        """
+        logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
+        is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
+        # first check/update the status of SandS
         if(IBus.keyval_name(keyval) in self._sands_key_set):
             # please note that this implementation has a limitation that would not allow multiple
             # SandS keys to be pressed and released as if "shift" is still being pressed.
             # This is a known limitation and is not planned to be addressed unless someone really
             # wishes so.
-            if((state & IBus.ModifierType.RELEASE_MASK) == 0):
-                logger.debug('do_process_key_event -- SandS-key pressed')
+            if(is_press_action):
+                logger.debug('process_key_event -- SandS-key pressed')
+                self._space_pressed = True
+                # at this point, you cannot simply return(true) because *pressing* the space action could have an impact as well
+            else:
+                logger.debug('process_key_event -- SandS-key released')
+                self._space_pressed = False
+        # check for the shift..
+        if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
+            if(is_press_action):
+                logger.debug('process_key_event -- Shift-key pressed')
                 self._space_pressed = True
             else:
+                logger.debug('process_key_event -- Shift-key released')
                 self._space_pressed = False
-                logger.debug('do_process_key_event -- SandS-key released')
-        return self._event.process_key_event(keyval, keycode, state)
+        # At this point, the keyval could be nothing but the IME on-off
+        if(not self.is_enabled()):
+            # this block is for direct-mode (no Japanese char)
+            return(False)
+        '''
+            self._commit_string(IBus.keyval_name(keyval))
+            return(True)
+        '''
+        # the real deal with Japanese typing starts...
+        # State0
+        # State1
+        # State2
+        # State3
+        '''
+        else:
+            self._commit_string(chr(keyval))
+            return(True)
+        '''
+        return(False)
+
 
     def handle_alt_graph(self, keyval, keycode, state, modifiers):
         logger.debug(f'handle_alt_graph("{self._event.chr()}")')
@@ -621,17 +681,17 @@ class EnginePSKK(IBus.Engine):
 
         # Handle Candidate window
         if 0 < self._lookup_table.get_number_of_candidates():
-            if keyval in (keysyms.Page_Up, keysyms.KP_Page_Up):
+            if keyval in (IBus.Page_Up, IBus.KP_Page_Up):
                 return self.do_page_up()
-            elif keyval in (keysyms.Page_Down, keysyms.KP_Page_Down):
+            elif keyval in (IBus.Page_Down, IBus.KP_Page_Down):
                 return self.do_page_down()
-            elif keyval == keysyms.Up or self._event.is_muhenkan():
+            elif keyval == IBus.Up or self._event.is_muhenkan():
                 return self.do_cursor_up()
-            elif keyval == keysyms.Down or self._event.is_henkan():
+            elif keyval == IBus.Down or self._event.is_henkan():
                 return self.do_cursor_down()
 
         if self._preedit_string:
-            if keyval == keysyms.Return:
+            if keyval == IBus.Return:
                 if self._preedit_string == 'n':
                     self._preedit_string = 'ん'
                     # FIXME: instead of this if-clause, more generic handing of pending char(s) should be used
@@ -639,22 +699,22 @@ class EnginePSKK(IBus.Engine):
                 self._preedit_string = ''
                 self._update_preedit()
                 return True
-            if keyval == keysyms.Escape:
+            if keyval == IBus.Escape:
                 self._preedit_string = ''
                 self._update_preedit()
                 return True
 
         if self._dict.current():
-            if keyval == keysyms.Tab:
+            if keyval == IBus.Tab:
                 if not self._event.is_shift():
                     return self.handle_shrink()
                 else:
                     return self.handle_expand()
-            if keyval == keysyms.Escape:
+            if keyval == IBus.Escape:
                 self._handle_escape()
                 self._update_preedit()
                 return True
-            if keyval == keysyms.Return:
+            if keyval == IBus.Return:
                 self._commit()
                 return True
 
@@ -685,10 +745,10 @@ class EnginePSKK(IBus.Engine):
                     self._preedit_string = ''
             else: # possible ASCII-to-hiragana
                 yomi, self._preedit_string = self._handle_input_to_yomi(self._preedit_string, keyval)
-        elif keyval == keysyms.hyphen:
+        elif keyval == IBus.hyphen:
             yomi = '―'
         elif self._previous_text:
-            if keyval == keysyms.Escape:
+            if keyval == IBus.Escape:
                 self._previous_text = ''
             else:
                 self._commit()
