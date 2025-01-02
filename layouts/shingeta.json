@@ -1,6 +1,7 @@
 {
     "conversion_trigger_keys": ["f"],
     "sands_keys": ["space"],
+    "kanchoku_layout": "aki_code",
     "layout": [
         ["k", "", "い", 0],
         ["q", "", "ー", 0],
