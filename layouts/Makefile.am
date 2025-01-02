@@ -14,6 +14,7 @@
 
 dist_layouts_DATA = \
 	shingeta.json \
+	aki_code.json \
 	jis.109.json \
 	roman.json \
 	roomazi.json \
