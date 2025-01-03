@@ -438,14 +438,14 @@ class EnginePSKK(IBus.Engine):
                 kanchoku_layout_data = json.load(f)
                 logger.info(f'kanchoku-layout JSON file loaded: {path}')
         except Exception as error:
-            logger.error(error)
+            logger.error(f'Error loading the kanchoku data {path} : {error}')
         if(len(kanchoku_layout_data) == 0):
             try:
                 with open(default_kanchoku_layout_path) as f:
                     kanchoku_layout_data = json.load(f)
-                    logger.info(f'default layout JSON file loaded: {default_kanchoku_layout_path}')
+                    logger.info(f'default kanchoku layout JSON file loaded: {default_kanchoku_layout_path}')
             except Exception as error:
-                logger.error(error)
+                logger.error(f'Error loading the default kanchoku data {default_kanchoku_layout_path}: {error}')
         # initialize the layout first..
         for first in KANCHOKU_KEY_SET:
             return_dict[first] = dict()
@@ -459,6 +459,7 @@ class EnginePSKK(IBus.Engine):
                 if(second not in KANCHOKU_KEY_SET):
                     continue
                 return_dict[first][second] = kanchoku_layout_data[first][second]
+        #logger.debug(f'Loaded kanchoku data: {return_dict}')
         return(return_dict)
 
     def _handle_input_to_yomi(self, preedit, keyval):
