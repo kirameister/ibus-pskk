@@ -156,6 +156,7 @@ class EnginePSKK(IBus.Engine):
         # _layout[INPUT]: {"output": OUTPUT_STR, "pending": PENDING_STR, "simul_limit_ms": INT}
         self._simul_candidate_char_set = set()
         self._if_simul_condition_met = False
+        self._max_simul_limit_ms = 0
 
         self._origin_timestamp = time.perf_counter()
         self._previous_typed_timestamp = time.perf_counter()
@@ -404,6 +405,7 @@ class EnginePSKK(IBus.Engine):
             list_values["output"] = str(l[1])
             list_values["pending"] = str(l[2])
             if(len(l) == 4 and type(l[3]) == int):
+                self._max_simul_limit_ms = max(l[3], self._max_simul_limit_ms)
                 list_values["simul_limit_ms"] = l[3]
             else:
                 list_values["simul_limit_ms"] = 0
@@ -411,6 +413,7 @@ class EnginePSKK(IBus.Engine):
             logger.debug(f'_load_layout -- layout element added {input_str} => {list_values}')
             if(input_len >= 2):
                 self._simul_candidate_char_set.add(input_str[:-1])
+        logger.debug(f'_load_layout -- _max_simul_limit_ms: {self._max_simul_limit_ms}')
         if("sands_keys" in layout_data):
             # Note that element/s of this set is str, not keyval
             self._sands_key_set = set(layout_data['sands_keys'])
@@ -670,9 +673,9 @@ class EnginePSKK(IBus.Engine):
         """
         logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
-        
         # From here until each return statement, the code would be very much convoluted. This is because 
         # the IME is eploying a rather complicated logic and that needs to be hard-coded here..
+        # FIXME: I'll need to let this function take care the Combo-keys with Ctrl. 
 
         if(self._lookup_table.get_number_of_candidates()):
             # We are already in the conversion mode
@@ -719,7 +722,7 @@ class EnginePSKK(IBus.Engine):
                 return(True)
         # mostly ignore the release action for applicable key..
         if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
-            self._previous_typed_timestamp -= 1000 # this is to ensure simul-check to always fail
+            self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
             return(True)
 
         # forced preedit mode
