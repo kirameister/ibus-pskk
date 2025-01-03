@@ -155,7 +155,7 @@ class EnginePSKK(IBus.Engine):
         self._kanchoku_layout = dict()
         # _layout[INPUT]: {"output": OUTPUT_STR, "pending": PENDING_STR, "simul_limit_ms": INT}
         self._simul_candidate_char_set = set()
-        self._if_simul_condition_met = False
+        #self._if_simul_condition_met = False
         self._max_simul_limit_ms = 0
 
         self._origin_timestamp = time.perf_counter()
@@ -480,16 +480,13 @@ class EnginePSKK(IBus.Engine):
         This should not be dependent whether the input mode is in
         hiragana or in kanji-conversion (to be implemented).
 
-        This function also takes care of the simultaneous input,
-        which is achieved by checking and updating the value of
-        self._if_simul_condition_met.
+        This function also takes care of the simultaneous input.
 
         This function returns the Yomi output and preedit char/s, 
         depending on the _layout_dict_array and value of c.
         """
         current_typed_time = time.perf_counter()
         stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
-        c = self._event.chr().lower() # FIXME : this line could be ignored and replaced by something fancier
         c = chr(keyval).lower() # FIXME : this line could be ignored and replaced by something fancier
         logger.debug(f'_handle_input_to_yomi -- preedit: "{preedit}", char: "{c}"')
         # sanity-check -- make the whole string committed if it's not found in the layout
@@ -497,34 +494,26 @@ class EnginePSKK(IBus.Engine):
             logger.debug(f'_handle_input_to_yomi -- "{c}" not found in layout input at all => committing {preedit} + {c}')
             return(preedit + c, "")
         # following implementation is very much goofy, but is probably easier to understand as we only consider max of len(preedit)==2
-        preedit_prefix = ""
         preedit_and_c = preedit + c
         # first, we do the simultaneous check (from longest to shortest)
         if(len(preedit)==2):
-            if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
-                logger.debug(f'_handle_input_to_yomi -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
-                if(stroke_timing_diff < self._layout[preedit_and_c]['simul_limit_ms']):
-                    logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
-                    self._previous_typed_timestamp = current_typed_time
-                    return(self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
+            if(self._is_simul_condition_met(keyval, preedit, stroke_timing_diff)):
+                logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
+                self._previous_typed_timestamp = current_typed_time
+                return(self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
             # at this point, 3-key-stroke simul-check was negative, we now go for 2-key-stroke simul-check
             # the following code is to handle cases like /abc/ => "aB" where we only have /bc/=>"B" simul rule
-            preedit_prefix = preedit[0]
             preedit_and_c = preedit[1] + c
-            if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
-                logger.debug(f'_handle_input_to_yomi -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
-                if(stroke_timing_diff < self._layout[preedit_and_c]['simul_limit_ms']):
-                    logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
-                    self._previous_typed_timestamp = current_typed_time
-                    return(preedit_prefix + self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
+            if(self._is_simul_condition_met(keyval, preedit[1], stroke_timing_diff)):
+                logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
+                self._previous_typed_timestamp = current_typed_time
+                return(preedit[0] + self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
         if(len(preedit)==1):
             # this is still simul-check in case we only have 1-char preedit (which should be most of the case)
-            if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
-                logger.debug(f'_handle_input_to_yomi -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
-                if(stroke_timing_diff < self._layout[preedit_and_c]['simul_limit_ms']):
-                    logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
-                    self._previous_typed_timestamp = current_typed_time
-                    return(self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
+            if(self._is_simul_condition_met(keyval, preedit, stroke_timing_diff)):
+                logger.debug(f'{preedit_and_c} => {self._layout[preedit_and_c]}')
+                self._previous_typed_timestamp = current_typed_time
+                return(self._layout[preedit_and_c]['output'], self._layout[preedit_and_c]['pending'])
         # at this point, all the simul-check is completed (and got negative)
         # because we do not need to think of changing the preedit value
         # outside of the simultaneous strokes in shingeta context, the rest should be simple
@@ -634,6 +623,23 @@ class EnginePSKK(IBus.Engine):
         self._update_lookup_table()
         self._update_input_mode()
         return True
+
+    def _is_simul_condition_met(self, keyval, preedit, stroke_timing_diff):
+        """
+        This function is to return the boolean value
+        if the given keycode (given the loaded layout)
+        is supposed to be captured as simultaneous stroke. 
+
+        In order to have the modularity, preedit value is 
+        also deined as argument.
+        """
+        c = chr(keyval)
+        preedit_and_c = preedit + c
+        if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
+            logger.debug(f'_if_simul_condition_met -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
+            if(stroke_timing_diff < self._layout[preedit_and_c]['simul_limit_ms']):
+                return(True)
+        return(False)
 
     def do_process_key_event(self, keyval, keycode, state):
         """
