@@ -121,7 +121,26 @@ def get_layout(config):
         layout_file_path = os.path.join(get_datadir(), 'layouts', layout_file_name)
     else:
         layout_file_path = os.path.join(get_datadir(), 'layouts', 'roman.json')
-    with open(layout_file_path) as layout_json:
-        return json.load(layout_json)
-    logger.error(f'Error in loading layout file: {layout_file_path}')
+    try:
+        with open(layout_file_path) as layout_json:
+            return json.load(layout_json)
+    except: 
+        logger.error(f'Error in loading layout file: {layout_file_path}')
+    return None
+
+
+def get_kanchoku_layout(config):
+    kanchoku_layout_file_name = config['kanchoku_layout']
+    kanchoku_layout_file_path = ''
+    if os.path.exists(os.path.join(get_user_configdir(), kanchoku_layout_file_name)):
+        kanchoku_layout_file_path = os.path.join(get_user_configdir(), kanchoku_layout_file_name)
+    elif os.path.exists(os.path.join(get_datadir(), 'kanchoku_layouts', kanchoku_layout_file_name)):
+        kanchoku_layout_file_path = os.path.join(get_datadir(), 'kanchoku_layouts', kanchoku_layout_file_name)
+    else:
+        kanchoku_layout_file_path = os.path.join(get_datadir(), 'kanchoku_layouts', 'aki_code.json')
+    try:
+        with open(kanchoku_layout_file_path) as kanchoku_layout_json:
+            return json.load(kanchoku_layout_json)
+    except: 
+        logger.error(f'Error in loading kanchoku_layout file: {kanchoku_layout_file_path}')
     return None

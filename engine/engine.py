@@ -45,6 +45,9 @@ logger = logging.getLogger(__name__)
 
 _ = lambda a: gettext.dgettext(util.get_package_name(), a)
 
+KANCHOKU_KEY_SET = set(list('qwertyuiopasdfghjkl;zxcvbnm,./'))
+MISSING_KANCHOKU_KANJI = '無'
+
 HIRAGANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんゔがぎぐげござじずぜぞだぢづでどばびぶべぼぁぃぅぇぉゃゅょっぱぴぷぺぽゎゐゑ・ーゝゞ"
 KATAKANA = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンヴガギグゲゴザジズゼゾダヂヅデドバビブベボァィゥェォャュョッパピプペポヮヰヱ・ーヽヾ"
 
@@ -175,6 +178,7 @@ class EnginePSKK(IBus.Engine):
         self._load_configs()
         self._dict = self._load_dictionary(self._settings)
         self._layout_data = self._load_layout() # this will also update self._layout
+        self._kanchoku_layout = self._load_kanchoku_layout()
         # This will create an object defined in event.py
         self._event = Event(self, self._layout_data)
 
@@ -408,6 +412,55 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'_simul_candidate_char_set:  {self._simul_candidate_char_set}')
         return layout_data
 
+    def _load_kanchoku_layout(self):
+        """
+        Purpose of this function is to load the kanchoku (漢直) layout
+        as form of dict. 
+        The term "layout" may not be very accurate, but I haven't found
+        a better term for this concept yet (people say "漢直配列").
+        """
+        return_dict = dict()
+        path = ""
+        if('kanchoku_layout' in self._config):
+            if(os.path.exists(os.path.join(util.get_user_configdir(), self._config['kanchoku_layout']))):
+                path = os.path.join(util.get_user_configdir(), self._config['kanchoku_layout'])
+                logger.debug(f"Specified kanchoku layout {self._config['kanchokulayout']} found in {util.get_user_configdir()}")
+            elif(os.path.exists(os.path.join(util.get_datadir(), 'layouts', self._config['layout']))):
+                path = os.path.join(util.get_datadir(), 'layouts', self._config['kanchoku_layout'])
+                logger.debug(f"Specified layout {self._config['kanchoku_layout']} found in {util.get_datadir()}")
+            else:
+                path = os.path.join(util.get_datadir(), 'layouts', 'aki_code.json')
+            logger.info(f'kanchoku-layout: {path}')
+        default_kanchoku_layout_path = os.path.join(util.get_datadir(), 'layouts', 'aki_code.json')
+        kanchoku_layout_data = dict()
+        try:
+            with open(path) as f:
+                kanchoku_layout_data = json.load(f)
+                logger.info(f'kanchoku-layout JSON file loaded: {path}')
+        except Exception as error:
+            logger.error(error)
+        if(len(kanchoku_layout_data) == 0):
+            try:
+                with open(default_kanchoku_layout_path) as f:
+                    kanchoku_layout_data = json.load(f)
+                    logger.info(f'default layout JSON file loaded: {default_kanchoku_layout_path}')
+            except Exception as error:
+                logger.error(error)
+        # initialize the layout first..
+        for first in KANCHOKU_KEY_SET:
+            return_dict[first] = dict()
+            for second in KANCHOKU_KEY_SET:
+                return_dict[first][second] = kanchoku_layout_data[first][second]
+        # actually loading the layout..
+        for first in kanchoku_layout_data.keys():
+            if(first not in KANCHOKU_KEY_SET):
+                continue
+            for second in kanchoku_layout_data[first].keys():
+                if(second not in KANCHOKU_KEY_SET):
+                    continue
+                return_dict[first][second] = kanchoku_layout_data[first][second]
+        return(return_dict)
+
     def _handle_input_to_yomi(self, preedit, keyval):
         """
         purpose of this function is to update the given preedit str
@@ -592,6 +645,10 @@ class EnginePSKK(IBus.Engine):
                 self.set_mode('あ', True)
             self._space_pressed = False # when the IME is newly enabled, this value needs to be False
             return(True)
+        # If the IME is supposed to be disabled (direct mode), do not cascade the keyval any further
+        if(not self.is_enabled()):
+            # this block is for direct-mode (no Japanese char)
+            return(False)
         return(self.process_key_event(keyval, keycode, state))
 
     def process_key_event(self, keyval, keycode, state):
@@ -624,10 +681,6 @@ class EnginePSKK(IBus.Engine):
             else:
                 logger.debug('process_key_event -- Shift-key released')
                 self._space_pressed = False
-        # At this point, the keyval could be nothing but the IME on-off
-        if(not self.is_enabled()):
-            # this block is for direct-mode (no Japanese char)
-            return(False)
         '''
             self._commit_string(IBus.keyval_name(keyval))
             return(True)
