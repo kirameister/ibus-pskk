@@ -45,6 +45,8 @@ logger = logging.getLogger(__name__)
 
 _ = lambda a: gettext.dgettext(util.get_package_name(), a)
 
+APPLICABLE_STROKE_SET_FOR_JAPANESE = set(list('1234567890qwertyuiopasdfghjk;lzxcvbnm,./'))
+
 KANCHOKU_KEY_SET = set(list('qwertyuiopasdfghjkl;zxcvbnm,./'))
 MISSING_KANCHOKU_KANJI = '無'
 
@@ -150,6 +152,7 @@ class EnginePSKK(IBus.Engine):
         self._override = False
         self._layout_data = dict() # this is complete data of layout JSON
         self._layout = dict() # this is the modified layout of JSON
+        self._kanchoku_layout = dict()
         # _layout[INPUT]: {"output": OUTPUT_STR, "pending": PENDING_STR, "simul_limit_ms": INT}
         self._simul_candidate_char_set = set()
         self._if_simul_condition_met = False
@@ -159,6 +162,10 @@ class EnginePSKK(IBus.Engine):
         # SandS vars
         self._sands_key_set = set()
         self._space_pressed = False # this is to hold the SandS state
+        self._in_kanchoku_mode = False
+        self._just_finished_kanchoku_mode = False # this is to make a diff with space-release
+        self._in_forced_preedit_mode = False
+        self._first_kanchoku_stroke = ""
 
         self._preedit_string = ''
         self._previous_text = ''
@@ -302,6 +309,7 @@ class EnginePSKK(IBus.Engine):
         logger.debug(self._config)
         # loading layout should be part of (re-)loading config
         self._layout_data = self._load_layout()
+        self._kanchoku_layout = self._load_kanchoku_layout()
         self._event = Event(self, self._layout_data)
 
     def about_response_callback(self, dialog, response):
@@ -479,6 +487,7 @@ class EnginePSKK(IBus.Engine):
         current_typed_time = time.perf_counter()
         stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         c = self._event.chr().lower() # FIXME : this line could be ignored and replaced by something fancier
+        c = chr(keyval).lower() # FIXME : this line could be ignored and replaced by something fancier
         logger.debug(f'_handle_input_to_yomi -- preedit: "{preedit}", char: "{c}"')
         # sanity-check -- make the whole string committed if it's not found in the layout
         if(c not in self._layout):
@@ -661,31 +670,87 @@ class EnginePSKK(IBus.Engine):
         """
         logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
-        # first check/update the status of SandS
+        
+        # From here until each return statement, the code would be very much convoluted. This is because 
+        # the IME is eploying a rather complicated logic and that needs to be hard-coded here..
+
+        if(self._lookup_table.get_number_of_candidates()):
+            # We are already in the conversion mode
+            # FIXME
+            pass
+        # segment of the SandS
         if(IBus.keyval_name(keyval) in self._sands_key_set):
-            # please note that this implementation has a limitation that would not allow multiple
-            # SandS keys to be pressed and released as if "shift" is still being pressed.
-            # This is a known limitation and is not planned to be addressed unless someone really
-            # wishes so.
             if(is_press_action):
                 logger.debug('process_key_event -- SandS-key pressed')
                 self._space_pressed = True
                 # at this point, you cannot simply return(true) because *pressing* the space action could have an impact as well
+                if(self._preedit_string != ""):
+                    self._commit_string(self._preedit_string)
+                    self._preedit_string = ''
+                    self._just_finished_kanchoku_mode = False
+                    self._update_preedit()
+                return(True)
             else:
                 logger.debug('process_key_event -- SandS-key released')
                 self._space_pressed = False
-        # check for the shift..
+                if(self._preedit_string == "" and not self._just_finished_kanchoku_mode):
+                    # enter space
+                    self.commit_text(IBus.Text.new_from_string(' '))
+                    self._first_kanchoku_stroke = ""
+                    self._just_finished_kanchoku_mode = False
+                else: # preedit already exists => this release action should be about conversion
+                    # FIXME
+                    pass
+                return(True)
+        # check for the shift.. This block cannot be shared with the one above because the release behavior may be different between space and shift.
         if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
             if(is_press_action):
                 logger.debug('process_key_event -- Shift-key pressed')
                 self._space_pressed = True
+                if(self._preedit_string != ""):
+                    self._commit_string(self._preedit_string)
+                    self._preedit_string = ''
+                    self._update_preedit()
+                return(True)
             else:
                 logger.debug('process_key_event -- Shift-key released')
                 self._space_pressed = False
-        '''
-            self._commit_string(IBus.keyval_name(keyval))
+                self._first_kanchoku_stroke = ""
+                return(True)
+        # mostly ignore the release action for applicable key..
+        if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
+            self._previous_typed_timestamp -= 1000 # this is to ensure simul-check to always fail
             return(True)
-        '''
+
+        # forced preedit mode
+        if(chr(keyval) == self._layout_data['conversion_trigger_keys'] and self._space_pressed):
+            logger.debug('entered in forced preedit mode')
+            self._in_forced_preedit_mode = True # you need to ensure turning off this switch
+            return(True)
+        # 漢直
+        if(self.is_applicable_japanese_stroke(keyval) and self._space_pressed):
+            if(self._first_kanchoku_stroke == ""):
+                # at this point, it's not about storing a new value
+                self._first_kanchoku_stroke = chr(keyval)
+                logger.debug('First 漢直 key-stroke: ' + self._first_kanchoku_stroke)
+            else:
+                logger.debug('漢直 recognized: ' + self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)])
+                # flush the preedit before committing the Kanji
+                self._preedit_string = ""
+                self._update_preedit()
+                self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
+                self._first_kanchoku_stroke = ""
+                self._just_finished_kanchoku_mode = True # you need to ensure turning off this switch
+                return(True)
+
+        # applicable key pressed
+        if(self.is_applicable_japanese_stroke(keyval)):
+            (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
+            self._commit_string(yomi)
+            self._update_preedit()
+            return(True)
+
+
         # the real deal with Japanese typing starts...
         # State0
         # State1
@@ -698,6 +763,10 @@ class EnginePSKK(IBus.Engine):
         '''
         return(False)
 
+    def is_applicable_japanese_stroke(self, keyval):
+        if(chr(keyval) in APPLICABLE_STROKE_SET_FOR_JAPANESE):
+            return(True)
+        return(False)
 
     def handle_alt_graph(self, keyval, keycode, state, modifiers):
         logger.debug(f'handle_alt_graph("{self._event.chr()}")')
@@ -937,25 +1006,6 @@ class EnginePSKK(IBus.Engine):
             self._forward_backspaces(len(self._previous_text))
 
     def _commit_string(self, text):
-        ## FIXME some hard-coded modifications..
-        if text == '゛':
-            prev, pos = self._get_surrounding_text()
-            if 0 < pos:
-                found = NON_DAKU.find(prev[pos - 1])
-                if 0 <= found:
-                    self._delete_surrounding_text(1)
-                    text = DAKU[found]
-                    time.sleep(EVENT_DELAY)
-        elif text == '゜':
-            prev, pos = self._get_surrounding_text()
-            if 0 < pos:
-                found = NON_HANDAKU.find(prev[pos - 1])
-                if 0 <= found:
-                    self._delete_surrounding_text(1)
-                    text = HANDAKU[found]
-                    time.sleep(EVENT_DELAY)
-        # hard-coded modification ended
-
         if self._surrounding in (SURROUNDING_NOT_SUPPORTED, SURROUNDING_BROKEN):
             #self._previous_text += text
             self.commit_text(IBus.Text.new_from_string(text))
@@ -1015,7 +1065,7 @@ class EnginePSKK(IBus.Engine):
         This method updates the preedit text with the given candidate string. The preedit text is the text that is currently being composed by the user, and the candidate string is a suggestion for what the user might want to type next. If the candidate string is empty, the preedit text is cleared.
         If the input candidate is not a string, a TypeError is raised.
         """
-        logger.debug('_update_preedit --')
+        logger.debug(f'_update_preedit -- previous_text: {self._previous_text}, cand: {cand}, preedit: {self._preedit_string}')
         if(not isinstance(cand, str)):
             raise TypeError("The `cand` parameter must be a str value.")
         previous_text = self._previous_text if self._surrounding != SURROUNDING_COMMITTED else ''
