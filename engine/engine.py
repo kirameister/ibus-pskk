@@ -636,7 +636,7 @@ class EnginePSKK(IBus.Engine):
         c = chr(keyval)
         preedit_and_c = preedit + c
         if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
-            logger.debug(f'_if_simul_condition_met -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
+            logger.debug(f'_is_simul_condition_met -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
             if(stroke_timing_diff < self._layout[preedit_and_c]['simul_limit_ms']):
                 return(True)
         return(False)
@@ -743,14 +743,19 @@ class EnginePSKK(IBus.Engine):
                 self._first_kanchoku_stroke = chr(keyval)
                 logger.debug('First 漢直 key-stroke: ' + self._first_kanchoku_stroke)
             else:
-                logger.debug('漢直 recognized: ' + self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)])
-                # flush the preedit before committing the Kanji
-                self._preedit_string = ""
-                self._update_preedit()
-                self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
-                self._first_kanchoku_stroke = ""
-                self._just_finished_kanchoku_mode = True # you need to ensure turning off this switch
-                return(True)
+                # we'll need to check if hte stroke was actually meant as a simultaneous strokes
+                current_typed_time = time.perf_counter()
+                stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
+                logger.debug(f'check {self._preedit_string} , {chr(keyval)} , {stroke_timing_diff}')
+                if(not self._is_simul_condition_met(keyval, self._preedit_string, stroke_timing_diff)):
+                    logger.debug('漢直 recognized: ' + self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)])
+                    # flush the preedit before committing the Kanji
+                    self._preedit_string = ""
+                    self._update_preedit()
+                    self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
+                    self._first_kanchoku_stroke = ""
+                    self._just_finished_kanchoku_mode = True # you need to ensure turning off this switch
+                    return(True)
 
         # applicable key pressed
         if(self.is_applicable_japanese_stroke(keyval)):
