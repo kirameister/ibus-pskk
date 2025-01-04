@@ -51,15 +51,15 @@ KANCHOKU_KEY_SET = set(list('qwertyuiopasdfghjkl;zxcvbnm,./'))
 MISSING_KANCHOKU_KANJI = '無'
 
 # modifier mask-bit segment
-SPACE_BIT       = 0x01
-SHIFT_L_BIT     = 0x02
-SHIFT_R_BIT     = 0x04
-CONTROL_L_BIT   = 0x08
-CONTROL_R_BIT   = 0x10
-ALT_L_BIT       = 0x20
-ALT_R_BIT       = 0x40
-SHIFT_BITS      = SHIFT_L_BIT | SHIFT_R_BIT
-MODIFIER_BITS   = SHIFT_BITS  | CONTROL_L_BIT | CONTROL_R_BIT | ALT_L_BIT | ALT_R_BIT | SPACE_BIT
+STATUS_SPACE       = 0x01
+STATUS_SHIFT_L     = 0x02
+STATUS_SHIFT_R     = 0x04
+STATUS_CONTROL_L   = 0x08
+STATUS_CONTROL_R   = 0x10
+STATUS_ALT_L       = 0x20
+STATUS_ALT_R       = 0x40
+STATUS_SHIFTS      = STATUS_SHIFT_L | STATUS_SHIFT_R
+STATUS_MODIFIER    = STATUS_SHIFTS  | STATUS_CONTROL_L | STATUS_CONTROL_R | STATUS_ALT_L | STATUS_ALT_R | STATUS_SPACE
 
 
 
@@ -174,8 +174,8 @@ class EnginePSKK(IBus.Engine):
         self._origin_timestamp = time.perf_counter()
         self._previous_typed_timestamp = time.perf_counter()
         # SandS vars
+        self._modkey_status = 0
         self._sands_key_set = set()
-        self._space_pressed = False # this is to hold the SandS state
         self._in_kanchoku_mode = False
         self._just_finished_kanchoku_mode = False # this is to make a diff with space-release
         self._in_forced_preedit_mode_possible = False
@@ -676,7 +676,7 @@ class EnginePSKK(IBus.Engine):
             if(is_press_action):
                 logger.debug(f'do_process_key_event -- IME set enabled via Henkan')
                 self.set_mode('あ', True)
-            self._space_pressed = False # when the IME is newly enabled, this value needs to be False
+            self._modkey_status &= ~STATUS_SPACE # when the IME is newly enabled, this value needs to be False
             return(True)
         # If the IME is supposed to be disabled (direct mode), do not cascade the keyval any further
         if(not self.is_enabled()):
@@ -705,7 +705,7 @@ class EnginePSKK(IBus.Engine):
         if(IBus.keyval_name(keyval) in self._sands_key_set):
             if(is_press_action):
                 logger.debug('process_key_event -- SandS-key pressed')
-                self._space_pressed = True
+                self._modkey_status |= STATUS_SPACE
                 # at this point, you cannot simply return(true) because *pressing* the space action could have an impact as well
                 if(self._preedit_string != ""):
                     self._commit_string(self._preedit_string)
@@ -715,7 +715,7 @@ class EnginePSKK(IBus.Engine):
                 return(True)
             else:
                 logger.debug('process_key_event -- SandS-key released')
-                self._space_pressed = False
+                self._modkey_status &= ~STATUS_SPACE
                 if(self._preedit_string == "" and not self._just_finished_kanchoku_mode):
                     # enter space
                     self.commit_text(IBus.Text.new_from_string(' '))
@@ -729,7 +729,7 @@ class EnginePSKK(IBus.Engine):
         if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
             if(is_press_action):
                 logger.debug('process_key_event -- Shift-key pressed')
-                self._space_pressed = True
+                self._modkey_status |= STATUS_SHIFTS
                 if(self._preedit_string != ""):
                     self._commit_string(self._preedit_string)
                     self._preedit_string = ''
@@ -737,7 +737,7 @@ class EnginePSKK(IBus.Engine):
                 return(True)
             else:
                 logger.debug('process_key_event -- Shift-key released')
-                self._space_pressed = False
+                self._modkey_status &= ~STATUS_SHIFTS
                 self._first_kanchoku_stroke = ""
                 return(True)
         # mostly ignore the release action for applicable key..
@@ -746,7 +746,7 @@ class EnginePSKK(IBus.Engine):
             return(True)
 
         # forced preedit mode
-        if(chr(keyval) == self._layout_data['conversion_trigger_keys'] and self._space_pressed):
+        if(chr(keyval) == self._layout_data['conversion_trigger_keys'] and self._modkey_status & STATUS_SPACE):
             if(is_press_action):
                 self._in_forced_preedit_mode_possible = True
             if(not is_press_action and self._in_forced_preedit_mode_possible):
@@ -757,7 +757,7 @@ class EnginePSKK(IBus.Engine):
                 self._update_preedit()
                 return(True)
         # 漢直
-        if(self.is_applicable_japanese_stroke(keyval) and self._space_pressed):
+        if(self.is_applicable_japanese_stroke(keyval) and self._modkey_status & STATUS_SPACE):
             if(self._first_kanchoku_stroke == ""):
                 # at this point, it's not about storing a new value
                 self._first_kanchoku_stroke = chr(keyval)
