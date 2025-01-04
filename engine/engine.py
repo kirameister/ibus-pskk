@@ -716,11 +716,11 @@ class EnginePSKK(IBus.Engine):
                 return(True)
             else:
                 logger.debug('process_key_event -- SandS-key released')
+                self._first_kanchoku_stroke = ""
                 self._modkey_status &= ~STATUS_SPACE
-                if(self._preedit_string == "" and not self._just_finished_kanchoku_mode):
+                if(self._preedit_string == "" and not self._just_finished_kanchoku_mode and self._in_forced_conversion_status == 0):
                     # enter space
                     self.commit_text(IBus.Text.new_from_string(' '))
-                    self._first_kanchoku_stroke = ""
                     self._just_finished_kanchoku_mode = False
                 else: # preedit already exists => this release action should be about conversion
                     # FIXME
@@ -746,11 +746,10 @@ class EnginePSKK(IBus.Engine):
         if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE):
             logger.debug(f'_in_forced_conversion_status : {self._in_forced_conversion_status}')
             if(is_press_action):
-                logger.debug('conversion_trigger_key PRESSED')
                 self._in_forced_conversion_status = 1
             if(not is_press_action and self._in_forced_conversion_status == 1):
-                logger.debug('conversion_trigger_key RELEASED')
                 logger.debug('entered in forced preedit mode')
+                logger.debug(f'self._preedit_string: {self._preedit_string}')
                 self._in_forced_preedit_mode = True # you need to ensure turning off this switch
                 self._in_forced_conversion_status = 2
                 self._first_kanchoku_stroke = ""
@@ -1092,7 +1091,7 @@ class EnginePSKK(IBus.Engine):
             self._update_candidate()
         return True
 
-    def _update_preedit(self, cand=''):
+    def _update_preedit(self, cand='', visible_preedit=False):
         """
         Updates the preedit text with the given candidate string.
         Args:
@@ -1122,9 +1121,11 @@ class EnginePSKK(IBus.Engine):
             attrs.append(IBus.Attribute.new(IBus.AttrType.BACKGROUND, CANDIDATE_BACKGROUND_COLOR, previous_len, previous_len + cand_len))
         if 0 < preedit_len:
             assert cand_len == 0
-            attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.SINGLE, previous_len, previous_len + preedit_len))
-            # Follownig version is to suppress the underline in the preedit string. We do not use this for the time being for debug purpose. 
-            #attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.NONE, previous_len, previous_len + preedit_len))
+            if(visible_preedit):
+                attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.SINGLE, previous_len, previous_len + preedit_len))
+            else:
+                # Follownig version is to suppress the underline in the preedit string. We do not use this for the time being for debug purpose. 
+                attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.NONE, previous_len, previous_len + preedit_len))
         if attrs:
             text.set_attributes(attrs)
         # Note self.hide_preedit_text() does not seem to work as expected with Kate.
