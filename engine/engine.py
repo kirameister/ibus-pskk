@@ -50,6 +50,19 @@ APPLICABLE_STROKE_SET_FOR_JAPANESE = set(list('1234567890qwertyuiopasdfghjk;lzxc
 KANCHOKU_KEY_SET = set(list('qwertyuiopasdfghjkl;zxcvbnm,./'))
 MISSING_KANCHOKU_KANJI = '無'
 
+# modifier mask-bit segment
+SPACE_BIT       = 0x01
+SHIFT_L_BIT     = 0x02
+SHIFT_R_BIT     = 0x04
+CONTROL_L_BIT   = 0x08
+CONTROL_R_BIT   = 0x10
+ALT_L_BIT       = 0x20
+ALT_R_BIT       = 0x40
+SHIFT_BITS      = SHIFT_L_BIT | SHIFT_R_BIT
+MODIFIER_BITS   = SHIFT_BITS  | CONTROL_L_BIT | CONTROL_R_BIT | ALT_L_BIT | ALT_R_BIT | SPACE_BIT
+
+
+
 HIRAGANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんゔがぎぐげござじずぜぞだぢづでどばびぶべぼぁぃぅぇぉゃゅょっぱぴぷぺぽゎゐゑ・ーゝゞ"
 KATAKANA = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンヴガギグゲゴザジズゼゾダヂヅデドバビブベボァィゥェォャュョッパピプペポヮヰヱ・ーヽヾ"
 
@@ -165,6 +178,7 @@ class EnginePSKK(IBus.Engine):
         self._space_pressed = False # this is to hold the SandS state
         self._in_kanchoku_mode = False
         self._just_finished_kanchoku_mode = False # this is to make a diff with space-release
+        self._in_forced_preedit_mode_possible = False
         self._in_forced_preedit_mode = False
         self._first_kanchoku_stroke = ""
 
@@ -733,9 +747,15 @@ class EnginePSKK(IBus.Engine):
 
         # forced preedit mode
         if(chr(keyval) == self._layout_data['conversion_trigger_keys'] and self._space_pressed):
-            logger.debug('entered in forced preedit mode')
-            self._in_forced_preedit_mode = True # you need to ensure turning off this switch
-            return(True)
+            if(is_press_action):
+                self._in_forced_preedit_mode_possible = True
+            if(not is_press_action and self._in_forced_preedit_mode_possible):
+                logger.debug('entered in forced preedit mode')
+                self._in_forced_preedit_mode = True # you need to ensure turning off this switch
+                self._first_kanchoku_stroke = ""
+                self._preedit_string = ""
+                self._update_preedit()
+                return(True)
         # 漢直
         if(self.is_applicable_japanese_stroke(keyval) and self._space_pressed):
             if(self._first_kanchoku_stroke == ""):
