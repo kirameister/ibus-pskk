@@ -742,7 +742,7 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status &= ~STATUS_SHIFTS
                 self._first_kanchoku_stroke = ""
                 return(True)
-        # check for hte Ctrl - this needs to be here because we need to treat Ctrl+j/k/l/;/i/o as something specific to the IME
+        # check for the Ctrl - this needs to be here because we need to treat Ctrl+j/k/l/;/i/o as something specific to the IME
         if(keyval == IBus.Control_L or keyval == IBus.Control_R):
             if(is_press_action):
                 self._modkey_status |= STATUS_CONTROLS
@@ -792,7 +792,7 @@ class EnginePSKK(IBus.Engine):
                     self._just_finished_kanchoku_mode = True # you need to ensure turning off this switch
                     return(True)
 
-        # applicable key pressed
+        # applicable (to be hiragana) key pressed
         if(self.is_applicable_japanese_stroke(keyval)):
             (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
             self._commit_string(yomi)
