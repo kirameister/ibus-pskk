@@ -1,5 +1,5 @@
 {
-    "conversion_trigger_keys": ["f"],
+    "conversion_trigger_key": "f",
     "sands_keys": ["space"],
     "layout": [
         ["k", "", "い", 0],

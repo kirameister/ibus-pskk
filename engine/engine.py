@@ -174,11 +174,11 @@ class EnginePSKK(IBus.Engine):
         self._origin_timestamp = time.perf_counter()
         self._previous_typed_timestamp = time.perf_counter()
         # SandS vars
-        self._modkey_status = 0
+        self._modkey_status = 0 # This is supposed to be bitwise status
+        self._in_forced_conversion_status = 0 # This is supposed to be bitwise status
         self._sands_key_set = set()
         self._in_kanchoku_mode = False
         self._just_finished_kanchoku_mode = False # this is to make a diff with space-release
-        self._in_forced_preedit_mode_possible = False
         self._in_forced_preedit_mode = False
         self._first_kanchoku_stroke = ""
 
@@ -677,6 +677,7 @@ class EnginePSKK(IBus.Engine):
                 logger.debug(f'do_process_key_event -- IME set enabled via Henkan')
                 self.set_mode('あ', True)
             self._modkey_status = 0 # we reset everything as we are very much certain that we entered into the Japanese typing mode anew.
+            self._in_forced_conversion_status = 0
             return(True)
         # If the IME is supposed to be disabled (direct mode), do not cascade the keyval any further
         if(not self.is_enabled()):
@@ -740,22 +741,26 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status &= ~STATUS_SHIFTS
                 self._first_kanchoku_stroke = ""
                 return(True)
-        # mostly ignore the release action for applicable key..
-        if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
-            self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
-            return(True)
 
         # forced preedit mode
-        if(chr(keyval) == self._layout_data['conversion_trigger_keys'] and self._modkey_status & STATUS_SPACE):
+        if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE):
+            logger.debug(f'_in_forced_conversion_status : {self._in_forced_conversion_status}')
             if(is_press_action):
-                self._in_forced_preedit_mode_possible = True
-            if(not is_press_action and self._in_forced_preedit_mode_possible):
+                logger.debug('conversion_trigger_key PRESSED')
+                self._in_forced_conversion_status = 1
+            if(not is_press_action and self._in_forced_conversion_status == 1):
+                logger.debug('conversion_trigger_key RELEASED')
                 logger.debug('entered in forced preedit mode')
                 self._in_forced_preedit_mode = True # you need to ensure turning off this switch
+                self._in_forced_conversion_status = 2
                 self._first_kanchoku_stroke = ""
                 self._preedit_string = ""
                 self._update_preedit()
                 return(True)
+        # mostly ignore the release action for applicable key..
+        if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
+            self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
+            return(True)
         # 漢直
         if(self.is_applicable_japanese_stroke(keyval) and self._modkey_status & STATUS_SPACE):
             if(self._first_kanchoku_stroke == ""):
