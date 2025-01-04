@@ -51,15 +51,16 @@ KANCHOKU_KEY_SET = set(list('qwertyuiopasdfghjkl;zxcvbnm,./'))
 MISSING_KANCHOKU_KANJI = '無'
 
 # modifier mask-bit segment
-STATUS_SPACE       = 0x01
-STATUS_SHIFT_L     = 0x02 # this value is currently not meant to be used directly
-STATUS_SHIFT_R     = 0x04 # this value is currently not meant to be used directly
-STATUS_CONTROL_L   = 0x08
-STATUS_CONTROL_R   = 0x10
-STATUS_ALT_L       = 0x20
-STATUS_ALT_R       = 0x40
-STATUS_SHIFTS      = STATUS_SHIFT_L | STATUS_SHIFT_R
-STATUS_MODIFIER    = STATUS_SHIFTS  | STATUS_CONTROL_L | STATUS_CONTROL_R | STATUS_ALT_L | STATUS_ALT_R | STATUS_SPACE
+STATUS_SPACE        = 0x01
+STATUS_SHIFT_L      = 0x02 # this value is currently not meant to be used directly
+STATUS_SHIFT_R      = 0x04 # this value is currently not meant to be used directly
+STATUS_CONTROL_L    = 0x08
+STATUS_CONTROL_R    = 0x10
+STATUS_ALT_L        = 0x20
+STATUS_ALT_R        = 0x40
+STATUS_SHIFTS       = STATUS_SHIFT_L | STATUS_SHIFT_R
+STATUS_CONTROLS     = STATUS_CONTROL_L | STATUS_CONTROL_R
+STATUS_MODIFIER     = STATUS_SHIFTS  | STATUS_CONTROLS | STATUS_ALT_L | STATUS_ALT_R | STATUS_SPACE
 
 
 
@@ -741,6 +742,14 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status &= ~STATUS_SHIFTS
                 self._first_kanchoku_stroke = ""
                 return(True)
+        # check for hte Ctrl - this needs to be here because we need to treat Ctrl+j/k/l/;/i/o as something specific to the IME
+        if(keyval == IBus.Control_L or keyval == IBus.Control_R):
+            if(is_press_action):
+                self._modkey_status |= STATUS_CONTROLS
+            else:
+                self._modkey_status &= ~STATUS_CONTROLS
+        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j', 'k', 'l', ';', 'i', 'o')):
+            return(False)
 
         # forced preedit mode
         if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE):
@@ -756,10 +765,12 @@ class EnginePSKK(IBus.Engine):
                 self._preedit_string = ""
                 self._update_preedit()
                 return(True)
+
         # mostly ignore the release action for applicable key..
         if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
             self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
             return(True)
+
         # 漢直
         if(self.is_applicable_japanese_stroke(keyval) and self._modkey_status & STATUS_SPACE):
             if(self._first_kanchoku_stroke == ""):
@@ -788,17 +799,7 @@ class EnginePSKK(IBus.Engine):
             self._update_preedit()
             return(True)
 
-
-        # the real deal with Japanese typing starts...
-        # State0
-        # State1
-        # State2
-        # State3
-        '''
-        else:
-            self._commit_string(chr(keyval))
-            return(True)
-        '''
+        # if none of above is applied.. It will be treated as direct input
         return(False)
 
     def is_applicable_japanese_stroke(self, keyval):
@@ -1124,8 +1125,9 @@ class EnginePSKK(IBus.Engine):
             if(visible_preedit):
                 attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.SINGLE, previous_len, previous_len + preedit_len))
             else:
+                attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.SINGLE, previous_len, previous_len + preedit_len))
                 # Follownig version is to suppress the underline in the preedit string. We do not use this for the time being for debug purpose. 
-                attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.NONE, previous_len, previous_len + preedit_len))
+                #attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.NONE, previous_len, previous_len + preedit_len))
         if attrs:
             text.set_attributes(attrs)
         # Note self.hide_preedit_text() does not seem to work as expected with Kate.
