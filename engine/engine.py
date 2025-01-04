@@ -676,7 +676,7 @@ class EnginePSKK(IBus.Engine):
             if(is_press_action):
                 logger.debug(f'do_process_key_event -- IME set enabled via Henkan')
                 self.set_mode('あ', True)
-            self._modkey_status &= ~STATUS_SPACE # when the IME is newly enabled, this value needs to be False
+            self._modkey_status = 0 # we reset everything as we are very much certain that we entered into the Japanese typing mode anew.
             return(True)
         # If the IME is supposed to be disabled (direct mode), do not cascade the keyval any further
         if(not self.is_enabled()):
