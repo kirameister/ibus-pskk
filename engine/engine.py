@@ -62,6 +62,12 @@ STATUS_SHIFTS       = STATUS_SHIFT_L | STATUS_SHIFT_R
 STATUS_CONTROLS     = STATUS_CONTROL_L | STATUS_CONTROL_R
 STATUS_MODIFIER     = STATUS_SHIFTS  | STATUS_CONTROLS | STATUS_ALT_L | STATUS_ALT_R | STATUS_SPACE
 
+# Japanese typing mode segment
+MODE_FORCED_CONVERSION_POSSIBLE = 0x01
+MODE_IN_FORCED_CONVERSION = 0x02
+MODE_IN_CONVERSION = 0x04
+MODE_IN_KANCHOKU                = 0x08
+MODE_JUST_FINISHED_KANCHOKU     = 0x10
 
 
 HIRAGANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんゔがぎぐげござじずぜぞだぢづでどばびぶべぼぁぃぅぇぉゃゅょっぱぴぷぺぽゎゐゑ・ーゝゞ"
@@ -169,17 +175,14 @@ class EnginePSKK(IBus.Engine):
         self._kanchoku_layout = dict()
         # _layout[INPUT]: {"output": OUTPUT_STR, "pending": PENDING_STR, "simul_limit_ms": INT}
         self._simul_candidate_char_set = set()
-        #self._if_simul_condition_met = False
         self._max_simul_limit_ms = 0
 
         self._origin_timestamp = time.perf_counter()
         self._previous_typed_timestamp = time.perf_counter()
         # SandS vars
         self._modkey_status = 0 # This is supposed to be bitwise status
-        self._in_forced_conversion_status = 0 # This is supposed to be bitwise status
+        self._typing_mode = 0 # This is to indicate which state the stroke is supposed to be
         self._sands_key_set = set()
-        self._in_kanchoku_mode = False
-        self._just_finished_kanchoku_mode = False # this is to make a diff with space-release
         self._in_forced_preedit_mode = False
         self._first_kanchoku_stroke = ""
 
@@ -678,7 +681,7 @@ class EnginePSKK(IBus.Engine):
                 logger.debug(f'do_process_key_event -- IME set enabled via Henkan')
                 self.set_mode('あ', True)
             self._modkey_status = 0 # we reset everything as we are very much certain that we entered into the Japanese typing mode anew.
-            self._in_forced_conversion_status = 0
+            self._typing_mode = 0
             return(True)
         # If the IME is supposed to be disabled (direct mode), do not cascade the keyval any further
         if(not self.is_enabled()):
@@ -694,6 +697,7 @@ class EnginePSKK(IBus.Engine):
         which (internal) state the IME is supposed to be. 
         """
         logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
+        current_typed_time = time.perf_counter()
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
         # From here until each return statement, the code would be very much convoluted. This is because 
         # the IME is eploying a rather complicated logic and that needs to be hard-coded here..
@@ -712,17 +716,17 @@ class EnginePSKK(IBus.Engine):
                 if(self._preedit_string != ""):
                     self._commit_string(self._preedit_string)
                     self._preedit_string = ''
-                    self._just_finished_kanchoku_mode = False
+                    self._typing_mode |= MODE_JUST_FINISHED_KANCHOKU
                     self._update_preedit()
                 return(True)
             else:
                 logger.debug('process_key_event -- SandS-key released')
                 self._first_kanchoku_stroke = ""
                 self._modkey_status &= ~STATUS_SPACE
-                if(self._preedit_string == "" and not self._just_finished_kanchoku_mode and self._in_forced_conversion_status == 0):
-                    # enter space
+                if(self._preedit_string == "" and self._typing_mode & ~MODE_JUST_FINISHED_KANCHOKU):
+                    # empty preedit && not 漢直-just-finished state => enter space
                     self.commit_text(IBus.Text.new_from_string(' '))
-                    self._just_finished_kanchoku_mode = False
+                    self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
                 else: # preedit already exists => this release action should be about conversion
                     # FIXME
                     pass
@@ -753,14 +757,14 @@ class EnginePSKK(IBus.Engine):
 
         # forced preedit mode
         if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE):
-            logger.debug(f'_in_forced_conversion_status : {self._in_forced_conversion_status}')
             if(is_press_action):
-                self._in_forced_conversion_status = 1
-            if(not is_press_action and self._in_forced_conversion_status == 1):
+                self._typing_mode |= MODE_FORCED_CONVERSION_POSSIBLE
+            if(not is_press_action and self._typing_mode & MODE_FORCED_CONVERSION_POSSIBLE):
                 logger.debug('entered in forced preedit mode')
                 logger.debug(f'self._preedit_string: {self._preedit_string}')
                 self._in_forced_preedit_mode = True # you need to ensure turning off this switch
-                self._in_forced_conversion_status = 2
+                self._typing_mode &= ~MODE_FORCED_CONVERSION_POSSIBLE
+                self._typing_mode |= MODE_IN_FORCED_CONVERSION
                 self._first_kanchoku_stroke = ""
                 self._preedit_string = ""
                 self._update_preedit()
@@ -775,11 +779,11 @@ class EnginePSKK(IBus.Engine):
         if(self.is_applicable_japanese_stroke(keyval) and self._modkey_status & STATUS_SPACE):
             if(self._first_kanchoku_stroke == ""):
                 # at this point, it's not about storing a new value
+                # the rest of the process for this key-stroke is handled in following block
                 self._first_kanchoku_stroke = chr(keyval)
                 logger.debug('First 漢直 key-stroke: ' + self._first_kanchoku_stroke)
             else:
-                # we'll need to check if hte stroke was actually meant as a simultaneous strokes
-                current_typed_time = time.perf_counter()
+                # we'll need to check if the stroke was actually meant as a simultaneous strokes
                 stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
                 logger.debug(f'check {self._preedit_string} , {chr(keyval)} , {stroke_timing_diff}')
                 if(not self._is_simul_condition_met(keyval, self._preedit_string, stroke_timing_diff)):
@@ -789,11 +793,32 @@ class EnginePSKK(IBus.Engine):
                     self._update_preedit()
                     self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
                     self._first_kanchoku_stroke = ""
-                    self._just_finished_kanchoku_mode = True # you need to ensure turning off this switch
+                    self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU # you need to ensure to reset this switch
                     return(True)
 
+        # Conversion-mode
+        if(self._modkey_status & STATUS_SPACE):
+            if(self.is_applicable_japanese_stroke(keyval)):
+                pass
         # applicable (to be hiragana) key pressed
         if(self.is_applicable_japanese_stroke(keyval)):
+            logger.debug(f'Hiragana key entered : {chr(keyval)} - ')
+            # see if this stroke could be the first stroke of the conversion-mode
+
+            if(self._modkey_status & STATUS_SPACE): 
+                # this is for the State1
+                if(len(self._preedit_string)<=2):
+                    yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
+                    self._preedit_string = yomi_to_preedit + preedit_after_yomi
+                    self._update_preedit()
+                    return(True)
+                else:
+                    reserved_preedit = self._preedit_string[:-2]
+                    yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string[-2:], keyval)
+                    self._preedit_string = reserved_preedit + yomi_to_preedit + preedit_after_yomi
+                    self._update_preedit()
+                    return(True)
+            # this is for the State0
             (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
             self._commit_string(yomi)
             self._update_preedit()
