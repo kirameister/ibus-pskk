@@ -52,8 +52,8 @@ MISSING_KANCHOKU_KANJI = '無'
 
 # modifier mask-bit segment
 STATUS_SPACE       = 0x01
-STATUS_SHIFT_L     = 0x02
-STATUS_SHIFT_R     = 0x04
+STATUS_SHIFT_L     = 0x02 # this value is currently not meant to be used directly
+STATUS_SHIFT_R     = 0x04 # this value is currently not meant to be used directly
 STATUS_CONTROL_L   = 0x08
 STATUS_CONTROL_R   = 0x10
 STATUS_ALT_L       = 0x20
