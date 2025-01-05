@@ -696,6 +696,7 @@ class EnginePSKK(IBus.Engine):
         which (internal) state the IME is supposed to be. 
         """
         logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
+        logger.debug(f'process_key_event -- _typing_mode: {bin(self._typing_mode)}')
         current_typed_time = time.perf_counter()
         stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
@@ -756,11 +757,21 @@ class EnginePSKK(IBus.Engine):
             return(True)
 
         ### From this point, there would be some typings involved..
+        logger.debug(f'process_key_event -- typing process started: {IBus.keyval_name(keyval)}')
 
         # Block for the dictionary-lookup
         if(self._lookup_table.get_number_of_candidates()):
             # FIXME
             pass
+
+        # Very ordinary Hiragana typing (S0)
+        if(not(self._typing_mode & MODE_IN_FORCED_CONVERSION) and not(self._modkey_status & STATUS_SPACE)):
+            if(self.is_applicable_japanese_stroke(keyval)):
+                logger.debug(f'Hiragana key entered : {chr(keyval)} - ')
+                (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
+                self._commit_string(yomi)
+                self._update_preedit()
+                return(True)
 
         # SandS and conversion
         if(keyval == IBus.space):
@@ -774,13 +785,14 @@ class EnginePSKK(IBus.Engine):
                     return(True)
                 # if we're in forced conversion mode, the show must go on for 漢直 at the beginning of preedit
             else:
-                if(self._preedit_string == "" and self._typing_mode & ~MODE_JUST_FINISHED_KANCHOKU):
+                if(self._preedit_string == "" and not(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU) and not(self._typing_mode & MODE_IN_FORCED_CONVERSION)):
                     # empty preedit && not 漢直-just-finished state => enter space
                     self.commit_text(IBus.Text.new_from_string(' '))
                     self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
                 else: # preedit already exists => this release action should be about conversion
                     # FIXME
-                    pass
+                    self._typing_mode &= -MODE_IN_FORCED_CONVERSION
+                    self._typing_mode |= MODE_IN_CONVERSION
                 return(True)
         # check for the shift.. This block cannot be shared with the one above because the release behavior may be different between space and shift.
         if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
@@ -823,14 +835,6 @@ class EnginePSKK(IBus.Engine):
         # Conversion-mode
         if(self._modkey_status & STATUS_SPACE):
             if(self.is_applicable_japanese_stroke(keyval)):
-                pass
-        # applicable (to be hiragana) key pressed
-        if(self.is_applicable_japanese_stroke(keyval)):
-            logger.debug(f'Hiragana key entered : {chr(keyval)} - ')
-            # see if this stroke could be the first stroke of the conversion-mode
-
-            if(self._modkey_status & STATUS_SPACE): 
-                # this is for the State1
                 if(len(self._preedit_string)<=2):
                     yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
                     self._preedit_string = yomi_to_preedit + preedit_after_yomi
@@ -842,11 +846,6 @@ class EnginePSKK(IBus.Engine):
                     self._preedit_string = reserved_preedit + yomi_to_preedit + preedit_after_yomi
                     self._update_preedit()
                     return(True)
-            # this is for the State0
-            (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
-            self._commit_string(yomi)
-            self._update_preedit()
-            return(True)
 
         # if none of above is applied.. It will be treated as direct input
         self._typing_mode &= ~MODE_FORCED_CONVERSION_POSSIBLE
