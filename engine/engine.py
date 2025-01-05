@@ -698,6 +698,43 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
         current_typed_time = time.perf_counter()
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
+
+        # before getting started, check and update the modkey-status
+        if(keyval == IBus.space):
+            if(is_press_action):
+                self._modkey_status |= STATUS_SPACE
+            else:
+                self._modkey_status &= ~STATUS_SPACE
+        if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
+            if(is_press_action):
+                self._modkey_status |= STATUS_SHIFTS
+            else:
+                self._modkey_status &= ~STATUS_SHIFTS
+        if(keyval == IBus.Control_L or keyval == IBus.Control_R):
+            if(is_press_action):
+                self._modkey_status |= STATUS_CONTROLS
+            else:
+                self._modkey_status &= ~STATUS_CONTROLS
+        if(keyval == IBus.Alt_L):
+            if(is_press_action):
+                self._modkey_status |= STATUS_ALT_L
+            else:
+                self._modkey_status &= ~STATUS_ALT_L
+        if(keyval == IBus.Alt_R):
+            if(is_press_action):
+                self._modkey_status |= STATUS_ALT_R
+            else:
+                self._modkey_status &= ~STATUS_ALT_R
+
+        # Filter out the irrelevant combo keys with Ctrl
+        if(keyval == IBus.Control_L or keyval == IBus.Control_R):
+            if(is_press_action):
+                self._modkey_status |= STATUS_CONTROLS
+            else:
+                self._modkey_status &= ~STATUS_CONTROLS
+        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j', 'k', 'l', ';', 'i', 'o')):
+            return(False)
+
         # From here until each return statement, the code would be very much convoluted. This is because 
         # the IME is eploying a rather complicated logic and that needs to be hard-coded here..
         # FIXME: I'll need to let this function take care the Combo-keys with Ctrl. 
@@ -745,14 +782,6 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status &= ~STATUS_SHIFTS
                 self._first_kanchoku_stroke = ""
                 return(True)
-        # check for the Ctrl - this needs to be here because we need to treat Ctrl+j/k/l/;/i/o as something specific to the IME
-        if(keyval == IBus.Control_L or keyval == IBus.Control_R):
-            if(is_press_action):
-                self._modkey_status |= STATUS_CONTROLS
-            else:
-                self._modkey_status &= ~STATUS_CONTROLS
-        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j', 'k', 'l', ';', 'i', 'o')):
-            return(False)
 
         # forced preedit mode
         if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE):
