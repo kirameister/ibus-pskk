@@ -183,7 +183,6 @@ class EnginePSKK(IBus.Engine):
         self._modkey_status = 0 # This is supposed to be bitwise status
         self._typing_mode = 0 # This is to indicate which state the stroke is supposed to be
         self._sands_key_set = set()
-        self._in_forced_preedit_mode = False
         self._first_kanchoku_stroke = ""
 
         self._preedit_string = ''
@@ -762,7 +761,6 @@ class EnginePSKK(IBus.Engine):
             if(not is_press_action and self._typing_mode & MODE_FORCED_CONVERSION_POSSIBLE):
                 logger.debug('entered in forced preedit mode')
                 logger.debug(f'self._preedit_string: {self._preedit_string}')
-                self._in_forced_preedit_mode = True # you need to ensure turning off this switch
                 self._typing_mode &= ~MODE_FORCED_CONVERSION_POSSIBLE
                 self._typing_mode |= MODE_IN_FORCED_CONVERSION
                 self._first_kanchoku_stroke = ""
