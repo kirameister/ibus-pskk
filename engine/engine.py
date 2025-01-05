@@ -697,6 +697,7 @@ class EnginePSKK(IBus.Engine):
         """
         logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
         current_typed_time = time.perf_counter()
+        stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
 
         # before getting started, check and update the modkey-status
@@ -733,63 +734,15 @@ class EnginePSKK(IBus.Engine):
             else:
                 self._modkey_status &= ~STATUS_CONTROLS
         if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j', 'k', 'l', ';', 'i', 'o')):
+            self._typing_mode = 0
             return(False)
 
-        # From here until each return statement, the code would be very much convoluted. This is because 
-        # the IME is eploying a rather complicated logic and that needs to be hard-coded here..
-        # FIXME: I'll need to let this function take care the Combo-keys with Ctrl. 
-
-        if(self._lookup_table.get_number_of_candidates()):
-            # We are already in the conversion mode
-            # FIXME
-            pass
-        # segment of the SandS
-        if(IBus.keyval_name(keyval) in self._sands_key_set):
-            if(is_press_action):
-                logger.debug('process_key_event -- SandS-key pressed')
-                self._modkey_status |= STATUS_SPACE
-                # at this point, you cannot simply return(true) because *pressing* the space action could have an impact as well
-                if(self._preedit_string != ""):
-                    self._commit_string(self._preedit_string)
-                    self._preedit_string = ''
-                    self._typing_mode |= MODE_JUST_FINISHED_KANCHOKU
-                    self._update_preedit()
-                return(True)
-            else:
-                logger.debug('process_key_event -- SandS-key released')
-                self._first_kanchoku_stroke = ""
-                self._modkey_status &= ~STATUS_SPACE
-                if(self._preedit_string == "" and self._typing_mode & ~MODE_JUST_FINISHED_KANCHOKU):
-                    # empty preedit && not 漢直-just-finished state => enter space
-                    self.commit_text(IBus.Text.new_from_string(' '))
-                    self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
-                else: # preedit already exists => this release action should be about conversion
-                    # FIXME
-                    pass
-                return(True)
-        # check for the shift.. This block cannot be shared with the one above because the release behavior may be different between space and shift.
-        if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
-            if(is_press_action):
-                logger.debug('process_key_event -- Shift-key pressed')
-                self._modkey_status |= STATUS_SHIFTS
-                if(self._preedit_string != ""):
-                    self._commit_string(self._preedit_string)
-                    self._preedit_string = ''
-                    self._update_preedit()
-                return(True)
-            else:
-                logger.debug('process_key_event -- Shift-key released')
-                self._modkey_status &= ~STATUS_SHIFTS
-                self._first_kanchoku_stroke = ""
-                return(True)
-
-        # forced preedit mode
+        # forced preedit mode - it is only about entering to the forced mode
         if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE):
             if(is_press_action):
                 self._typing_mode |= MODE_FORCED_CONVERSION_POSSIBLE
             if(not is_press_action and self._typing_mode & MODE_FORCED_CONVERSION_POSSIBLE):
                 logger.debug('entered in forced preedit mode')
-                logger.debug(f'self._preedit_string: {self._preedit_string}')
                 self._typing_mode &= ~MODE_FORCED_CONVERSION_POSSIBLE
                 self._typing_mode |= MODE_IN_FORCED_CONVERSION
                 self._first_kanchoku_stroke = ""
@@ -802,7 +755,53 @@ class EnginePSKK(IBus.Engine):
             self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
             return(True)
 
+        ### From this point, there would be some typings involved..
+
+        # Block for the dictionary-lookup
+        if(self._lookup_table.get_number_of_candidates()):
+            # FIXME
+            pass
+
+        # SandS and conversion
+        if(keyval == IBus.space):
+            if(is_press_action):
+                if(self._preedit_string != ""):
+                    self._commit_string(self._preedit_string)
+                    self._preedit_string = ''
+                    self._update_preedit()
+                # at this point, you cannot simply return(True) because *pressing* the space action could have an impact as well
+                if(not self._typing_mode & MODE_IN_FORCED_CONVERSION):
+                    return(True)
+                # if we're in forced conversion mode, the show must go on for 漢直 at the beginning of preedit
+            else:
+                if(self._preedit_string == "" and self._typing_mode & ~MODE_JUST_FINISHED_KANCHOKU):
+                    # empty preedit && not 漢直-just-finished state => enter space
+                    self.commit_text(IBus.Text.new_from_string(' '))
+                    self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
+                else: # preedit already exists => this release action should be about conversion
+                    # FIXME
+                    pass
+                return(True)
+        # check for the shift.. This block cannot be shared with the one above because the release behavior may be different between space and shift.
+        if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
+            if(is_press_action):
+                if(self._preedit_string != ""):
+                    self._commit_string(self._preedit_string)
+                    self._preedit_string = ''
+                    self._update_preedit()
+                return(True)
+            else:
+                self._first_kanchoku_stroke = ""
+                return(True)
+
         # 漢直
+        if(keyval == IBus.space):
+            if(is_press_action):
+                if(self._preedit_string != ""):
+                    self._typing_mode |= MODE_JUST_FINISHED_KANCHOKU
+                return(True)
+            else:
+                self._first_kanchoku_stroke = ""
         if(self.is_applicable_japanese_stroke(keyval) and self._modkey_status & STATUS_SPACE):
             if(self._first_kanchoku_stroke == ""):
                 # at this point, it's not about storing a new value
@@ -811,8 +810,6 @@ class EnginePSKK(IBus.Engine):
                 logger.debug('First 漢直 key-stroke: ' + self._first_kanchoku_stroke)
             else:
                 # we'll need to check if the stroke was actually meant as a simultaneous strokes
-                stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
-                logger.debug(f'check {self._preedit_string} , {chr(keyval)} , {stroke_timing_diff}')
                 if(not self._is_simul_condition_met(keyval, self._preedit_string, stroke_timing_diff)):
                     logger.debug('漢直 recognized: ' + self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)])
                     # flush the preedit before committing the Kanji
@@ -820,7 +817,7 @@ class EnginePSKK(IBus.Engine):
                     self._update_preedit()
                     self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
                     self._first_kanchoku_stroke = ""
-                    self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU # you need to ensure to reset this switch
+                    self._typing_mode |= MODE_JUST_FINISHED_KANCHOKU # you need to ensure to reset this switch
                     return(True)
 
         # Conversion-mode
@@ -852,6 +849,9 @@ class EnginePSKK(IBus.Engine):
             return(True)
 
         # if none of above is applied.. It will be treated as direct input
+        self._typing_mode &= ~MODE_FORCED_CONVERSION_POSSIBLE
+        self._typing_mode &= ~MODE_IN_FORCED_CONVERSION
+        self._typing_mode = 0
         return(False)
 
     def is_applicable_japanese_stroke(self, keyval):
