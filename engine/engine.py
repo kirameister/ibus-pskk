@@ -757,6 +757,7 @@ class EnginePSKK(IBus.Engine):
             if(not is_press_action and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
                 logger.debug('entered in forced preedit mode')
                 self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
+                self._typing_mode &= ~MODE_IN_PREEDIT # this is because MODE_IN_FORCED_PREEDIT and MODE_IN_PREEDIT need to be mutually exclusive
                 self._typing_mode |= MODE_IN_FORCED_PREEDIT
                 self._first_kanchoku_stroke = ""
                 self._preedit_string = ""
@@ -838,12 +839,6 @@ class EnginePSKK(IBus.Engine):
                     return(True)
                 else:
                     return(True)
-            # filter out
-            if(not self.is_applicable_japanese_stroke(keyval) or keyval != IBus.space):
-                return(False)
-            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
-                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
-                return(True)
             # Check for 漢直
             if(self.is_applicable_japanese_stroke(keyval) and self._modkey_status & STATUS_SPACE):
                 if(self._first_kanchoku_stroke == ""):
@@ -864,6 +859,7 @@ class EnginePSKK(IBus.Engine):
                         return(True)
             # 漢直 with SandS
             if(keyval == IBus.space):
+                self._first_kanchoku_stroke = ""
                 if(is_press_action):
                     # actually this should never happen
                     if(self._preedit_string == ""):
@@ -873,9 +869,33 @@ class EnginePSKK(IBus.Engine):
                     if(self._preedit_string == ""):
                         self._typing_mode &= ~MODE_IN_PREEDIT
                         return(True)
+            # offset simul_limit_ms for key-release on normal keys
+            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
+                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
+                return(True)
+            # to type Hiragana..
+            if(self.is_applicable_japanese_stroke(keyval)):
+                if(len(self._preedit_string)<=2):
+                    yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
+                    self._preedit_string = yomi_to_preedit + preedit_after_yomi
+                    self._update_preedit()
+                    return(True)
+                else:
+                    reserved_preedit = self._preedit_string[:-2]
+                    yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string[-2:], keyval)
+                    self._preedit_string = reserved_preedit + yomi_to_preedit + preedit_after_yomi
+                    self._update_preedit()
+                    return(True)
+            else:
+                # commit the string to be on a safe side.
+                self._commit_string(self._preedit_string)
+                self._preedit_string = ''
+                self._update_preedit()
+                return(False)
 
         ## Case 3 - In Forced preedit (S3)
         if(self._typing_mode & MODE_IN_FORCED_PREEDIT):
+            logger.debug('Case 3 -- S(1)')
             pass
 
         '''
