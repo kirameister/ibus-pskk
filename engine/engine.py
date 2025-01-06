@@ -754,10 +754,12 @@ class EnginePSKK(IBus.Engine):
             return(False)
 
         # forced preedit mode - it is only about entering to the forced mode
-        if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE):
+        if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE and self._typing_mode & MODE_IN_PREEDIT):
             if(is_press_action):
                 self._typing_mode |= MODE_FORCED_PREEDIT_POSSIBLE
             if(not is_press_action and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
+                # SandS.press => /f/.press => /f/.release => SandS.release
+                # ...but we'll also accept -- SandS.press => /f/.press => /f/.release
                 logger.debug('entered in forced preedit mode')
                 self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
                 self._typing_mode &= ~MODE_IN_PREEDIT # this is because MODE_IN_FORCED_PREEDIT and MODE_IN_PREEDIT need to be mutually exclusive
@@ -766,11 +768,6 @@ class EnginePSKK(IBus.Engine):
                 self._preedit_string = ""
                 self._update_preedit()
                 return(True)
-
-        # mostly ignore the release action for applicable key.. FIXME: these lines should be rather contained within each Case
-        if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
-            self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
-            return(True)
 
         ### From this point, there would be some typings involved..
         ### Once the process goes into one of Case N, it will not go any further block (it always ends with return())
@@ -809,7 +806,7 @@ class EnginePSKK(IBus.Engine):
                         self.commit_text(IBus.Text.new_from_string(' '))
                         self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
                     return(True)
-            # offset simul_limit_ms for key-release on normal keys
+            # offset simul_limit_ms for key-release on normal keys and drop the signal
             if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
                 self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
                 return(True)
@@ -872,10 +869,13 @@ class EnginePSKK(IBus.Engine):
                     if(self._preedit_string == ""):
                         self._typing_mode &= ~MODE_IN_PREEDIT
                         return(True)
-            # offset simul_limit_ms for key-release on normal keys
+            # offset simul_limit_ms for key-release on normal keys and drop the signal
             if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
                 self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
                 return(True)
+            # re-set the MODE_FORCED_PREEDIT_POSSIBLE if other key is typed
+            if(chr(keyval) != self._layout_data['conversion_trigger_key'] and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
+                self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
             # to type Hiragana..
             if(self.is_applicable_japanese_stroke(keyval)):
                 if(len(self._preedit_string)<=2):
@@ -899,6 +899,14 @@ class EnginePSKK(IBus.Engine):
         ## Case 3 - In Forced preedit (S3)
         if(self._typing_mode & MODE_IN_FORCED_PREEDIT):
             logger.debug('Case 3 -- S(1)')
+            if(keyval == IBus.space):
+                if(not is_press_action):
+                    # ignore the SandS.release when preedit is empty - this can only happen at the beginning of the MODE_IN_FORCED_PREEDIT
+                    return(False)
+                else:
+                    # in this mode, pressing space can only mean the conversion..
+                    # FIXME
+                    pass
             pass
 
         '''
