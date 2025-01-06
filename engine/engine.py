@@ -742,6 +742,9 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status &= ~STATUS_CONTROLS
         if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j','k','l',';','i','o')):
             self._typing_mode = 0
+            self._commit_string(self._preedit_string)
+            self._preedit_string = ''
+            self._update_preedit()
             return(False)
         # Filter out Ctrol+(jkl;) if it is not in the PREEDIT mode
         if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('j','k','l',';') and not(self._typing_mode & (MODE_IN_PREEDIT|MODE_IN_FORCED_PREEDIT))):
