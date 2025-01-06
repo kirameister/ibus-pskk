@@ -562,6 +562,10 @@ class EnginePSKK(IBus.Engine):
         return self._event.chr(), ''
 
     def _get_surrounding_text(self):
+        preedit_len = len(self._preedit_string)
+        logger.debug(f'_get_surrounding_text: "{self._preedit_string}", {preedit_len}')
+        return(self._preedit_string, preedit_len)
+
         if not (self.client_capabilities & IBus.Capabilite.SURROUNDING_TEXT):
             self._surrounding = SURROUNDING_NOT_SUPPORTED
 
@@ -776,12 +780,12 @@ class EnginePSKK(IBus.Engine):
         # SandS and conversion
         if(keyval == IBus.space):
             if(is_press_action):
-                if(self._preedit_string != ""):
+                if(self._preedit_string != "" and not(self._typing_mode & MODE_IN_CONVERSION)):
                     self._commit_string(self._preedit_string)
                     self._preedit_string = ''
                     self._update_preedit()
                 # at this point, you cannot simply return(True) because *pressing* the space action could have an impact as well
-                if(not self._typing_mode & MODE_IN_FORCED_CONVERSION):
+                if(not(self._typing_mode & MODE_IN_FORCED_CONVERSION) or not(self._typing_mode & MODE_IN_CONVERSION)):
                     return(True)
                 # if we're in forced conversion mode, the show must go on for 漢直 at the beginning of preedit
             else:
@@ -789,11 +793,11 @@ class EnginePSKK(IBus.Engine):
                     # empty preedit && not 漢直-just-finished state => enter space
                     self.commit_text(IBus.Text.new_from_string(' '))
                     self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
+                    return(True)
                 else: # preedit already exists => this release action should be about conversion
                     # FIXME
                     self._typing_mode &= -MODE_IN_FORCED_CONVERSION
                     self._typing_mode |= MODE_IN_CONVERSION
-                return(True)
         # check for the shift.. This block cannot be shared with the one above because the release behavior may be different between space and shift.
         if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
             if(is_press_action):
@@ -848,8 +852,13 @@ class EnginePSKK(IBus.Engine):
                     self._preedit_string = reserved_preedit + yomi_to_preedit + preedit_after_yomi
                     self._update_preedit()
                     return(True)
-            #if(keyval == IBus.space and not is_press_action):
-            #    return self.handle_replace()
+            if(keyval == IBus.space):
+                if(is_press_action):
+                    # FIXME this could be where the new 文節 could begin
+                    pass
+                else:
+                    # we are certain that this is about conversion
+                    return self.handle_replace(keyval)
 
         # if none of above is applied.. It will be treated as direct input
         self._typing_mode &= ~MODE_FORCED_CONVERSION_POSSIBLE
@@ -1019,11 +1028,11 @@ class EnginePSKK(IBus.Engine):
             break
         return True
 
-    def handle_replace(self):
+    def handle_replace(self, keyval):
         if self._dict.current():
             return True
         text, pos = self._get_surrounding_text()
-        if self._event.is_henkan():
+        if(keyval == IBus.space):
             cand, size = self.lookup_dictionary(text, pos)
         elif 1 <= pos:
             assert self._event.is_muhenkan()
