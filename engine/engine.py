@@ -778,7 +778,7 @@ class EnginePSKK(IBus.Engine):
 
         ## Case 1 - Very ordinary Hiragana typing (S0)
         if(not(self._typing_mode & (MODE_IN_FORCED_PREEDIT|MODE_IN_PREEDIT))):
-            logger.debug('Case 1')
+            logger.debug('Case 1 -- S(0)')
             # Return key => commit the preedit and move on..
             if(keyval == IBus.Return):
                 if(is_press_action):
@@ -788,19 +788,10 @@ class EnginePSKK(IBus.Engine):
                     return(False)
                 else:
                     return(True)
-            # filter out
-            if(not self.is_applicable_japanese_stroke(keyval)):
-                # commit the string to be on a safe side.
-                self._commit_string(self._preedit_string)
-                self._preedit_string = ''
-                self._update_preedit()
-                return(False)
-            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
-                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
-                return(True)
             # SandS
             if(keyval == IBus.space):
                 if(is_press_action): # => key-pressed, so it's potentially about going for PREEDIT (possibly FORCED_PREEDIT, but we'll figure that out in next strokes..)
+                    logger.debug('case1 space pressed')
                     if(self._preedit_string != ""):
                         self._commit_string(self._preedit_string)
                         self._preedit_string = ''
@@ -808,23 +799,35 @@ class EnginePSKK(IBus.Engine):
                     self._typing_mode |= MODE_IN_PREEDIT
                     return(True)
                 else:
+                    logger.debug('case1 space released')
                     if(self._preedit_string == "" and not(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU)):
                         # empty preedit && not 漢直-just-finished state => enter space
                         self.commit_text(IBus.Text.new_from_string(' '))
                         self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
                     return(True)
+            # offset simul_limit_ms for key-release on normal keys
+            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
+                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
+                return(True)
             # to type Hiragana..
             if(self.is_applicable_japanese_stroke(keyval)):
                 (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
                 self._commit_string(yomi)
                 self._update_preedit()
                 return(True)
-            return(False)
+            else:
+                # commit the string to be on a safe side.
+                self._commit_string(self._preedit_string)
+                self._preedit_string = ''
+                self._update_preedit()
+                return(False)
+            #return(False)
 
         ## Case 2 - In normal preedit (S1)
         ## -- please note transition to forced preedit mode is taken care above
         ## -- please also note that this mode could return to S0 via 漢直
         if(self._typing_mode & MODE_IN_PREEDIT):
+            logger.debug('Case 2 -- S(1)')
             # Return key => commit the preedit and return to S0
             if(keyval == IBus.Return):
                 if(is_press_action):
