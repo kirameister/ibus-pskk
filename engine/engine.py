@@ -829,6 +829,14 @@ class EnginePSKK(IBus.Engine):
         ## -- please also note that this mode could return to S0 via 漢直
         if(self._typing_mode & MODE_IN_PREEDIT):
             logger.debug('Case 2 -- S(1)')
+            # SandS key release without preedit => enter space and go back to S(0)
+            if(keyval == IBus.space and self._preedit_string == ""):
+                if(is_press_action):
+                    return(True) # actually this should never happen
+                else:
+                    self.commit_text(IBus.Text.new_from_string(' '))
+                    self._typing_mode &= ~MODE_IN_PREEDIT
+                    return(True)
             # Return key => commit the preedit and return to S0
             if(keyval == IBus.Return):
                 if(is_press_action):
@@ -839,10 +847,14 @@ class EnginePSKK(IBus.Engine):
                     return(True)
                 else:
                     return(True)
-            # Check for 漢直
-            if(self.is_applicable_japanese_stroke(keyval) and self._modkey_status & STATUS_SPACE):
+            # offset simul_limit_ms for key-release on normal keys and drop the signal
+            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
+                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
+                return(True)
+            # Check for 漢直 -- please note that this is will transition to S(0) if succeeds
+            if(self.is_applicable_key_for_kanchoku(keyval) and self._modkey_status & STATUS_SPACE):
                 if(self._first_kanchoku_stroke == ""):
-                    # at this point, it's not about storing a new value
+                    # at this point, it's only about internally storing a key value.
                     # the rest of the process for this key-stroke is handled in following block
                     self._first_kanchoku_stroke = chr(keyval)
                     logger.debug('First 漢直 key-stroke: ' + self._first_kanchoku_stroke)
@@ -856,28 +868,34 @@ class EnginePSKK(IBus.Engine):
                         self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
                         self._first_kanchoku_stroke = ""
                         self._typing_mode |= MODE_JUST_FINISHED_KANCHOKU # you need to ensure to reset this switch
-                        return(True)
-            # 漢直 with SandS
-            if(keyval == IBus.space):
-                self._first_kanchoku_stroke = ""
-                if(is_press_action):
-                    # actually this should never happen
-                    if(self._preedit_string == ""):
-                        return(True)
-                else:
-                    # PREEDIT with SandS release => this can be either conversion or end of 漢直
-                    if(self._preedit_string == ""):
                         self._typing_mode &= ~MODE_IN_PREEDIT
                         return(True)
-            # offset simul_limit_ms for key-release on normal keys and drop the signal
-            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
-                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
-                return(True)
+            # reset 漢直
+            if(keyval == IBus.space):
+                # any action with space will reset the kanchoku stroke
+                self._first_kanchoku_stroke = ""
+            if(self._modkey_status & STATUS_SPACE and not self.is_applicable_key_for_kanchoku(keyval)):
+                # if the second stroke is not applicable for kanchoku, reset the 1st one.
+                self._first_kanchoku_stroke = ""
+            # SandS -- This key-press/release has multiple meanings depending on context
+            if(keyval == IBus.space):
+                if(is_press_action):
+                    if(self._preedit_string == ""):
+                        return(True) # this is actually already taken care at the beginning, but just to be sure..
+                    else: # FIXME => At this point, preedit should not be empty, so we start conversion
+                        self._typing_mode &= ~MODE_IN_PREEDIT
+                        self._typing_mode |= MODE_IN_CONVERSION
+                        return(True)
+                else:
+                    return(True) # e.g., Space.press => /a/.press => /a/.release => Space.release <= NOW
             # re-set the MODE_FORCED_PREEDIT_POSSIBLE if other key is typed
             if(chr(keyval) != self._layout_data['conversion_trigger_key'] and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
                 self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
             # to type Hiragana..
             if(self.is_applicable_japanese_stroke(keyval)):
+                if(self._modkey_status & STATUS_SPACE):
+                    # FIXME: This should be the beginning of new 文節
+                    pass
                 if(len(self._preedit_string)<=2):
                     yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
                     self._preedit_string = yomi_to_preedit + preedit_after_yomi
@@ -1003,6 +1021,10 @@ class EnginePSKK(IBus.Engine):
 
 
 
+    def is_applicable_key_for_kanchoku(self, keyval):
+        if(chr(keyval) in KANCHOKU_KEY_SET):
+            return(True)
+        return(False)
 
     def is_applicable_japanese_stroke(self, keyval):
         if(chr(keyval) in APPLICABLE_STROKE_SET_FOR_JAPANESE):
