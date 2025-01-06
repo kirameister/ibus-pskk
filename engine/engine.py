@@ -68,6 +68,8 @@ MODE_IN_FORCED_PREEDIT = 0x02
 MODE_IN_PREEDIT = 0x04
 MODE_IN_KANCHOKU                = 0x08
 MODE_JUST_FINISHED_KANCHOKU     = 0x10
+MODE_IN_CONVERSION              = 0x20
+MODE_IN_FORCED_CONVERSION       = 0x40
 
 
 HIRAGANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんゔがぎぐげござじずぜぞだぢづでどばびぶべぼぁぃぅぇぉゃゅょっぱぴぷぺぽゎゐゑ・ーゝゞ"
@@ -738,8 +740,14 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status |= STATUS_CONTROLS
             else:
                 self._modkey_status &= ~STATUS_CONTROLS
-        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j', 'k', 'l', ';', 'i', 'o')):
+        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j','k','l',';','i','o')):
             self._typing_mode = 0
+            return(False)
+        # Filter out Ctrol+(jkl;) if it is not in the PREEDIT mode
+        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('j','k','l',';') and not(self._typing_mode & (MODE_IN_PREEDIT|MODE_IN_FORCED_PREEDIT))):
+            return(False)
+        # Filter out Ctrl+(io) if it is not in the CONVERSION mode
+        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('i','o') and not(self._typing_mode & (MODE_IN_CONVERSION|MODE_IN_FORCED_CONVERSION))):
             return(False)
 
         # forced preedit mode - it is only about entering to the forced mode
@@ -755,28 +763,119 @@ class EnginePSKK(IBus.Engine):
                 self._update_preedit()
                 return(True)
 
-        # mostly ignore the release action for applicable key..
+        # mostly ignore the release action for applicable key.. FIXME: these lines should be rather contained within each Case
         if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
             self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
             return(True)
 
         ### From this point, there would be some typings involved..
-        logger.debug(f'process_key_event -- typing process started: {IBus.keyval_name(keyval)}')
+        ### Once the process goes into one of Case N, it will not go any further block (it always ends with return())
 
-        # Block for the dictionary-lookup
+        ## Case 0 - Block for the dictionary-lookup (L)
         if(self._lookup_table.get_number_of_candidates()):
             # FIXME
             pass
 
-        # Very ordinary Hiragana typing (S0)
-        if(not(self._typing_mode & MODE_IN_FORCED_PREEDIT) and not(self._typing_mode & MODE_IN_PREEDIT) and not(self._modkey_status & STATUS_SPACE)):
+        ## Case 1 - Very ordinary Hiragana typing (S0)
+        if(not(self._typing_mode & (MODE_IN_FORCED_PREEDIT|MODE_IN_PREEDIT))):
+            logger.debug('Case 1')
+            # Return key => commit the preedit and move on..
+            if(keyval == IBus.Return):
+                if(is_press_action):
+                    self._commit_string(self._preedit_string)
+                    self._preedit_string = ''
+                    self._update_preedit()
+                    return(False)
+                else:
+                    return(True)
+            # filter out
+            if(not self.is_applicable_japanese_stroke(keyval)):
+                # commit the string to be on a safe side.
+                self._commit_string(self._preedit_string)
+                self._preedit_string = ''
+                self._update_preedit()
+                return(False)
+            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
+                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
+                return(True)
+            # SandS
+            if(keyval == IBus.space):
+                if(is_press_action): # => key-pressed, so it's potentially about going for PREEDIT (possibly FORCED_PREEDIT, but we'll figure that out in next strokes..)
+                    if(self._preedit_string != ""):
+                        self._commit_string(self._preedit_string)
+                        self._preedit_string = ''
+                        self._update_preedit()
+                    self._typing_mode |= MODE_IN_PREEDIT
+                    return(True)
+                else:
+                    if(self._preedit_string == "" and not(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU)):
+                        # empty preedit && not 漢直-just-finished state => enter space
+                        self.commit_text(IBus.Text.new_from_string(' '))
+                        self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
+                    return(True)
+            # to type Hiragana..
             if(self.is_applicable_japanese_stroke(keyval)):
-                logger.debug(f'Hiragana key entered : {chr(keyval)} - ')
                 (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
                 self._commit_string(yomi)
                 self._update_preedit()
                 return(True)
+            return(False)
 
+        ## Case 2 - In normal preedit (S1)
+        ## -- please note transition to forced preedit mode is taken care above
+        ## -- please also note that this mode could return to S0 via 漢直
+        if(self._typing_mode & MODE_IN_PREEDIT):
+            # Return key => commit the preedit and return to S0
+            if(keyval == IBus.Return):
+                if(is_press_action):
+                    self._commit_string(self._preedit_string)
+                    self._preedit_string = ''
+                    self._update_preedit()
+                    self._typing_mode &= ~MODE_IN_PREEDIT
+                    return(True)
+                else:
+                    return(True)
+            # filter out
+            if(not self.is_applicable_japanese_stroke(keyval) or keyval != IBus.space):
+                return(False)
+            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
+                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
+                return(True)
+            # Check for 漢直
+            if(self.is_applicable_japanese_stroke(keyval) and self._modkey_status & STATUS_SPACE):
+                if(self._first_kanchoku_stroke == ""):
+                    # at this point, it's not about storing a new value
+                    # the rest of the process for this key-stroke is handled in following block
+                    self._first_kanchoku_stroke = chr(keyval)
+                    logger.debug('First 漢直 key-stroke: ' + self._first_kanchoku_stroke)
+                else:
+                    # we'll need to check if the stroke was actually meant as a simultaneous strokes
+                    if(not self._is_simul_condition_met(keyval, self._preedit_string, stroke_timing_diff)):
+                        logger.debug('漢直 recognized: ' + self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)])
+                        # flush the preedit before committing the Kanji => This is because we're in S1
+                        self._preedit_string = ""
+                        self._update_preedit()
+                        self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
+                        self._first_kanchoku_stroke = ""
+                        self._typing_mode |= MODE_JUST_FINISHED_KANCHOKU # you need to ensure to reset this switch
+                        return(True)
+            # 漢直 with SandS
+            if(keyval == IBus.space):
+                if(is_press_action):
+                    # actually this should never happen
+                    if(self._preedit_string == ""):
+                        return(True)
+                else:
+                    # PREEDIT with SandS release => this can be either conversion or end of 漢直
+                    if(self._preedit_string == ""):
+                        self._typing_mode &= ~MODE_IN_PREEDIT
+                        return(True)
+
+        ## Case 3 - In Forced preedit (S3)
+        if(self._typing_mode & MODE_IN_FORCED_PREEDIT):
+            pass
+
+        '''
         # SandS and conversion
         if(keyval == IBus.space):
             if(is_press_action):
@@ -796,8 +895,9 @@ class EnginePSKK(IBus.Engine):
                     return(True)
                 else: # preedit already exists => this release action should be about conversion
                     # FIXME
-                    self._typing_mode &= -MODE_IN_FORCED_PREEDIT
-                    self._typing_mode |= MODE_IN_PREEDIT
+                    pass
+                    #self._typing_mode &= -MODE_IN_FORCED_PREEDIT
+                    #self._typing_mode |= MODE_IN_PREEDIT
         # check for the shift.. This block cannot be shared with the one above because the release behavior may be different between space and shift.
         if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
             if(is_press_action):
@@ -838,8 +938,8 @@ class EnginePSKK(IBus.Engine):
 
         # Conversion-mode
         if(self._modkey_status & STATUS_SPACE or self._typing_mode & MODE_IN_PREEDIT or self._typing_mode & MODE_IN_FORCED_PREEDIT):
-            self._typing_mode &= ~MODE_IN_FORCED_PREEDIT
-            self._typing_mode |= MODE_IN_PREEDIT
+            #self._typing_mode &= ~MODE_IN_FORCED_PREEDIT
+            #self._typing_mode |= MODE_IN_PREEDIT
             if(self.is_applicable_japanese_stroke(keyval)):
                 if(len(self._preedit_string)<=2):
                     yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
@@ -859,12 +959,16 @@ class EnginePSKK(IBus.Engine):
                 else:
                     # we are certain that this is about conversion
                     return self.handle_replace(keyval)
+        '''
 
         # if none of above is applied.. It will be treated as direct input
         self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
         self._typing_mode &= ~MODE_IN_FORCED_PREEDIT
         self._typing_mode = 0
         return(False)
+
+
+
 
     def is_applicable_japanese_stroke(self, keyval):
         if(chr(keyval) in APPLICABLE_STROKE_SET_FOR_JAPANESE):
