@@ -765,7 +765,7 @@ class EnginePSKK(IBus.Engine):
             pass
 
         # Very ordinary Hiragana typing (S0)
-        if(not(self._typing_mode & MODE_IN_FORCED_CONVERSION) and not(self._modkey_status & STATUS_SPACE)):
+        if(not(self._typing_mode & MODE_IN_FORCED_CONVERSION) and not(self._typing_mode & MODE_IN_CONVERSION) and not(self._modkey_status & STATUS_SPACE)):
             if(self.is_applicable_japanese_stroke(keyval)):
                 logger.debug(f'Hiragana key entered : {chr(keyval)} - ')
                 (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
@@ -833,7 +833,9 @@ class EnginePSKK(IBus.Engine):
                     return(True)
 
         # Conversion-mode
-        if(self._modkey_status & STATUS_SPACE):
+        if(self._modkey_status & STATUS_SPACE or self._typing_mode & MODE_IN_CONVERSION or self._typing_mode & MODE_IN_FORCED_CONVERSION):
+            self._typing_mode &= ~MODE_IN_FORCED_CONVERSION
+            self._typing_mode |= MODE_IN_CONVERSION
             if(self.is_applicable_japanese_stroke(keyval)):
                 if(len(self._preedit_string)<=2):
                     yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
@@ -846,6 +848,8 @@ class EnginePSKK(IBus.Engine):
                     self._preedit_string = reserved_preedit + yomi_to_preedit + preedit_after_yomi
                     self._update_preedit()
                     return(True)
+            #if(keyval == IBus.space and not is_press_action):
+            #    return self.handle_replace()
 
         # if none of above is applied.. It will be treated as direct input
         self._typing_mode &= ~MODE_FORCED_CONVERSION_POSSIBLE
