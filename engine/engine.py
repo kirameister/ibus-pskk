@@ -63,14 +63,14 @@ STATUS_CONTROLS     = STATUS_CONTROL_L | STATUS_CONTROL_R
 STATUS_MODIFIER     = STATUS_SHIFTS  | STATUS_CONTROLS | STATUS_ALT_L | STATUS_ALT_R | STATUS_SPACE
 
 # Japanese typing mode segment
-MODE_FORCED_PREEDIT_POSSIBLE    = 0x01
-MODE_IN_FORCED_PREEDIT          = 0x02
-MODE_IN_PREEDIT                 = 0x04
-MODE_IN_KANCHOKU                = 0x08
-MODE_JUST_FINISHED_KANCHOKU     = 0x10
-MODE_IN_CONVERSION              = 0x20
-MODE_IN_FORCED_CONVERSION       = 0x40
-
+MODE_FORCED_PREEDIT_POSSIBLE                   = 0x001
+MODE_IN_FORCED_PREEDIT                         = 0x002
+MODE_IN_PREEDIT                                = 0x004
+MODE_IN_KANCHOKU                               = 0x008
+MODE_JUST_FINISHED_KANCHOKU                    = 0x010
+MODE_IN_CONVERSION                             = 0x020
+MODE_IN_FORCED_CONVERSION                      = 0x040
+SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT          = 0x080
 
 HIRAGANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんゔがぎぐげござじずぜぞだぢづでどばびぶべぼぁぃぅぇぉゃゅょっぱぴぷぺぽゎゐゑ・ーゝゞ"
 KATAKANA = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンヴガギグゲゴザジズゼゾダヂヅデドバビブベボァィゥェォャュョッパピプペポヮヰヱ・ーヽヾ"
@@ -792,12 +792,13 @@ class EnginePSKK(IBus.Engine):
             # SandS
             if(keyval == IBus.space):
                 if(is_press_action): # => key-pressed, so it's potentially about going for PREEDIT (possibly FORCED_PREEDIT, but we'll figure that out in next strokes..)
-                    logger.debug('case1 space pressed')
+                    logger.debug('Case1 space pressed')
                     if(self._preedit_string != ""):
                         self._commit_string(self._preedit_string)
                         self._preedit_string = ''
                         self._update_preedit()
                     self._typing_mode |= MODE_IN_PREEDIT
+                    self._typing_mode |= SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
                     return(True)
                 else:
                     logger.debug('case1 space released')
@@ -832,11 +833,25 @@ class EnginePSKK(IBus.Engine):
             # SandS key release without preedit => enter space and go back to S(0)
             if(keyval == IBus.space and self._preedit_string == ""):
                 if(is_press_action):
+                    logger.debug('Case 2 -- space pressed => do nothing')
                     return(True) # actually this should never happen
                 else:
-                    self.commit_text(IBus.Text.new_from_string(' '))
-                    self._typing_mode &= ~MODE_IN_PREEDIT
-                    return(True)
+                    logger.debug(f'Case 2 -- space released _typing_mode: {bin(self._typing_mode)}')
+                    logger.debug(f'Case 2 -- space released MODE_JUST_FINISHED_KANCHOKU: {bin(MODE_JUST_FINISHED_KANCHOKU)}')
+                    if(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU):
+                        self.debug('Case 2 -- space released with empty preedit and MODE_JUST_FINISHED_KANCHOKU => move back to S(0)')
+                        self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
+                        self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                        self._typing_mode &= ~MODE_IN_PREEDIT
+                        return(True)
+                    if(self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
+                        self.debug('Case 2 -- space released with empty preedit and SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => turn-off SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT and stay in S(1)')
+                        self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                        return(True)
+                    else:
+                        self.commit_text(IBus.Text.new_from_string(' '))
+                        self._typing_mode &= ~MODE_IN_PREEDIT
+                        return(True)
             # Return key => commit the preedit and return to S0
             if(keyval == IBus.Return):
                 if(is_press_action):
@@ -868,7 +883,7 @@ class EnginePSKK(IBus.Engine):
                         self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
                         self._first_kanchoku_stroke = ""
                         self._typing_mode |= MODE_JUST_FINISHED_KANCHOKU # you need to ensure to reset this switch
-                        self._typing_mode &= ~MODE_IN_PREEDIT
+                        #self._typing_mode &= ~MODE_IN_PREEDIT # The mode must remain the same at this point because SnadS is still being pressed
                         return(True)
             # reset 漢直
             if(keyval == IBus.space):
@@ -880,6 +895,7 @@ class EnginePSKK(IBus.Engine):
             # SandS -- This key-press/release has multiple meanings depending on context
             if(keyval == IBus.space):
                 if(self._preedit_string == ""):
+                    logger.debug('UPPS -- Something unpredicted happened!!')
                     # this block is actually already taken care at the beginning, but just to be sure..
                     if(is_press_action):
                         return(True)
@@ -887,7 +903,7 @@ class EnginePSKK(IBus.Engine):
                         self.commit_text(IBus.Text.new_from_string(' '))
                         self._typing_mode &= ~MODE_IN_PREEDIT
                         return(True)
-                else:
+                else: # non-empty preedit
                     if(is_press_action):
                         # This press action itself does not mean anything in this mode
                         return(True)
@@ -900,21 +916,39 @@ class EnginePSKK(IBus.Engine):
                         self._typing_mode |= MODE_IN_CONVERSION
                         return(self.handle_replace(keyval))
                         '''
-                        # following lines to be replaced in the future
-                        self._commit_string(self._preedit_string)
-                        self._preedit_string = ''
-                        self._update_preedit()
-                        self._typing_mode &= ~MODE_IN_PREEDIT
-                        # end of lines to be replaced
+                        if(not self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
+                            # following lines to be replaced in the future
+                            logger.debug(f'Case 2 -- committing {self._preedit_string} -- In the future, lookup table should be rendered for this preedit')
+                            self._commit_string(self._preedit_string)
+                            self._preedit_string = ''
+                            self._update_preedit()
+                            self._typing_mode &= ~MODE_IN_PREEDIT
+                            # end of lines to be replaced
+                        self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
                         return(True)
             # re-set the MODE_FORCED_PREEDIT_POSSIBLE if other key is typed
             if(chr(keyval) != self._layout_data['conversion_trigger_key'] and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
                 self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
             # to type Hiragana..
             if(self.is_applicable_japanese_stroke(keyval)):
-                if(self._modkey_status & STATUS_SPACE):
+                if(self._modkey_status & STATUS_SPACE and not self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
+                    # key-pressed while SandS is pressed (and this press is not part of incoming transition to S(1))
                     # FIXME: This should be the beginning of new 文節
-                    pass
+                    # for the time being, we just commit the preedit
+                    # in the future, this would be choosing the first
+                    # candidate in the dictionary
+                    logger.debug(f'Case 2 -- committing {self._preedit_string} -- In the future, the first candidate of lookup table should be selected, committed, and moved onto the new 文節')
+                    self._commit_string(self._preedit_string)
+                    self._preedit_string = ''
+                    self._update_preedit()
+                    # end of lines to be replaced
+                    # start a new 文節
+                    # note that the mode remains the same as MODE_IN_PREEDIT
+                    yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
+                    self._preedit_string = yomi_to_preedit + preedit_after_yomi
+                    self._update_preedit()
+                    self._typing_mode |= SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                    return(True)
                 if(len(self._preedit_string)<=2):
                     yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
                     self._preedit_string = yomi_to_preedit + preedit_after_yomi
@@ -1439,7 +1473,7 @@ class EnginePSKK(IBus.Engine):
         typing.. (i.e., typing intervened by mouse move)
         ...It seems taht this function is called periodically. It may be an idea to store the position of the mouse pointer and commit(?) the hiragana only with pointer-position value mismatch? 
         """
-        logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
+        #logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
         self._update_lookup_table()
 
     def _forward_backspaces(self, size):
