@@ -671,10 +671,12 @@ class EnginePSKK(IBus.Engine):
         """
         #return self._event.process_key_event(keyval, keycode, state)
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
+        '''
         if(is_press_action):
             logger.debug(f'do_process_key_event -- press ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
         else:
             logger.debug(f'do_process_key_event -- release ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
+        '''
         # 変換 / 無変換
         if(keyval == IBus.Muhenkan):
             if(is_press_action): # this extra if-clause is necessary not to cascade release signal to further function.
@@ -701,11 +703,15 @@ class EnginePSKK(IBus.Engine):
         This function not only detects the type/state of the key, but also identify 
         which (internal) state the IME is supposed to be. 
         """
-        logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
-        logger.debug(f'process_key_event -- _typing_mode: {bin(self._typing_mode)}')
+        #logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
+        #logger.debug(f'process_key_event -- _typing_mode: {bin(self._typing_mode)}')
         current_typed_time = time.perf_counter()
         stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
+        if(is_press_action):
+            logger.debug(f'process_key_event -- press("{IBus.keyval_name(keyval)}")     _typing_mode: {bin(self._typing_mode)}')
+        else:
+            logger.debug(f'process_key_event -- release("{IBus.keyval_name(keyval)}")   _typing_mode: {bin(self._typing_mode)}')
 
         # before getting started, check and update the modkey-status
         if(keyval == IBus.space):
@@ -774,6 +780,7 @@ class EnginePSKK(IBus.Engine):
 
         ## Case 0 - Block for the dictionary-lookup (L)
         if(self._lookup_table.get_number_of_candidates()):
+            logger.debug('Case 0 -- L(0)')
             # FIXME
             pass
 
@@ -786,8 +793,10 @@ class EnginePSKK(IBus.Engine):
                     self._commit_string(self._preedit_string)
                     self._preedit_string = ''
                     self._update_preedit()
+                    logger.debug('  => "Return" pressed => commit preedit and return False')
                     return(False)
                 else:
+                    logger.debug('  => "Return" released => do nothing')
                     return(True)
             # SandS
             if(keyval == IBus.space):
@@ -799,29 +808,33 @@ class EnginePSKK(IBus.Engine):
                         self._update_preedit()
                     self._typing_mode |= MODE_IN_PREEDIT
                     self._typing_mode |= SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                    logger.debug('  => "Space" pressed => commit preedit and transition to PREEDIT with FIRST_SHIFT_PRESSED switch')
                     return(True)
                 else:
-                    logger.debug('case1 space released')
                     if(self._preedit_string == "" and not(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU)):
+                        logger.debug('  -> "Space" release => space committed because of empty preedit and MODE_JUST_FINISHED_KANCHOKU not set')
                         # empty preedit && not 漢直-just-finished state => enter space
                         self.commit_text(IBus.Text.new_from_string(' '))
-                        self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
+                    logger.debug('  => "Space" release => do nothing')
                     return(True)
             # offset simul_limit_ms for key-release on normal keys and drop the signal
             if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
                 self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
+                logger.debug('  => Japanese key released => offset the previous timestamp')
                 return(True)
             # to type Hiragana..
             if(self.is_applicable_japanese_stroke(keyval)):
                 (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
                 self._commit_string(yomi)
                 self._update_preedit()
+                logger.debug(f'  => Japanese key pressed => update preedit and commit string "{yomi}"/"{self._preedit_string}"')
                 return(True)
             else:
                 # commit the string to be on a safe side.
                 self._commit_string(self._preedit_string)
                 self._preedit_string = ''
                 self._update_preedit()
+                logger.debug('  => non-Japanese key pressed or released => passthrough')
                 return(False)
             #return(False)
 
@@ -833,25 +846,29 @@ class EnginePSKK(IBus.Engine):
             # SandS key release without preedit => enter space and go back to S(0)
             if(keyval == IBus.space and self._preedit_string == ""):
                 if(is_press_action):
-                    logger.debug('Case 2 -- space pressed => do nothing')
+                    logger.debug('  => space pressed => do nothing')
                     return(True) # actually this should never happen
                 else:
                     logger.debug(f'Case 2 -- space released _typing_mode: {bin(self._typing_mode)}')
                     logger.debug(f'Case 2 -- space released MODE_JUST_FINISHED_KANCHOKU: {bin(MODE_JUST_FINISHED_KANCHOKU)}')
                     if(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU):
-                        self.debug('Case 2 -- space released with empty preedit and MODE_JUST_FINISHED_KANCHOKU => move back to S(0)')
+                        logger.debug('Case 2 -- space released with empty preedit and MODE_JUST_FINISHED_KANCHOKU => move back to S(0)')
                         self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
                         self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
                         self._typing_mode &= ~MODE_IN_PREEDIT
+                        logger.debug('  => space released with MODE_JUST_FINISHED_KANCHOKU => -(MODE_JUST_FINISHED_KANCHOKU,SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT) => move back to S(0)')
                         return(True)
                     if(self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
                         self.debug('Case 2 -- space released with empty preedit and SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => turn-off SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT and stay in S(1)')
                         self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                        logger.debug('  => space released with SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => -SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT')
                         return(True)
                     else:
                         self.commit_text(IBus.Text.new_from_string(' '))
                         self._typing_mode &= ~MODE_IN_PREEDIT
+                        logger.debug('  => space released => Commit space and -MODE_IN_PREEDIT')
                         return(True)
+                    logger.debug('hoge')
             # Return key => commit the preedit and return to S0
             if(keyval == IBus.Return):
                 if(is_press_action):
