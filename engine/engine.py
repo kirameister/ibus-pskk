@@ -868,7 +868,6 @@ class EnginePSKK(IBus.Engine):
                         self._typing_mode &= ~MODE_IN_PREEDIT
                         logger.debug('  => space released => Commit space and -MODE_IN_PREEDIT')
                         return(True)
-                    logger.debug('hoge')
             # Return key => commit the preedit and return to S0
             if(keyval == IBus.Return):
                 if(is_press_action):
