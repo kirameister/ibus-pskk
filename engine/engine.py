@@ -859,7 +859,7 @@ class EnginePSKK(IBus.Engine):
                         logger.debug('  => space released with MODE_JUST_FINISHED_KANCHOKU => -(MODE_JUST_FINISHED_KANCHOKU,SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT) => move back to S(0)')
                         return(True)
                     if(self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
-                        self.debug('Case 2 -- space released with empty preedit and SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => turn-off SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT and stay in S(1)')
+                        logger.debug('Case 2 -- space released with empty preedit and SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => turn-off SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT and stay in S(1)')
                         self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
                         logger.debug('  => space released with SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => -SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT')
                         return(True)
