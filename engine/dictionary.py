@@ -75,6 +75,11 @@ class Dictionary:
             self._load_dict(self._dict, self._orders_path, 'a+', version_checked=False)
 
     def exact_lookup(self, yomi):
+        '''
+        This is probably the simplest way to do the dictionary lookup - simply check for
+        the dict key and take the first element of its list-value. If yomi is found
+        in the dict, return empty string.
+        '''
         if(yomi in self._dict):
             return(self._dict[yomi][0])
         else:
