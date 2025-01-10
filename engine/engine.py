@@ -200,6 +200,7 @@ class EnginePSKK(IBus.Engine):
 
         self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
         self._settings.connect('changed', self._config_value_changed_cb)
+        logger.debug(f'Engine init -- settings: {self._settings}')
 
         # load configs
         self._load_configs()
@@ -949,15 +950,7 @@ class EnginePSKK(IBus.Engine):
             if(self.is_applicable_japanese_stroke(keyval)):
                 if(self._modkey_status & STATUS_SPACE and not self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
                     # key-pressed while SandS is pressed (and this press is not part of incoming transition to S(1))
-                    # FIXME: This should be the beginning of new 文節
-                    # for the time being, we just commit the preedit
-                    # in the future, this would be choosing the first
-                    # candidate in the dictionary
-                    logger.debug(f'Case 2 -- committing {self._preedit_string} -- In the future, the first candidate of lookup table should be selected, committed, and moved onto the new 文節')
-                    self._commit_string(self._preedit_string)
-                    self._preedit_string = ''
-                    self._update_preedit()
-                    # end of lines to be replaced
+                    self.preedit_to_convert_commit()
                     # start a new 文節
                     # note that the mode remains the same as MODE_IN_PREEDIT
                     yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
@@ -1091,7 +1084,7 @@ class EnginePSKK(IBus.Engine):
 
         # Handle Japanese text
         if((self._event.is_henkan() or self._event.is_muhenkan()) and not(modifiers & event.ALT_R_BIT)):
-            return self.handle_replace()
+            return self.handle_replace(keyval)
         if self._dict.current():
             self._commit()
         yomi = ''
@@ -1141,9 +1134,6 @@ class EnginePSKK(IBus.Engine):
         size = len(self._dict.reading())
         if 0 < size:
             # FIXME same as above..
-            if self._preedit_string == 'n':
-                # For FuriganaPad, yomi has to be committed anyway.
-                self._commit_string('ん')
             self._preedit_string = ''
             if 1 < len(self._dict.cand()):
                 for c in self._dict.cand():
@@ -1175,6 +1165,32 @@ class EnginePSKK(IBus.Engine):
         based on the value of preedit
         """
         pass
+
+    def preedit_to_convert_commit(self):
+        """
+        Purpose of this function is to lookup the contents
+        of preedit against the dictionary, convert it if
+        there is a match (and use the first candidate),
+        and then commit it directly.
+        If preedit is empty, False will be returned. 
+        If a match is not found in the dictionary, the
+        preedit will be committed nonetheless, and False
+        would be returned from this function. 
+        If the conversion is done, True will be returned. 
+        """
+        if(self._preedit_string == ""):
+            return(False)
+        first_candidate = self._dict.exact_lookup(self._preedit_string)
+        if(first_candidate == ""):
+            self._commit_string(self._preedit_string)
+            self._preedit_string = ''
+            self._update_preedit()
+            return(False)
+        else:
+            self._preedit_string = ''
+            self._update_preedit()
+            self._commit_string(first_candidate)
+            return(True)
 
     def handle_replace(self, keyval):
         if self._dict.current():

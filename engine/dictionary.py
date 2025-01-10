@@ -62,6 +62,7 @@ class Dictionary:
             my_path = os.path.join(util.get_user_configdir(), user)
             logger.info(f'engine/dictionary.py init -- my_path: {my_path}')
             self._load_dict(self._dict, my_path, 'a+')
+            logger.debug(self._dict)
 
         base = os.path.basename(path)
         if base:
@@ -72,6 +73,12 @@ class Dictionary:
                 with open(self._orders_path, 'w') as file:
                     file.write("; " + DICTIONARY_VERSION + "\n")
             self._load_dict(self._dict, self._orders_path, 'a+', version_checked=False)
+
+    def exact_lookup(self, yomi):
+        if(yomi in self._dict):
+            return(self._dict[yomi][0])
+        else:
+            return("")
 
     def _load_dict(self, dict, path, mode='r', version_checked=True):
         reorder_only = not version_checked
