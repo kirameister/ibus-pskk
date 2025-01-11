@@ -780,10 +780,12 @@ class EnginePSKK(IBus.Engine):
         ### Once the process goes into one of Case N, it will not go any further block (it always ends with return())
 
         ## Case 0 - Block for the dictionary-lookup (L)
-        if(self._lookup_table.get_number_of_candidates()):
+        #if(self._lookup_table.get_number_of_candidates()):
+        if(self._typing_mode & MODE_IN_CONVERSION):
             logger.debug('Case 0 -- L(0)')
-            # FIXME
-            pass
+            self.show_conversion_window()
+            self._typing_mode &= ~MODE_IN_CONVERSION
+            return(True)
 
         ## Case 1 - Very ordinary Hiragana typing (S0)
         if(not(self._typing_mode & (MODE_IN_FORCED_PREEDIT|MODE_IN_PREEDIT))):
@@ -936,11 +938,14 @@ class EnginePSKK(IBus.Engine):
                         if(not self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
                             # following lines to be replaced in the future
                             logger.debug(f'Case 2 -- committing {self._preedit_string} -- In the future, lookup table should be rendered for this preedit')
+                            """
                             self._commit_string(self._preedit_string)
                             self._preedit_string = ''
                             self._update_preedit()
-                            self._typing_mode &= ~MODE_IN_PREEDIT
+                            """
                             # end of lines to be replaced
+                            self._typing_mode &= ~MODE_IN_PREEDIT
+                            self._typing_mode |= MODE_IN_CONVERSION
                         self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
                         return(True)
             # re-set the MODE_FORCED_PREEDIT_POSSIBLE if other key is typed
@@ -1191,6 +1196,31 @@ class EnginePSKK(IBus.Engine):
             self._update_preedit()
             self._commit_string(first_candidate)
             return(True)
+
+    def show_conversion_window(self):
+        """
+        This function takes the value of preedit, 
+        looks up on the dictionary, and shows the
+        candidate window.
+        If there is no match found, it will simply
+        commit the preedit and move on with return(False).
+        """
+        if(self._preedit_string == ""):
+            return(False)
+        self._lookup_table.clear()
+        self._dict.smart_yomi_to_kanji_lookup(self._preedit_string)
+        if(0 < len(self._dict.reading())):
+            self._preedit_string = ""
+            if(1 < len(self._dict.cand())):
+                for c in self._dict.cand():
+                    self._lookup_table.append_candidate(IBus.Text.new_from_string(c))
+            return(True)
+        else:
+            self._commit_string(self._preedit_string)
+            self._preedit_string = ''
+            self._update_preedit()
+        return(False)
+
 
     def handle_replace(self, keyval):
         if self._dict.current():

@@ -234,6 +234,17 @@ class Dictionary:
             return 0 <= "わいうえおっ".find(yomi[0])
         return False
 
+    def smart_yomi_to_kanji_lookup(self, yomi):
+        self.reset()
+        # first check for the exact match
+        if yomi in self._dict:
+            self._yomi = yomi
+            self._cand = self._dict[yomi]
+            self._no = 0
+            self._order = list()
+            return self.current()
+        return(False)
+
     def lookup(self, yomi, pos):
         self.reset()
         # Look for the nearest hyphen.
