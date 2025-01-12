@@ -937,13 +937,14 @@ class EnginePSKK(IBus.Engine):
                         '''
                         if(not self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
                             # following lines to be replaced in the future
-                            logger.debug(f'Case 2 -- committing {self._preedit_string} -- In the future, lookup table should be rendered for this preedit')
                             """
+                            logger.debug(f'Case 2 -- committing {self._preedit_string} -- In the future, lookup table should be rendered for this preedit')
                             self._commit_string(self._preedit_string)
                             self._preedit_string = ''
                             self._update_preedit()
                             """
                             # end of lines to be replaced
+                            logger.debug(f'  => SnadS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSINO mode for conversion')
                             self._typing_mode &= ~MODE_IN_PREEDIT
                             self._typing_mode |= MODE_IN_CONVERSION
                         self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
