@@ -695,9 +695,10 @@ class EnginePSKK(IBus.Engine):
         if(not self.is_enabled()):
             # this block is for direct-mode (no Japanese char)
             return(False)
-        return(self.process_key_event(keyval, keycode, state))
+        #return(self.process_key_event(keyval, keycode, state))
+        return(self.process_key_event(keyval, state))
 
-    def process_key_event(self, keyval, keycode, state):
+    def process_key_event(self, keyval, state):
         """
         This function is the actual implementation of the do_process_key_event()
         This function could be considered as the core part of the IME
