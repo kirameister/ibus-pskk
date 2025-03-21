@@ -48,3 +48,15 @@ setup/Makefile
 setup/Makefile.in
 setup/ibus-setup-pskk.in
 setup/util.py.in
+
+engine/__pycache__/
+engine/org.freedesktop.ibus.engine.pskk.gschema.valid
+engine/org.freedesktop.ibus.engine.pskk.gschema.xml
+engine/pskk.xml
+engine/util.py
+po/ja.gmo
+po/stamp-po
+setup/ibus-setup-pskk
+setup/ibus-setup-pskk.desktop
+setup/util.py
+

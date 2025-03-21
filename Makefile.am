@@ -102,5 +102,14 @@ l:
 	rm -f setup/Makefile.in
 	rm -f setup/ibus-setup-pskk.in
 	rm -f setup/util.py.in
-
+	rm -rf engine/__pycache__
+	rm -f engine/org.freedesktop.ibus.engine.pskk.gschema.valid
+	rm -f engine/org.freedesktop.ibus.engine.pskk.gschema.xml
+	rm -f engine/pskk.xml
+	rm -f engine/util.py
+	rm -f po/ja.gmo
+	rm -f po/stamp-po
+	rm -f setup/ibus-setup-pskk
+	rm -f setup/ibus-setup-pskk.desktop
+	rm -f setup/util.py
 
