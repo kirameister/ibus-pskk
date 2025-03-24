@@ -39,6 +39,11 @@ SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT          = 0x080
 
 
 class TestSimplestStrokes(unittest.TestCase):
+    def _init_for_null(self):
+        self.eq._modkey_status = 0
+        self.eq._typing_mode = 0
+        return()
+
     def setUp(self):
         """Let the _commit_string() and _update_preedit() functions do nothing"""
         # Initialize the object under test after mocking
@@ -47,17 +52,18 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string = MagicMock(return_value=None)
         self.eq._update_preedit = MagicMock(return_value=None)
         self.eq.commit_text = MagicMock(return_value=None)
+        return(None)
 
     def tearDown(self):
         """Nothing to be done by this function"""
         #self.patcher.stop()
         pass
+        return(None)
 
     def test_process_key_event_1(self):
         """ P(a) => 'の' / '' """
         exp_preedit = 'の'
-        self.eq._modkey_status = 0
-        self.eq._typing_mode = 0
+        self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(exp_preedit, self.eq._preedit_string)
         self.assertEqual(self.eq._modkey_status, 0)
@@ -68,8 +74,7 @@ class TestSimplestStrokes(unittest.TestCase):
     def test_process_key_event_2(self):
         """ P(a)R(a) => 'の' / '' """
         exp_preedit = 'の'
-        self.eq._modkey_status = 0
-        self.eq._typing_mode = 0
+        self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(self.eq.process_key_event(IBus.a, RELEASE_ACTION), True)
         self.assertEqual(exp_preedit, self.eq._preedit_string)
@@ -81,8 +86,7 @@ class TestSimplestStrokes(unittest.TestCase):
     def test_process_key_event_3(self):
         """ P(space) => '' / '' (漢直モード) """
         exp_preedit = ''
-        self.eq._modkey_status = 0
-        self.eq._typing_mode = 0
+        self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
         self.assertEqual(exp_preedit, self.eq._preedit_string)
         self.assertEqual(self.eq._modkey_status, STATUS_SPACE)
@@ -94,8 +98,7 @@ class TestSimplestStrokes(unittest.TestCase):
     def test_process_key_event_4(self):
         """ P(space)R(space) => '' / 'space' """
         exp_preedit = ''
-        self.eq._modkey_status = 0
-        self.eq._typing_mode = 0
+        self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
         self.assertEqual(self.eq.process_key_event(IBus.space, RELEASE_ACTION), True)
         self.assertEqual(exp_preedit, self.eq._preedit_string)
