@@ -1,4 +1,5 @@
 docs/*#
+engine/gschemas.compiled
 
 m4
 autom4te.cache
