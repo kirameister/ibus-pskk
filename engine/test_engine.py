@@ -46,7 +46,7 @@ class TestSimplestStrokes(unittest.TestCase):
         return()
 
     def setUp(self):
-        """Let the _commit_string() and _update_preedit() functions do nothing"""
+        '''Let the _commit_string() and _update_preedit() functions do nothing'''
         # Initialize the object under test after mocking
         self.eq = engine.EnginePSKK()
         # Mock _commit_string and _update_preedit to avoid real execution
@@ -56,13 +56,13 @@ class TestSimplestStrokes(unittest.TestCase):
         return(None)
 
     def tearDown(self):
-        """Nothing to be done by this function"""
+        '''Nothing to be done by this function'''
         #self.patcher.stop()
         pass
         return(None)
 
     def test_S0_1(self):
-        """ +a => 'の' / '' """
+        ''' +a => "の" / "" '''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, 'の')
@@ -72,7 +72,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string.assert_called()
 
     def test_S0_2(self):
-        """ +a -a => 'の' / '' """
+        ''' +a -a => "の" / "" '''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(self.eq.process_key_event(IBus.a, RELEASE_ACTION), True)
@@ -83,7 +83,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string.assert_called()
 
     def test_S0_3(self):
-        """ +space -space => '' / 'space' """
+        ''' +space -space => "" / "space" '''
         exp_preedit = ''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
@@ -96,7 +96,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string.assert_not_called()
 
     def test_S0_4(self):
-        """ +a +k -a -k => 'ほ' / '' """
+        ''' +a +k -a -k => "ほ" / "" '''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, 'の')
@@ -113,7 +113,7 @@ class TestSimplestStrokes(unittest.TestCase):
         assert self.eq._commit_string.call_args_list == [call(''), call('ほ')]
 
     def test_S0_5(self):
-        """ +z +d +l -z -d -l => '→' / '' """
+        ''' +z +d +l -z -d -l => "→" / "" '''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.z, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, 'す')
@@ -132,7 +132,7 @@ class TestSimplestStrokes(unittest.TestCase):
         assert self.eq._commit_string.call_args_list == [call(''), call(''), call('→')]
 
     def test_S0toS1_1(self):
-        """ +space => '' / '' (漢直モード) """
+        ''' +space => "" / "" (漢直モード) '''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, '')
