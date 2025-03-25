@@ -62,7 +62,7 @@ class TestSimplestStrokes(unittest.TestCase):
         return(None)
 
     def test_S0_1(self):
-        """ P(a) => 'の' / '' """
+        """ +a => 'の' / '' """
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, 'の')
@@ -72,7 +72,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string.assert_called()
 
     def test_S0_2(self):
-        """ P(a)R(a) => 'の' / '' """
+        """ +a -a => 'の' / '' """
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(self.eq.process_key_event(IBus.a, RELEASE_ACTION), True)
@@ -83,7 +83,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string.assert_called()
 
     def test_S0_3(self):
-        """ P(space)R(space) => '' / 'space' """
+        """ +space -space => '' / 'space' """
         exp_preedit = ''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
@@ -96,7 +96,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string.assert_not_called()
 
     def test_S0_4(self):
-        """ P(a)P(k)R(a)R(k) => 'ほ' / '' """
+        """ +a +k -a -k => 'ほ' / '' """
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, 'の')
@@ -113,7 +113,7 @@ class TestSimplestStrokes(unittest.TestCase):
         assert self.eq._commit_string.call_args_list == [call(''), call('ほ')]
 
     def test_S0_5(self):
-        """ P(z)P(d)P(z)R(z)R(d)R(l) => '→' / '' """
+        """ +z +d +l -z -d -l => '→' / '' """
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.z, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, 'す')
@@ -132,7 +132,7 @@ class TestSimplestStrokes(unittest.TestCase):
         assert self.eq._commit_string.call_args_list == [call(''), call(''), call('→')]
 
     def test_S0toS1_1(self):
-        """ P(space) => '' / '' (漢直モード) """
+        """ +space => '' / '' (漢直モード) """
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, '')
