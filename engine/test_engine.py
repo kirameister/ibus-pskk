@@ -92,7 +92,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.assertEqual(self.eq._modkey_status, 0)
         self.assertEqual(self.eq._typing_mode, SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT)
         self.eq.commit_text.assert_called()
-        self.eq._update_preedit.assert_not_called()  # Fails if never called
+        self.eq._update_preedit.assert_not_called()
         self.eq._commit_string.assert_not_called()
 
     def test_S0_4(self):
@@ -133,10 +133,9 @@ class TestSimplestStrokes(unittest.TestCase):
 
     def test_S0toS1_1(self):
         """ P(space) => '' / '' (漢直モード) """
-        exp_preedit = ''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
-        self.assertEqual(exp_preedit, self.eq._preedit_string)
+        self.assertEqual(self.eq._preedit_string, '')
         self.assertEqual(self.eq._modkey_status, STATUS_SPACE)
         self.assertEqual(self.eq._typing_mode, MODE_IN_PREEDIT | SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT)
         self.eq.commit_text.assert_not_called()
