@@ -83,17 +83,17 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string.assert_called()
 
     def test_S0_3(self):
-        ''' +space -space => "space" / "" '''
-        exp_preedit = ''
+        ''' +space -space => "" / "space" '''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
         self.assertEqual(self.eq.process_key_event(IBus.space, RELEASE_ACTION), True)
-        self.assertEqual(exp_preedit, self.eq._preedit_string)
+        self.assertEqual(self.eq._preedit_string, '')
         self.assertEqual(self.eq._modkey_status, 0)
         self.assertEqual(self.eq._typing_mode, SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT)
         self.eq.commit_text.assert_called()
         self.eq._update_preedit.assert_not_called()
         self.eq._commit_string.assert_not_called()
+        assert self.eq.commit_text.call_args_list == [call(IBus.Text.new_from_string(' '))]
 
     def test_S0_4(self):
         ''' +a +k -a -k => "ほ" / "" '''
@@ -151,7 +151,7 @@ class TestSimplestStrokes(unittest.TestCase):
         ''' +return -return => "NEW_LINE" / "" '''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.Return, PRESS_ACTION), False)
-        self.assertEqual(self.eq.process_key_event(IBus.Return, RELEASE_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.Return, RELEASE_ACTION), False)
         self.assertEqual(self.eq._preedit_string, '')
         self.assertEqual(self.eq._modkey_status, 0)
         self.assertEqual(self.eq._typing_mode, 0)
@@ -168,6 +168,19 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._update_preedit.assert_not_called()
         self.eq._commit_string.assert_not_called()
 
+    def test_S1_0(self):
+        ''' +space +a -space -a +s -s => "のと" / "" '''
+        self._init_for_null()
+        self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
+        self.assertEqual(self.eq._typing_mode, MODE_IN_PREEDIT | SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT)
+        self.assertEqual(self.eq.process_key_event(IBus.space, RELEASE_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.a, RELEASE_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.s, PRESS_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.s, RELEASE_ACTION), True)
+        self.assertEqual(self.eq._preedit_string, 'のと')
+        self.assertEqual(self.eq._typing_mode, MODE_IN_PREEDIT)
+        self.eq._commit_string.assert_not_called()
 
 
 
