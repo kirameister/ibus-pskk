@@ -62,7 +62,7 @@ class TestSimplestStrokes(unittest.TestCase):
         return(None)
 
     def test_S0_1(self):
-        ''' +a => "の" / "" '''
+        ''' +a => "" / "の" '''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, 'の')
@@ -72,7 +72,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string.assert_called()
 
     def test_S0_2(self):
-        ''' +a -a => "の" / "" '''
+        ''' +a -a => "" / "の" '''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
         self.assertEqual(self.eq.process_key_event(IBus.a, RELEASE_ACTION), True)
@@ -83,7 +83,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq._commit_string.assert_called()
 
     def test_S0_3(self):
-        ''' +space -space => "" / "space" '''
+        ''' +space -space => "space" / "" '''
         exp_preedit = ''
         self._init_for_null()
         self.assertEqual(self.eq.process_key_event(IBus.space, PRESS_ACTION), True)
@@ -120,16 +120,42 @@ class TestSimplestStrokes(unittest.TestCase):
         self.assertEqual(self.eq.process_key_event(IBus.d, PRESS_ACTION), True)
         self.assertEqual(self.eq._preedit_string, 'すか')
         self.assertEqual(self.eq.process_key_event(IBus.l, PRESS_ACTION), True)
-        self.assertEqual(self.eq._preedit_string, '')
         self.assertEqual(self.eq.process_key_event(IBus.z, RELEASE_ACTION), True)
         self.assertEqual(self.eq.process_key_event(IBus.d, RELEASE_ACTION), True)
         self.assertEqual(self.eq.process_key_event(IBus.l, RELEASE_ACTION), True)
+        self.assertEqual(self.eq._preedit_string, '')
         self.assertEqual(self.eq._modkey_status, 0)
         self.assertEqual(self.eq._typing_mode, 0)
         self.eq._update_preedit.assert_called()
         self.eq._commit_string.assert_called()
         self.eq.commit_text.assert_not_called()
         assert self.eq._commit_string.call_args_list == [call(''), call(''), call('→')]
+
+    def test_S0_6(self):
+        ''' +z +d -z -d +l -l  => "すか" / "し" '''
+        self._init_for_null()
+        self.assertEqual(self.eq.process_key_event(IBus.z, PRESS_ACTION), True)
+        self.assertEqual(self.eq._preedit_string, 'す')
+        self.assertEqual(self.eq.process_key_event(IBus.d, PRESS_ACTION), True)
+        self.assertEqual(self.eq._preedit_string, 'すか')
+        self.assertEqual(self.eq.process_key_event(IBus.z, RELEASE_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.d, RELEASE_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.l, PRESS_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.l, RELEASE_ACTION), True)
+        self.assertEqual(self.eq._preedit_string, 'し')
+        self.assertEqual(self.eq._modkey_status, 0)
+        self.assertEqual(self.eq._typing_mode, 0)
+        assert self.eq._commit_string.call_args_list == [call(''), call(''), call('すか')] # "すか" is pushed out to committed as /l/ is given.
+
+    def test_S0_7(self):
+        ''' +return -return => "NEW_LINE" / "" '''
+        self._init_for_null()
+        self.assertEqual(self.eq.process_key_event(IBus.Return, PRESS_ACTION), False)
+        self.assertEqual(self.eq.process_key_event(IBus.Return, RELEASE_ACTION), True)
+        self.assertEqual(self.eq._preedit_string, '')
+        self.assertEqual(self.eq._modkey_status, 0)
+        self.assertEqual(self.eq._typing_mode, 0)
+        assert self.eq._commit_string.call_args_list == [call('')]
 
     def test_S0toS1_1(self):
         ''' +space => "" / "" (漢直モード) '''
