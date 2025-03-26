@@ -430,7 +430,7 @@ class EnginePSKK(IBus.Engine):
             else:
                 list_values["simul_limit_ms"] = 0
             self._layout[input_str] = list_values
-            logger.debug(f'_load_layout -- layout element added {input_str} => {list_values}')
+            #logger.debug(f'_load_layout -- layout element added {input_str} => {list_values}')
             if(input_len >= 2):
                 self._simul_candidate_char_set.add(input_str[:-1])
         logger.debug(f'_load_layout -- _max_simul_limit_ms: {self._max_simul_limit_ms}')
@@ -800,8 +800,8 @@ class EnginePSKK(IBus.Engine):
                     logger.debug('  => "Return" pressed => commit preedit and return False')
                     return(False)
                 else:
-                    logger.debug('  => "Return" released => do nothing')
-                    return(True)
+                    logger.debug('  => "Return" released => return False')
+                    return(False)
             # SandS
             if(keyval == IBus.space):
                 if(is_press_action): # => key-pressed, so it's potentially about going for PREEDIT (possibly FORCED_PREEDIT, but we'll figure that out in next strokes..)
@@ -1364,7 +1364,7 @@ class EnginePSKK(IBus.Engine):
         This method updates the preedit text with the given candidate string. The preedit text is the text that is currently being composed by the user, and the candidate string is a suggestion for what the user might want to type next. If the candidate string is empty, the preedit text is cleared.
         If the input candidate is not a string, a TypeError is raised.
         """
-        logger.debug(f'_update_preedit -- previous_text: {self._previous_text}, cand: {cand}, preedit: {self._preedit_string}')
+        logger.debug(f'_update_preedit -- previous_text: "{self._previous_text}", cand: "{cand}", preedit: "{self._preedit_string}"')
         if(not isinstance(cand, str)):
             raise TypeError("The `cand` parameter must be a str value.")
         previous_text = self._previous_text if self._surrounding != SURROUNDING_COMMITTED else ''
@@ -1373,7 +1373,8 @@ class EnginePSKK(IBus.Engine):
         cand_len = len(cand)
         preedit_len = len(self._preedit_string)
         text_len = previous_len + cand_len + preedit_len
-        attrs = IBus.AttrList() if 0 < text_len else None
+        attrs = IBus.AttrList() if 0 < text_len else []
+        logger.debug(f'_update_preedit -- previous_len: {previous_len}, cand_len: {cand_len}, preedit_len: {preedit_len}')
         if 0 < previous_len:
             attrs.append(IBus.Attribute.new(IBus.AttrType.UNDERLINE, IBus.AttrUnderline.SINGLE, 0, previous_len))
         if 0 < cand_len:
@@ -1398,6 +1399,7 @@ class EnginePSKK(IBus.Engine):
         self._update_lookup_table()
 
     def _update_lookup_table(self):
+        logger.debug('_update_lookup_table')
         if self.is_enabled():
             visible = 0 < self._lookup_table.get_number_of_candidates()
             self.update_lookup_table(self._lookup_table, visible)
