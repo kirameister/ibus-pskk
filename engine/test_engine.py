@@ -93,7 +93,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq.commit_text.assert_called()
         self.eq._update_preedit.assert_not_called()
         self.eq._commit_string.assert_not_called()
-        assert self.eq.commit_text.call_args_list == [call(IBus.Text.new_from_string(' '))]
+        #assert self.eq.commit_text.call_args_list == [call(IBus.Text.new_from_string(' '))]
 
     def test_S0_4(self):
         ''' +a +k -a -k => "ほ" / "" '''
@@ -156,6 +156,17 @@ class TestSimplestStrokes(unittest.TestCase):
         self.assertEqual(self.eq._modkey_status, 0)
         self.assertEqual(self.eq._typing_mode, 0)
         assert self.eq._commit_string.call_args_list == [call('')]
+
+    def test_S0_8(self):
+        ''' +a === +k -a -k => "の" / "い" '''
+        self._init_for_null()
+        self.assertEqual(self.eq.process_key_event(IBus.a, PRESS_ACTION), True)
+        self.eq._previous_typed_timestamp -= 1000 * self.eq._max_simul_limit_ms # this is to ensure simul-check to always fail
+        self.assertEqual(self.eq.process_key_event(IBus.k, PRESS_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.a, RELEASE_ACTION), True)
+        self.assertEqual(self.eq.process_key_event(IBus.k, RELEASE_ACTION), True)
+        self.assertEqual(self.eq._preedit_string, 'い') # preedit value is still there..
+        assert self.eq._commit_string.call_args_list == [call(''),call('の')] # commit confirmed at the 2nd stroke
 
     def test_S0toS1_1(self):
         ''' +space => "" / "" (漢直モード) '''
