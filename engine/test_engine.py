@@ -39,7 +39,8 @@ MODE_IN_FORCED_CONVERSION                      = 0x040
 SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT          = 0x080
 
 
-class TestSimplestStrokes(unittest.TestCase):
+class Test_on_S0_mode(unittest.TestCase):
+    # {{{
     def _init_for_null(self):
         """
         This function is to initiatlize the relevant class variables 
@@ -182,6 +183,35 @@ class TestSimplestStrokes(unittest.TestCase):
         self.eq.commit_text.assert_not_called()
         self.eq._update_preedit.assert_not_called()
         self.eq._commit_string.assert_not_called()
+    # }}}
+
+
+class Test_on_S1_mode(unittest.TestCase):
+    # {{{
+    def _init_for_null(self):
+        """
+        This function is to initiatlize the relevant class variables 
+        for an UT to get started with S0 mode
+        """
+        self.eq._modkey_status = 0
+        self.eq._typing_mode = 0
+        return()
+
+    def setUp(self):
+        '''Let the _commit_string() and _update_preedit() functions do nothing'''
+        # Initialize the object under test after mocking
+        self.eq = engine.EnginePSKK()
+        # Mock _commit_string and _update_preedit to avoid real execution
+        self.eq._commit_string = MagicMock(return_value=None)
+        self.eq._update_preedit = MagicMock(return_value=None)
+        self.eq.commit_text = MagicMock(return_value=None)
+        return(None)
+
+    def tearDown(self):
+        '''Nothing to be done by this function'''
+        #self.patcher.stop()
+        pass
+        return(None)
 
     def test_S1_0(self):
         ''' +space +a -space -a +s -s => "のと" / "" '''
@@ -196,7 +226,7 @@ class TestSimplestStrokes(unittest.TestCase):
         self.assertEqual(self.eq._preedit_string, 'のと')
         self.assertEqual(self.eq._typing_mode, MODE_IN_PREEDIT)
         self.eq._commit_string.assert_not_called()
-
+    # }}}
 
 
 if(__name__ == '__main__'):
