@@ -41,6 +41,10 @@ SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT          = 0x080
 
 class TestSimplestStrokes(unittest.TestCase):
     def _init_for_null(self):
+        """
+        This function is to initiatlize the relevant class variables 
+        for an UT to get started with S0 mode
+        """
         self.eq._modkey_status = 0
         self.eq._typing_mode = 0
         return()
