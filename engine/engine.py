@@ -62,8 +62,9 @@ STATUS_SUPER_L      = 0x080
 STATUS_SUPER_R      = 0x100
 STATUS_SHIFTS       = STATUS_SHIFT_L | STATUS_SHIFT_R
 STATUS_CONTROLS     = STATUS_CONTROL_L | STATUS_CONTROL_R
+STATUS_ALTS         = STATUS_ALT_L | STATUS_ALT_R
 STATUS_SUPERS       = STATUS_SUPER_L | STATUS_SUPER_R
-STATUS_MODIFIER     = STATUS_SHIFTS  | STATUS_CONTROLS | STATUS_ALT_L | STATUS_ALT_R | STATUS_SPACE | STATUS_SUPERS
+STATUS_MODIFIER     = STATUS_SHIFTS  | STATUS_CONTROLS | STATUS_ALTS | STATUS_SPACE | STATUS_SUPERS
 
 # Japanese typing mode segment
 MODE_FORCED_PREEDIT_POSSIBLE                   = 0x001
@@ -734,23 +735,19 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status |= STATUS_CONTROLS
             else:
                 self._modkey_status &= ~STATUS_CONTROLS
-        if(keyval == IBus.Alt_L):
+        if(keyval == IBus.Super_L or keyval == IBus.Super_R):
             if(is_press_action):
-                self._modkey_status |= STATUS_ALT_L
+                self._modkey_status |= STATUS_SUPERS
             else:
-                self._modkey_status &= ~STATUS_ALT_L
-        if(keyval == IBus.Alt_R):
+                self._modkey_status &= ~STATUS_SUPERS
+        # at this point, there is no particular reason to treat Alt_L and Alt_R differently (but this may change in the future)
+        if(keyval == IBus.Alt_L or keyval == IBus.Alt_R):
             if(is_press_action):
-                self._modkey_status |= STATUS_ALT_R
+                self._modkey_status |= STATUS_ALTS
             else:
-                self._modkey_status &= ~STATUS_ALT_R
+                self._modkey_status &= ~STATUS_ALTS
 
         # Filter out the irrelevant combo keys with Ctrl
-        if(keyval == IBus.Control_L or keyval == IBus.Control_R):
-            if(is_press_action):
-                self._modkey_status |= STATUS_CONTROLS
-            else:
-                self._modkey_status &= ~STATUS_CONTROLS
         if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j','k','l',';','i','o')):
             self._typing_mode = 0
             self._commit_string(self._preedit_string)
@@ -762,6 +759,9 @@ class EnginePSKK(IBus.Engine):
             return(False)
         # Filter out Ctrl+(io) if it is not in the CONVERSION mode
         if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('i','o') and not(self._typing_mode & (MODE_IN_CONVERSION|MODE_IN_FORCED_CONVERSION))):
+            return(False)
+        # Filter out all the key-combos with Super key
+        if(self._modkey_status & STATUS_SUPERS):
             return(False)
 
         # forced preedit mode - it is only about entering to the forced mode
