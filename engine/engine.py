@@ -185,6 +185,7 @@ class EnginePSKK(IBus.Engine):
 
         self._origin_timestamp = time.perf_counter()
         self._previous_typed_timestamp = time.perf_counter()
+        self._stroke_timing_diff = time.perf_counter()
         # SandS vars
         self._modkey_status = 0 # This is supposed to be bitwise status
         self._typing_mode = 0 # This is to indicate which state the stroke is supposed to be
@@ -438,6 +439,7 @@ class EnginePSKK(IBus.Engine):
             if(input_len >= 2):
                 self._simul_candidate_char_set.add(input_str[:-1])
         logger.debug(f'_load_layout -- _max_simul_limit_ms: {self._max_simul_limit_ms}')
+        self._stroke_timing_diff = self._max_simul_limit_ms
         if("sands_keys" in layout_data):
             # Note that element/s of this set is str, not keyval
             self._sands_key_set = set(layout_data['sands_keys'])
@@ -700,9 +702,12 @@ class EnginePSKK(IBus.Engine):
             # this block is for direct-mode (no Japanese char)
             return(False)
         #return(self.process_key_event(keyval, keycode, state))
+        # At this point, the simul-timinng diff is taken (to hopefully make it simple)
+        current_typed_time = time.perf_counter()
+        self._stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         return(self.process_key_event(keyval, state))
 
-    def process_key_event_simple_type(self, keyval, state, is_press_action):
+    def process_key_event_simple_type(self, keyval, is_press_action):
         """
         This function is for handling a simplistic strokes of keys where there is no conversion required. 
         """
@@ -758,6 +763,146 @@ class EnginePSKK(IBus.Engine):
             return(False)
         #return(False) # this return statement should never be reached, but anyhow..
 
+    def process_key_event_in_preedit(self, keyval, is_press_action):
+        """
+        """
+        logger.debug('process_key_event_in_preedit')
+        # SandS key release without preedit => enter space and go back to S(0)
+        if(keyval == IBus.space and self._preedit_string == ""):
+            if(is_press_action):
+                logger.debug('  => space pressed => do nothing')
+                return(True) # actually this should never happen
+            else:
+                logger.debug(f'Case 2 -- space released _typing_mode: {bin(self._typing_mode)}')
+                logger.debug(f'Case 2 -- space released MODE_JUST_FINISHED_KANCHOKU: {bin(MODE_JUST_FINISHED_KANCHOKU)}')
+                if(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU):
+                    logger.debug('Case 2 -- space released with empty preedit and MODE_JUST_FINISHED_KANCHOKU => move back to S(0)')
+                    self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
+                    self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                    self._typing_mode &= ~MODE_IN_PREEDIT
+                    logger.debug('  => space released with MODE_JUST_FINISHED_KANCHOKU => -(MODE_JUST_FINISHED_KANCHOKU,SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT) => move back to S(0)')
+                    return(True)
+                #if(self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
+                #    logger.debug('Case 2 -- space released with empty preedit and SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => turn-off SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT and stay in S(1)')
+                #    self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                #    logger.debug('  => space released with SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => -SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT')
+                #    return(True)
+                else:
+                    self.commit_text(IBus.Text.new_from_string(' '))
+                    self._typing_mode &= ~MODE_IN_PREEDIT
+                    logger.debug('  => space released => Commit space and -MODE_IN_PREEDIT')
+                    return(True)
+        # Return key => commit the preedit and return to S0
+        if(keyval == IBus.Return):
+            if(is_press_action):
+                self._commit_string(self._preedit_string)
+                self._preedit_string = ''
+                self._update_preedit()
+                self._typing_mode &= ~MODE_IN_PREEDIT
+                return(True)
+            else:
+                return(True)
+        # offset simul_limit_ms for key-release on normal keys and drop the signal
+        if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
+            self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
+            return(True)
+        # Check for 漢直 -- please note that this is will transition to S(0) if succeeds
+        if(self.is_applicable_key_for_kanchoku(keyval) and self._modkey_status & STATUS_SPACE):
+            if(self._first_kanchoku_stroke == ""):
+                # at this point, it's only about internally storing a key value.
+                # the rest of the process for this key-stroke is handled in following block
+                self._first_kanchoku_stroke = chr(keyval)
+                logger.debug('First 漢直 key-stroke: ' + self._first_kanchoku_stroke)
+            else:
+                # we'll need to check if the stroke was actually meant as a simultaneous strokes
+                if(not self._is_simul_condition_met(keyval, self._preedit_string, self._stroke_timing_diff)):
+                    logger.debug('漢直 recognized: ' + self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)])
+                    # flush the preedit before committing the Kanji => This is because we're in S1
+                    self._preedit_string = ""
+                    self._update_preedit()
+                    self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
+                    self._first_kanchoku_stroke = ""
+                    self._typing_mode |= MODE_JUST_FINISHED_KANCHOKU # you need to ensure to reset this switch
+                    #self._typing_mode &= ~MODE_IN_PREEDIT # The mode must remain the same at this point because SnadS is still being pressed
+                    return(True)
+        # reset 漢直
+        if(keyval == IBus.space):
+            # any action with space will reset the kanchoku stroke
+            self._first_kanchoku_stroke = ""
+        if(self._modkey_status & STATUS_SPACE and not self.is_applicable_key_for_kanchoku(keyval)):
+            # if the second stroke is not applicable for kanchoku, reset the 1st one.
+            self._first_kanchoku_stroke = ""
+        # SandS -- This key-press/release has multiple meanings depending on context
+        if(keyval == IBus.space):
+            if(self._preedit_string == ""):
+                logger.debug('UPPS -- Something unpredicted happened!!')
+                # this block is actually already taken care at the beginning, but just to be sure..
+                if(is_press_action):
+                    return(True)
+                else: # FIXME => At this point, preedit should not be empty, so we start conversion
+                    self.commit_text(IBus.Text.new_from_string(' '))
+                    self._typing_mode &= ~MODE_IN_PREEDIT
+                    return(True)
+            else: # non-empty preedit
+                if(is_press_action):
+                    # This press action itself does not mean anything in this mode
+                    return(True)
+                else:
+                    # e.g., Space.press => /a/.press => /a/.release => Space.release <= NOW
+                    # this would mean transition to the CONVERSION mode
+                    # FIXME -- for now, I'm only comitting the preedit; it should be in conversion mode in the future
+                    '''
+                    self._typing_mode &= ~MODE_IN_PREEDIT
+                    self._typing_mode |= MODE_IN_CONVERSION
+                    return(self.handle_replace(keyval))
+                    '''
+                    if(not self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
+                        # following lines to be replaced in the future
+                        """
+                        logger.debug(f'Case 2 -- committing {self._preedit_string} -- In the future, lookup table should be rendered for this preedit')
+                        self._commit_string(self._preedit_string)
+                        self._preedit_string = ''
+                        self._update_preedit()
+                        """
+                        # end of lines to be replaced
+                        logger.debug(f'  => SandS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSINO mode for conversion')
+                        self._typing_mode &= ~MODE_IN_PREEDIT
+                        self._typing_mode |= MODE_IN_CONVERSION
+                    self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                    return(True)
+        # re-set the MODE_FORCED_PREEDIT_POSSIBLE if other key is typed
+        if(chr(keyval) != self._layout_data['conversion_trigger_key'] and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
+            self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
+        # to type Hiragana..
+        if(self.is_applicable_japanese_stroke(keyval)):
+            if(self._modkey_status & STATUS_SPACE and not self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
+                # key-pressed while SandS is pressed (and this press is not part of incoming transition to S(1))
+                self.preedit_to_convert_commit()
+                # start a new 文節
+                # note that the mode remains the same as MODE_IN_PREEDIT
+                yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
+                self._preedit_string = yomi_to_preedit + preedit_after_yomi
+                self._update_preedit()
+                self._typing_mode |= SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                return(True)
+            if(len(self._preedit_string)<=2):
+                yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
+                self._preedit_string = yomi_to_preedit + preedit_after_yomi
+                self._update_preedit()
+                return(True)
+            else:
+                reserved_preedit = self._preedit_string[:-2]
+                yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string[-2:], keyval)
+                self._preedit_string = reserved_preedit + yomi_to_preedit + preedit_after_yomi
+                self._update_preedit()
+                return(True)
+        else:
+            # commit the string to be on a safe side.
+            self._commit_string(self._preedit_string)
+            self._preedit_string = ''
+            self._update_preedit()
+            return(False)
+
     def process_key_event(self, keyval, state):
         """
         This function is the actual implementation of the do_process_key_event()
@@ -767,8 +912,6 @@ class EnginePSKK(IBus.Engine):
         """
         #logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
         #logger.debug(f'process_key_event -- _typing_mode: {bin(self._typing_mode)}')
-        current_typed_time = time.perf_counter()
-        stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
         if(is_press_action):
             logger.debug(f'process_key_event -- press("{IBus.keyval_name(keyval)}")     _typing_mode: {bin(self._typing_mode)}')
@@ -855,148 +998,14 @@ class EnginePSKK(IBus.Engine):
         ## Case 1 - Very ordinary Hiragana typing (S0)
         if(not(self._typing_mode & (MODE_IN_FORCED_PREEDIT|MODE_IN_PREEDIT))):
             logger.debug('Case 1 -- S(0)')
-            return(self.process_key_event_simple_type(keyval, state, is_press_action))
+            return(self.process_key_event_simple_type(keyval, is_press_action))
 
         ## Case 2 - In normal preedit (S1)
         ## -- please note transition to forced preedit mode is taken care above
         ## -- please also note that this mode could return to S0 via 漢直
         if(self._typing_mode & MODE_IN_PREEDIT):
             logger.debug('Case 2 -- S(1)')
-            # SandS key release without preedit => enter space and go back to S(0)
-            if(keyval == IBus.space and self._preedit_string == ""):
-                if(is_press_action):
-                    logger.debug('  => space pressed => do nothing')
-                    return(True) # actually this should never happen
-                else:
-                    logger.debug(f'Case 2 -- space released _typing_mode: {bin(self._typing_mode)}')
-                    logger.debug(f'Case 2 -- space released MODE_JUST_FINISHED_KANCHOKU: {bin(MODE_JUST_FINISHED_KANCHOKU)}')
-                    if(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU):
-                        logger.debug('Case 2 -- space released with empty preedit and MODE_JUST_FINISHED_KANCHOKU => move back to S(0)')
-                        self._typing_mode &= ~MODE_JUST_FINISHED_KANCHOKU
-                        self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
-                        self._typing_mode &= ~MODE_IN_PREEDIT
-                        logger.debug('  => space released with MODE_JUST_FINISHED_KANCHOKU => -(MODE_JUST_FINISHED_KANCHOKU,SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT) => move back to S(0)')
-                        return(True)
-                    #if(self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
-                    #    logger.debug('Case 2 -- space released with empty preedit and SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => turn-off SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT and stay in S(1)')
-                    #    self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
-                    #    logger.debug('  => space released with SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT => -SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT')
-                    #    return(True)
-                    else:
-                        self.commit_text(IBus.Text.new_from_string(' '))
-                        self._typing_mode &= ~MODE_IN_PREEDIT
-                        logger.debug('  => space released => Commit space and -MODE_IN_PREEDIT')
-                        return(True)
-            # Return key => commit the preedit and return to S0
-            if(keyval == IBus.Return):
-                if(is_press_action):
-                    self._commit_string(self._preedit_string)
-                    self._preedit_string = ''
-                    self._update_preedit()
-                    self._typing_mode &= ~MODE_IN_PREEDIT
-                    return(True)
-                else:
-                    return(True)
-            # offset simul_limit_ms for key-release on normal keys and drop the signal
-            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
-                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
-                return(True)
-            # Check for 漢直 -- please note that this is will transition to S(0) if succeeds
-            if(self.is_applicable_key_for_kanchoku(keyval) and self._modkey_status & STATUS_SPACE):
-                if(self._first_kanchoku_stroke == ""):
-                    # at this point, it's only about internally storing a key value.
-                    # the rest of the process for this key-stroke is handled in following block
-                    self._first_kanchoku_stroke = chr(keyval)
-                    logger.debug('First 漢直 key-stroke: ' + self._first_kanchoku_stroke)
-                else:
-                    # we'll need to check if the stroke was actually meant as a simultaneous strokes
-                    if(not self._is_simul_condition_met(keyval, self._preedit_string, stroke_timing_diff)):
-                        logger.debug('漢直 recognized: ' + self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)])
-                        # flush the preedit before committing the Kanji => This is because we're in S1
-                        self._preedit_string = ""
-                        self._update_preedit()
-                        self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
-                        self._first_kanchoku_stroke = ""
-                        self._typing_mode |= MODE_JUST_FINISHED_KANCHOKU # you need to ensure to reset this switch
-                        #self._typing_mode &= ~MODE_IN_PREEDIT # The mode must remain the same at this point because SnadS is still being pressed
-                        return(True)
-            # reset 漢直
-            if(keyval == IBus.space):
-                # any action with space will reset the kanchoku stroke
-                self._first_kanchoku_stroke = ""
-            if(self._modkey_status & STATUS_SPACE and not self.is_applicable_key_for_kanchoku(keyval)):
-                # if the second stroke is not applicable for kanchoku, reset the 1st one.
-                self._first_kanchoku_stroke = ""
-            # SandS -- This key-press/release has multiple meanings depending on context
-            if(keyval == IBus.space):
-                if(self._preedit_string == ""):
-                    logger.debug('UPPS -- Something unpredicted happened!!')
-                    # this block is actually already taken care at the beginning, but just to be sure..
-                    if(is_press_action):
-                        return(True)
-                    else: # FIXME => At this point, preedit should not be empty, so we start conversion
-                        self.commit_text(IBus.Text.new_from_string(' '))
-                        self._typing_mode &= ~MODE_IN_PREEDIT
-                        return(True)
-                else: # non-empty preedit
-                    if(is_press_action):
-                        # This press action itself does not mean anything in this mode
-                        return(True)
-                    else:
-                        # e.g., Space.press => /a/.press => /a/.release => Space.release <= NOW
-                        # this would mean transition to the CONVERSION mode
-                        # FIXME -- for now, I'm only comitting the preedit; it should be in conversion mode in the future
-                        '''
-                        self._typing_mode &= ~MODE_IN_PREEDIT
-                        self._typing_mode |= MODE_IN_CONVERSION
-                        return(self.handle_replace(keyval))
-                        '''
-                        if(not self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
-                            # following lines to be replaced in the future
-                            """
-                            logger.debug(f'Case 2 -- committing {self._preedit_string} -- In the future, lookup table should be rendered for this preedit')
-                            self._commit_string(self._preedit_string)
-                            self._preedit_string = ''
-                            self._update_preedit()
-                            """
-                            # end of lines to be replaced
-                            logger.debug(f'  => SandS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSINO mode for conversion')
-                            self._typing_mode &= ~MODE_IN_PREEDIT
-                            self._typing_mode |= MODE_IN_CONVERSION
-                        self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
-                        return(True)
-            # re-set the MODE_FORCED_PREEDIT_POSSIBLE if other key is typed
-            if(chr(keyval) != self._layout_data['conversion_trigger_key'] and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
-                self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
-            # to type Hiragana..
-            if(self.is_applicable_japanese_stroke(keyval)):
-                if(self._modkey_status & STATUS_SPACE and not self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT):
-                    # key-pressed while SandS is pressed (and this press is not part of incoming transition to S(1))
-                    self.preedit_to_convert_commit()
-                    # start a new 文節
-                    # note that the mode remains the same as MODE_IN_PREEDIT
-                    yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
-                    self._preedit_string = yomi_to_preedit + preedit_after_yomi
-                    self._update_preedit()
-                    self._typing_mode |= SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
-                    return(True)
-                if(len(self._preedit_string)<=2):
-                    yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string, keyval)
-                    self._preedit_string = yomi_to_preedit + preedit_after_yomi
-                    self._update_preedit()
-                    return(True)
-                else:
-                    reserved_preedit = self._preedit_string[:-2]
-                    yomi_to_preedit, preedit_after_yomi = self._handle_input_to_yomi(self._preedit_string[-2:], keyval)
-                    self._preedit_string = reserved_preedit + yomi_to_preedit + preedit_after_yomi
-                    self._update_preedit()
-                    return(True)
-            else:
-                # commit the string to be on a safe side.
-                self._commit_string(self._preedit_string)
-                self._preedit_string = ''
-                self._update_preedit()
-                return(False)
+            return(self.process_key_event_in_preedit(keyval, is_press_action))
 
         ## Case 3 - In Forced preedit (S3)
         if(self._typing_mode & MODE_IN_FORCED_PREEDIT):
