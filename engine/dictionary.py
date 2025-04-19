@@ -62,7 +62,7 @@ class Dictionary:
             my_path = os.path.join(util.get_user_configdir(), user)
             logger.info(f'engine/dictionary.py init -- my_path: {my_path}')
             self._load_dict(self._dict, my_path, 'a+')
-            logger.debug(self._dict)
+            #logger.debug(self._dict)
 
         base = os.path.basename(path)
         if base:

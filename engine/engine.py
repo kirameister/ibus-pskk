@@ -331,7 +331,7 @@ class EnginePSKK(IBus.Engine):
         self._config = util.get_config_data()
         self._logging_level = self._load_logging_level(self._config)
         logger.debug('config.json loaded')
-        logger.debug(self._config)
+        #logger.debug(self._config)
         # loading layout should be part of (re-)loading config
         self._layout_data = self._load_layout()
         self._kanchoku_layout = self._load_kanchoku_layout()
@@ -948,7 +948,7 @@ class EnginePSKK(IBus.Engine):
                             self._update_preedit()
                             """
                             # end of lines to be replaced
-                            logger.debug(f'  => SnadS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSINO mode for conversion')
+                            logger.debug(f'  => SandS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSINO mode for conversion')
                             self._typing_mode &= ~MODE_IN_PREEDIT
                             self._typing_mode |= MODE_IN_CONVERSION
                         self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
