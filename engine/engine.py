@@ -875,9 +875,11 @@ class EnginePSKK(IBus.Engine):
                         self._update_preedit()
                         """
                         # end of lines to be replaced
-                        logger.debug(f'  => SandS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSION mode for conversion')
+                        logger.debug('  => SandS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSION mode for conversion')
+                        logger.debug('MODE_IN_CONVERSION flag is raised')
                         self._typing_mode &= ~MODE_IN_PREEDIT
                         self._typing_mode |= MODE_IN_CONVERSION
+                        self.debug('MODE_IN_CONVERSION flag is raised')
                     self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
                     return(True)
         # re-set the MODE_FORCED_PREEDIT_POSSIBLE if other key is typed
@@ -937,7 +939,8 @@ class EnginePSKK(IBus.Engine):
                 self._typing_mode &= ~MODE_IN_CONVERSION
                 logger.debug('  => Return key pressed => conversion mode ended')
                 return(True)
-            if(keyval == IBus.space):
+            if(keyval == IBus.space and not is_press_action):
+                logger.debug('conversion window should appear')
                 self.show_conversion_window()
             # we'll leave this move behind only when there is an appropriate input
             #self._typing_mode &= ~MODE_IN_CONVERSION
