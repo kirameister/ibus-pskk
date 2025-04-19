@@ -701,6 +701,14 @@ class EnginePSKK(IBus.Engine):
         if(not self.is_enabled()):
             # this block is for direct-mode (no Japanese char)
             return(False)
+        if(keyval == IBus.Super_L or keyval == IBus.Super_R):
+            if(is_press_action):
+                self._modkey_status |= STATUS_SUPERS
+            else:
+                self._modkey_status &= ~STATUS_SUPERS
+        # Filter out all the key-combos with Super key
+        if(self._modkey_status & STATUS_SUPERS):
+            return(False)
         #return(self.process_key_event(keyval, keycode, state))
         # At this point, the simul-timinng diff is taken (to hopefully make it simple)
         current_typed_time = time.perf_counter()
@@ -765,6 +773,8 @@ class EnginePSKK(IBus.Engine):
 
     def process_key_event_in_preedit(self, keyval, is_press_action):
         """
+        This function handles possible key events in preedit mode. 
+        This includes potential preedit mode as it could mean an entering phase for 漢直
         """
         logger.debug('process_key_event_in_preedit')
         # SandS key release without preedit => enter space and go back to S(0)
@@ -865,7 +875,7 @@ class EnginePSKK(IBus.Engine):
                         self._update_preedit()
                         """
                         # end of lines to be replaced
-                        logger.debug(f'  => SandS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSINO mode for conversion')
+                        logger.debug(f'  => SandS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSION mode for conversion')
                         self._typing_mode &= ~MODE_IN_PREEDIT
                         self._typing_mode |= MODE_IN_CONVERSION
                     self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
@@ -918,6 +928,22 @@ class EnginePSKK(IBus.Engine):
         else:
             logger.debug(f'process_key_event -- release("{IBus.keyval_name(keyval)}")   _typing_mode: {bin(self._typing_mode)}')
 
+        # if the it is already in the conversion mode, we'll need to let the IBus window handle the key-events
+        ## Case 0 - Block for the dictionary-lookup (L)
+        #if(self._lookup_table.get_number_of_candidates()):
+        if(self._typing_mode & MODE_IN_CONVERSION):
+            logger.debug('Case 0 -- L(0)')
+            if(keyval == IBus.Return):
+                self._typing_mode &= ~MODE_IN_CONVERSION
+                logger.debug('  => Return key pressed => conversion mode ended')
+                return(True)
+            if(keyval == IBus.space):
+                self.show_conversion_window()
+            # we'll leave this move behind only when there is an appropriate input
+            #self._typing_mode &= ~MODE_IN_CONVERSION
+            return(True)
+
+
         # before getting started, check and update the modkey-status
         if(keyval == IBus.space):
             if(is_press_action):
@@ -934,11 +960,6 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status |= STATUS_CONTROLS
             else:
                 self._modkey_status &= ~STATUS_CONTROLS
-        if(keyval == IBus.Super_L or keyval == IBus.Super_R):
-            if(is_press_action):
-                self._modkey_status |= STATUS_SUPERS
-            else:
-                self._modkey_status &= ~STATUS_SUPERS
         # at this point, there is no particular reason to treat Alt_L and Alt_R differently (but this may change in the future)
         if(keyval == IBus.Alt_L or keyval == IBus.Alt_R):
             if(is_press_action):
@@ -959,14 +980,12 @@ class EnginePSKK(IBus.Engine):
         # Filter out Ctrl+(io) if it is not in the CONVERSION mode
         if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('i','o') and not(self._typing_mode & (MODE_IN_CONVERSION|MODE_IN_FORCED_CONVERSION))):
             return(False)
-        # Filter out all the key-combos with Super key
-        if(self._modkey_status & STATUS_SUPERS):
-            return(False)
 
         # forced preedit mode - it is only about entering to the forced mode
         if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE and self._typing_mode & MODE_IN_PREEDIT):
             if(is_press_action):
                 self._typing_mode |= MODE_FORCED_PREEDIT_POSSIBLE
+                # do not return at this point..
             if(not is_press_action and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
                 # SandS.press => /f/.press => /f/.release => SandS.release
                 # ...but we'll also accept -- SandS.press => /f/.press => /f/.release
@@ -982,27 +1001,14 @@ class EnginePSKK(IBus.Engine):
         ### From this point, there would be some typings involved..
         ### Once the process goes into one of Case N, it will not go any further block (it always ends with return())
 
-        ## Case 0 - Block for the dictionary-lookup (L)
-        #if(self._lookup_table.get_number_of_candidates()):
-        if(self._typing_mode & MODE_IN_CONVERSION):
-            logger.debug('Case 0 -- L(0)')
-            if(keyval == IBus.Return):
-                self._typing_mode &= ~MODE_IN_CONVERSION
-                logger.debug('  => Return key pressed => conversion mode ended')
-                return(True)
-            self.show_conversion_window()
-            # we'll leave this move behind only when there is an appropriate input
-            #self._typing_mode &= ~MODE_IN_CONVERSION
-            return(True)
-
         ## Case 1 - Very ordinary Hiragana typing (S0)
         if(not(self._typing_mode & (MODE_IN_FORCED_PREEDIT|MODE_IN_PREEDIT))):
             logger.debug('Case 1 -- S(0)')
             return(self.process_key_event_simple_type(keyval, is_press_action))
 
         ## Case 2 - In normal preedit (S1)
-        ## -- please note transition to forced preedit mode is taken care above
-        ## -- please also note that this mode could return to S0 via 漢直
+        ## -- note transition to forced preedit mode is taken care by process_key_event_simple_type()
+        ## -- also note that this mode could return to S0 via 漢直
         if(self._typing_mode & MODE_IN_PREEDIT):
             logger.debug('Case 2 -- S(1)')
             return(self.process_key_event_in_preedit(keyval, is_press_action))
@@ -1020,6 +1026,7 @@ class EnginePSKK(IBus.Engine):
                     # FIXME
                     logger.debug('  => space pressed => Enter into the conversion mode')
                     pass
+                    return(False)
             pass
 
 
@@ -1426,7 +1433,7 @@ class EnginePSKK(IBus.Engine):
         logger.debug('_update_lookup_table')
         if self.is_enabled():
             visible = 0 < self._lookup_table.get_number_of_candidates()
-            self.update_lookup_table(self._lookup_table, visible)
+            #self.update_lookup_table(self._lookup_table, visible)
 
     def is_lookup_table_visible(self):
         return 0 < self._lookup_table.get_number_of_candidates()
@@ -1459,7 +1466,7 @@ class EnginePSKK(IBus.Engine):
         self._dict.save_orders()
 
     def do_reset(self):
-        logger.info(f'reset: {self._surrounding}')
+        logger.info(f'do_reset: {self._surrounding}')
         if self._surrounding != SURROUNDING_BROKEN:
             self._reset()
         else:
@@ -1479,7 +1486,7 @@ class EnginePSKK(IBus.Engine):
         typing.. (i.e., typing intervened by mouse move)
         ...It seems taht this function is called periodically. It may be an idea to store the position of the mouse pointer and commit(?) the hiragana only with pointer-position value mismatch? 
         """
-        #logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
+        logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
         self._update_lookup_table()
 
     def _forward_backspaces(self, size):
