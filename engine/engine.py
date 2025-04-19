@@ -702,6 +702,62 @@ class EnginePSKK(IBus.Engine):
         #return(self.process_key_event(keyval, keycode, state))
         return(self.process_key_event(keyval, state))
 
+    def process_key_event_simple_type(self, keyval, state, is_press_action):
+        """
+        This function is for handling a simplistic strokes of keys where there is no conversion required. 
+        """
+        logger.debug('process_key_event_simple_type')
+        # Return key => commit the preedit and move on..
+        if(keyval == IBus.Return):
+            if(is_press_action):
+                self._commit_string(self._preedit_string)
+                self._preedit_string = ''
+                self._update_preedit()
+                logger.debug('  => "Return" pressed => commit preedit and return False')
+                return(False)
+            else:
+                logger.debug('  => "Return" released => return False')
+                return(False)
+        # SandS
+        if(keyval == IBus.space):
+            if(is_press_action): # => key-pressed, so it's potentially about going for PREEDIT (possibly FORCED_PREEDIT, but we'll figure that out in next strokes..)
+                logger.debug('Case1 space pressed')
+                if(self._preedit_string != ""):
+                    self._commit_string(self._preedit_string)
+                    self._preedit_string = ''
+                    self._update_preedit()
+                self._typing_mode |= MODE_IN_PREEDIT
+                self._typing_mode |= SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
+                logger.debug('  => "Space" pressed => commit preedit and transition to PREEDIT with FIRST_SHIFT_PRESSED switch')
+                return(True)
+            else:
+                if(self._preedit_string == "" and not(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU)):
+                    logger.debug('  -> "Space" release => space committed because of empty preedit and MODE_JUST_FINISHED_KANCHOKU not set')
+                    # empty preedit && not 漢直-just-finished state => enter space
+                    self.commit_text(IBus.Text.new_from_string(' '))
+                logger.debug('  => "Space" release => do nothing')
+                return(True)
+        # offset simul_limit_ms for key-release on normal keys and drop the signal
+        if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
+            self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
+            logger.debug('  => Japanese key released => offset the previous timestamp')
+            return(True)
+        # to type Hiragana..
+        if(self.is_applicable_japanese_stroke(keyval)):
+            (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
+            self._commit_string(yomi)
+            self._update_preedit()
+            logger.debug(f'  => Japanese key pressed => update preedit and commit string "{yomi}"/"{self._preedit_string}"')
+            return(True)
+        else:
+            # commit the string to be on a safe side.
+            self._commit_string(self._preedit_string)
+            self._preedit_string = ''
+            self._update_preedit()
+            logger.debug('  => non-Japanese key pressed or released => passthrough')
+            return(False)
+        #return(False) # this return statement should never be reached, but anyhow..
+
     def process_key_event(self, keyval, state):
         """
         This function is the actual implementation of the do_process_key_event()
@@ -787,63 +843,19 @@ class EnginePSKK(IBus.Engine):
         #if(self._lookup_table.get_number_of_candidates()):
         if(self._typing_mode & MODE_IN_CONVERSION):
             logger.debug('Case 0 -- L(0)')
+            if(keyval == IBus.Return):
+                self._typing_mode &= ~MODE_IN_CONVERSION
+                logger.debug('  => Return key pressed => conversion mode ended')
+                return(True)
             self.show_conversion_window()
-            self._typing_mode &= ~MODE_IN_CONVERSION
+            # we'll leave this move behind only when there is an appropriate input
+            #self._typing_mode &= ~MODE_IN_CONVERSION
             return(True)
 
         ## Case 1 - Very ordinary Hiragana typing (S0)
         if(not(self._typing_mode & (MODE_IN_FORCED_PREEDIT|MODE_IN_PREEDIT))):
             logger.debug('Case 1 -- S(0)')
-            # Return key => commit the preedit and move on..
-            if(keyval == IBus.Return):
-                if(is_press_action):
-                    self._commit_string(self._preedit_string)
-                    self._preedit_string = ''
-                    self._update_preedit()
-                    logger.debug('  => "Return" pressed => commit preedit and return False')
-                    return(False)
-                else:
-                    logger.debug('  => "Return" released => return False')
-                    return(False)
-            # SandS
-            if(keyval == IBus.space):
-                if(is_press_action): # => key-pressed, so it's potentially about going for PREEDIT (possibly FORCED_PREEDIT, but we'll figure that out in next strokes..)
-                    logger.debug('Case1 space pressed')
-                    if(self._preedit_string != ""):
-                        self._commit_string(self._preedit_string)
-                        self._preedit_string = ''
-                        self._update_preedit()
-                    self._typing_mode |= MODE_IN_PREEDIT
-                    self._typing_mode |= SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
-                    logger.debug('  => "Space" pressed => commit preedit and transition to PREEDIT with FIRST_SHIFT_PRESSED switch')
-                    return(True)
-                else:
-                    if(self._preedit_string == "" and not(self._typing_mode & MODE_JUST_FINISHED_KANCHOKU)):
-                        logger.debug('  -> "Space" release => space committed because of empty preedit and MODE_JUST_FINISHED_KANCHOKU not set')
-                        # empty preedit && not 漢直-just-finished state => enter space
-                        self.commit_text(IBus.Text.new_from_string(' '))
-                    logger.debug('  => "Space" release => do nothing')
-                    return(True)
-            # offset simul_limit_ms for key-release on normal keys and drop the signal
-            if(self.is_applicable_japanese_stroke(keyval) and not is_press_action):
-                self._previous_typed_timestamp -= 1000 * self._max_simul_limit_ms # this is to ensure simul-check to always fail
-                logger.debug('  => Japanese key released => offset the previous timestamp')
-                return(True)
-            # to type Hiragana..
-            if(self.is_applicable_japanese_stroke(keyval)):
-                (yomi, self._preedit_string) = self._handle_input_to_yomi(self._preedit_string, keyval)
-                self._commit_string(yomi)
-                self._update_preedit()
-                logger.debug(f'  => Japanese key pressed => update preedit and commit string "{yomi}"/"{self._preedit_string}"')
-                return(True)
-            else:
-                # commit the string to be on a safe side.
-                self._commit_string(self._preedit_string)
-                self._preedit_string = ''
-                self._update_preedit()
-                logger.debug('  => non-Japanese key pressed or released => passthrough')
-                return(False)
-            #return(False)
+            return(self.process_key_event_simple_type(keyval, state, is_press_action))
 
         ## Case 2 - In normal preedit (S1)
         ## -- please note transition to forced preedit mode is taken care above
