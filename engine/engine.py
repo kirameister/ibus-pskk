@@ -709,6 +709,129 @@ class EnginePSKK(IBus.Engine):
         self._stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         return(self.process_key_event(keyval, state))
 
+    def process_key_event(self, keyval, state):
+        """
+        This function is the actual implementation of the do_process_key_event()
+        This function could be considered as the core part of the IME
+        This function not only detects the type/state of the key, but also identify 
+        which (internal) state the IME is supposed to be. 
+        """
+        #logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
+        #logger.debug(f'process_key_event -- _typing_mode: {bin(self._typing_mode)}')
+        is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
+        if(is_press_action):
+            logger.debug(f'process_key_event -- press("{IBus.keyval_name(keyval)}")     _typing_mode: {bin(self._typing_mode)}')
+        else:
+            logger.debug(f'process_key_event -- release("{IBus.keyval_name(keyval)}")   _typing_mode: {bin(self._typing_mode)}')
+
+        # if the it is already in the conversion mode, we'll need to let the IBus window handle the key-events
+        ## Case 0 - Block for the dictionary-lookup (L)
+        #if(self._lookup_table.get_number_of_candidates()):
+        if(self._typing_mode & MODE_IN_CONVERSION):
+            logger.debug('Case 0 -- L(0)')
+            if(keyval == IBus.Return):
+                self._typing_mode &= ~MODE_IN_CONVERSION
+                logger.debug('  => Return key pressed => conversion mode ended')
+                return(True)
+            if(keyval == IBus.space and not is_press_action):
+                logger.debug('conversion window should appear')
+                self.show_conversion_window()
+            # we'll leave this move behind only when there is an appropriate input
+            #self._typing_mode &= ~MODE_IN_CONVERSION
+            return(True)
+
+
+        # before getting started, check and update the modkey-status
+        if(keyval == IBus.space):
+            if(is_press_action):
+                self._modkey_status |= STATUS_SPACE
+            else:
+                self._modkey_status &= ~STATUS_SPACE
+        if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
+            if(is_press_action):
+                self._modkey_status |= STATUS_SHIFTS
+            else:
+                self._modkey_status &= ~STATUS_SHIFTS
+        if(keyval == IBus.Control_L or keyval == IBus.Control_R):
+            if(is_press_action):
+                self._modkey_status |= STATUS_CONTROLS
+            else:
+                self._modkey_status &= ~STATUS_CONTROLS
+        # at this point, there is no particular reason to treat Alt_L and Alt_R differently (but this may change in the future)
+        if(keyval == IBus.Alt_L or keyval == IBus.Alt_R):
+            if(is_press_action):
+                self._modkey_status |= STATUS_ALTS
+            else:
+                self._modkey_status &= ~STATUS_ALTS
+
+        # Filter out the irrelevant combo keys with Ctrl
+        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j','k','l',';','i','o')):
+            self._typing_mode = 0
+            self._commit_string(self._preedit_string)
+            self._preedit_string = ''
+            self._update_preedit()
+            return(False)
+        # Filter out Ctrol+(jkl;) if it is not in the PREEDIT mode
+        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('j','k','l',';') and not(self._typing_mode & (MODE_IN_PREEDIT|MODE_IN_FORCED_PREEDIT))):
+            return(False)
+        # Filter out Ctrl+(io) if it is not in the CONVERSION mode
+        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('i','o') and not(self._typing_mode & (MODE_IN_CONVERSION|MODE_IN_FORCED_CONVERSION))):
+            return(False)
+
+        # forced preedit mode - it is only about entering to the forced mode
+        if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE and self._typing_mode & MODE_IN_PREEDIT):
+            if(is_press_action):
+                self._typing_mode |= MODE_FORCED_PREEDIT_POSSIBLE
+                # do not return at this point..
+            if(not is_press_action and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
+                # SandS.press => /f/.press => /f/.release => SandS.release
+                # ...but we'll also accept -- SandS.press => /f/.press => /f/.release
+                logger.debug('entered in forced preedit mode')
+                self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
+                self._typing_mode &= ~MODE_IN_PREEDIT # this is because MODE_IN_FORCED_PREEDIT and MODE_IN_PREEDIT need to be mutually exclusive
+                self._typing_mode |= MODE_IN_FORCED_PREEDIT
+                self._first_kanchoku_stroke = ""
+                self._preedit_string = ""
+                self._update_preedit()
+                return(True)
+
+        ### From this point, there would be some typings involved..
+        ### Once the process goes into one of Case N, it will not go any further block (it always ends with return())
+
+        ## Case 1 - Very ordinary Hiragana typing (S0)
+        if(not(self._typing_mode & (MODE_IN_FORCED_PREEDIT|MODE_IN_PREEDIT))):
+            logger.debug('Case 1 -- S(0)')
+            return(self.process_key_event_simple_type(keyval, is_press_action))
+
+        ## Case 2 - In normal preedit (S1)
+        ## -- note transition to forced preedit mode is taken care by process_key_event_simple_type()
+        ## -- also note that this mode could return to S0 via 漢直
+        if(self._typing_mode & MODE_IN_PREEDIT):
+            logger.debug('Case 2 -- S(1)')
+            return(self.process_key_event_in_preedit(keyval, is_press_action))
+
+        ## Case 3 - In Forced preedit (S3)
+        if(self._typing_mode & MODE_IN_FORCED_PREEDIT):
+            logger.debug('Case 3 -- S(1)')
+            if(keyval == IBus.space):
+                if(not is_press_action):
+                    # ignore the SandS.release when preedit is empty - this can only happen at the beginning of the MODE_IN_FORCED_PREEDIT
+                    logger.debug('  => space released => do nothing in this mode')
+                    return(False)
+                else:
+                    # in this mode, pressing space can only mean the conversion..
+                    # FIXME
+                    logger.debug('  => space pressed => Enter into the conversion mode')
+                    pass
+                    return(False)
+            pass
+
+
+        # if none of above is applied.. It will be treated as direct input
+        self._typing_mode = 0
+        logger.debug('Case Z => reset _typing_mode completely and return(False)')
+        return(False)
+
     def process_key_event_simple_type(self, keyval, is_press_action):
         """
         This function is for handling a simplistic strokes of keys where there is no conversion required. 
@@ -909,128 +1032,6 @@ class EnginePSKK(IBus.Engine):
             self._update_preedit()
             return(False)
 
-    def process_key_event(self, keyval, state):
-        """
-        This function is the actual implementation of the do_process_key_event()
-        This function could be considered as the core part of the IME
-        This function not only detects the type/state of the key, but also identify 
-        which (internal) state the IME is supposed to be. 
-        """
-        #logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
-        #logger.debug(f'process_key_event -- _typing_mode: {bin(self._typing_mode)}')
-        is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
-        if(is_press_action):
-            logger.debug(f'process_key_event -- press("{IBus.keyval_name(keyval)}")     _typing_mode: {bin(self._typing_mode)}')
-        else:
-            logger.debug(f'process_key_event -- release("{IBus.keyval_name(keyval)}")   _typing_mode: {bin(self._typing_mode)}')
-
-        # if the it is already in the conversion mode, we'll need to let the IBus window handle the key-events
-        ## Case 0 - Block for the dictionary-lookup (L)
-        #if(self._lookup_table.get_number_of_candidates()):
-        if(self._typing_mode & MODE_IN_CONVERSION):
-            logger.debug('Case 0 -- L(0)')
-            if(keyval == IBus.Return):
-                self._typing_mode &= ~MODE_IN_CONVERSION
-                logger.debug('  => Return key pressed => conversion mode ended')
-                return(True)
-            if(keyval == IBus.space and not is_press_action):
-                logger.debug('conversion window should appear')
-                self.show_conversion_window()
-            # we'll leave this move behind only when there is an appropriate input
-            #self._typing_mode &= ~MODE_IN_CONVERSION
-            return(True)
-
-
-        # before getting started, check and update the modkey-status
-        if(keyval == IBus.space):
-            if(is_press_action):
-                self._modkey_status |= STATUS_SPACE
-            else:
-                self._modkey_status &= ~STATUS_SPACE
-        if(keyval == IBus.Shift_L or keyval == IBus.Shift_R):
-            if(is_press_action):
-                self._modkey_status |= STATUS_SHIFTS
-            else:
-                self._modkey_status &= ~STATUS_SHIFTS
-        if(keyval == IBus.Control_L or keyval == IBus.Control_R):
-            if(is_press_action):
-                self._modkey_status |= STATUS_CONTROLS
-            else:
-                self._modkey_status &= ~STATUS_CONTROLS
-        # at this point, there is no particular reason to treat Alt_L and Alt_R differently (but this may change in the future)
-        if(keyval == IBus.Alt_L or keyval == IBus.Alt_R):
-            if(is_press_action):
-                self._modkey_status |= STATUS_ALTS
-            else:
-                self._modkey_status &= ~STATUS_ALTS
-
-        # Filter out the irrelevant combo keys with Ctrl
-        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j','k','l',';','i','o')):
-            self._typing_mode = 0
-            self._commit_string(self._preedit_string)
-            self._preedit_string = ''
-            self._update_preedit()
-            return(False)
-        # Filter out Ctrol+(jkl;) if it is not in the PREEDIT mode
-        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('j','k','l',';') and not(self._typing_mode & (MODE_IN_PREEDIT|MODE_IN_FORCED_PREEDIT))):
-            return(False)
-        # Filter out Ctrl+(io) if it is not in the CONVERSION mode
-        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('i','o') and not(self._typing_mode & (MODE_IN_CONVERSION|MODE_IN_FORCED_CONVERSION))):
-            return(False)
-
-        # forced preedit mode - it is only about entering to the forced mode
-        if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE and self._typing_mode & MODE_IN_PREEDIT):
-            if(is_press_action):
-                self._typing_mode |= MODE_FORCED_PREEDIT_POSSIBLE
-                # do not return at this point..
-            if(not is_press_action and self._typing_mode & MODE_FORCED_PREEDIT_POSSIBLE):
-                # SandS.press => /f/.press => /f/.release => SandS.release
-                # ...but we'll also accept -- SandS.press => /f/.press => /f/.release
-                logger.debug('entered in forced preedit mode')
-                self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
-                self._typing_mode &= ~MODE_IN_PREEDIT # this is because MODE_IN_FORCED_PREEDIT and MODE_IN_PREEDIT need to be mutually exclusive
-                self._typing_mode |= MODE_IN_FORCED_PREEDIT
-                self._first_kanchoku_stroke = ""
-                self._preedit_string = ""
-                self._update_preedit()
-                return(True)
-
-        ### From this point, there would be some typings involved..
-        ### Once the process goes into one of Case N, it will not go any further block (it always ends with return())
-
-        ## Case 1 - Very ordinary Hiragana typing (S0)
-        if(not(self._typing_mode & (MODE_IN_FORCED_PREEDIT|MODE_IN_PREEDIT))):
-            logger.debug('Case 1 -- S(0)')
-            return(self.process_key_event_simple_type(keyval, is_press_action))
-
-        ## Case 2 - In normal preedit (S1)
-        ## -- note transition to forced preedit mode is taken care by process_key_event_simple_type()
-        ## -- also note that this mode could return to S0 via 漢直
-        if(self._typing_mode & MODE_IN_PREEDIT):
-            logger.debug('Case 2 -- S(1)')
-            return(self.process_key_event_in_preedit(keyval, is_press_action))
-
-        ## Case 3 - In Forced preedit (S3)
-        if(self._typing_mode & MODE_IN_FORCED_PREEDIT):
-            logger.debug('Case 3 -- S(1)')
-            if(keyval == IBus.space):
-                if(not is_press_action):
-                    # ignore the SandS.release when preedit is empty - this can only happen at the beginning of the MODE_IN_FORCED_PREEDIT
-                    logger.debug('  => space released => do nothing in this mode')
-                    return(False)
-                else:
-                    # in this mode, pressing space can only mean the conversion..
-                    # FIXME
-                    logger.debug('  => space pressed => Enter into the conversion mode')
-                    pass
-                    return(False)
-            pass
-
-
-        # if none of above is applied.. It will be treated as direct input
-        self._typing_mode = 0
-        logger.debug('Case Z => reset _typing_mode completely and return(False)')
-        return(False)
 
 
 
