@@ -715,6 +715,7 @@ class EnginePSKK(IBus.Engine):
         This function could be considered as the core part of the IME
         This function not only detects the type/state of the key, but also identify 
         which (internal) state the IME is supposed to be. 
+        This function is directly called from the IBus; no function call expected (perhaps except for the recursion call)
         """
         #logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
         #logger.debug(f'process_key_event -- _typing_mode: {bin(self._typing_mode)}')
@@ -735,11 +736,23 @@ class EnginePSKK(IBus.Engine):
                 return(True)
             if(keyval == IBus.space and not is_press_action):
                 logger.debug('conversion window should appear')
+                self._modkey_status &= ~STATUS_SPACE
                 self.show_conversion_window()
+            if(keyval == IBus.down_arrow and is_press_action):
+                logger.debug('Down-arrow pressed')
+                pass
+            if(keyval == IBus.up_arrow and is_press_action):
+                logger.debug('Up-arrow pressed')
+                pass
+            if(keyval == IBus.space and is_press_action):
+                logger.debug('space-bar pressed while conversion-window is present')
+                # at this point, we hav emultiple further options, (1) space-released, (2) normal-ASCII pressed, (3) other..
+                # this key-press action itself doesn't really do anything
+                self._modkey_status |= STATUS_SPACE
+                return(True)
             # we'll leave this move behind only when there is an appropriate input
             #self._typing_mode &= ~MODE_IN_CONVERSION
             return(True)
-
 
         # before getting started, check and update the modkey-status
         if(keyval == IBus.space):
@@ -825,7 +838,6 @@ class EnginePSKK(IBus.Engine):
                     pass
                     return(False)
             pass
-
 
         # if none of above is applied.. It will be treated as direct input
         self._typing_mode = 0
