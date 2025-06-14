@@ -846,6 +846,7 @@ class EnginePSKK(IBus.Engine):
         logger.debug('Case Z => reset _typing_mode completely and return(False)')
         return(False)
 
+
     def process_key_event_simple_type(self, keyval, is_press_action):
         """
         This function is for handling a simplistic strokes of keys where there is no conversion required. 
@@ -901,6 +902,8 @@ class EnginePSKK(IBus.Engine):
             logger.debug('  => non-Japanese key pressed or released => passthrough')
             return(False)
         #return(False) # this return statement should never be reached, but anyhow..
+
+
 
     def process_key_event_in_preedit(self, keyval, is_press_action):
         """
@@ -1025,11 +1028,15 @@ class EnginePSKK(IBus.Engine):
                             return(True)
                         # At this point, multiple conversions are possible. So show the candidates in IBus window
                         logger.debug('Multiple candidates are found in the dictionary; so show the candidates via IBus')
+                        self._lookup_table.clear()
+                        for i, c in enumerate(self._dict._dict[self._preedit_string]):
+                            self._lookup_table.append_candidate(IBus.Text.new_from_string(c))
+                            #self._lookup_table.set_label(i, IBus.Text.new_from_string(' '))
+                        self._update_lookup_table()
                         # The IBus candidate window is already shown at this point; after that, we'll wait for the next stroke
                         logger.debug('MODE_IN_CONVERSION flag is raised')
                         self._typing_mode &= ~MODE_IN_PREEDIT
                         self._typing_mode |= MODE_IN_CONVERSION
-                        self.show_conversion_window()
                     self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
                     return(True)
         # re-set the MODE_FORCED_PREEDIT_POSSIBLE if other key is typed
@@ -1466,7 +1473,9 @@ class EnginePSKK(IBus.Engine):
         logger.debug('_update_lookup_table')
         if self.is_enabled():
             visible = 0 < self._lookup_table.get_number_of_candidates()
-            #self.update_lookup_table(self._lookup_table, visible)
+            logger.debug(f'lookup table visible: {visible}')
+            logger.debug(f'self._lookup_table.get_number_of_candidates() : {self._lookup_table.get_number_of_candidates()}')
+            self.update_lookup_table(self._lookup_table, visible)
 
     def is_lookup_table_visible(self):
         return 0 < self._lookup_table.get_number_of_candidates()
