@@ -738,12 +738,14 @@ class EnginePSKK(IBus.Engine):
                 logger.debug('conversion window should appear')
                 self._modkey_status &= ~STATUS_SPACE
                 self.show_conversion_window()
-            if(keyval == IBus.down_arrow and is_press_action):
+            if(keyval == IBus.Down and is_press_action):
                 logger.debug('Down-arrow pressed')
-                pass
-            if(keyval == IBus.up_arrow and is_press_action):
+                if(self._lookup_table.cursor_down()):
+                    self._update_candidate()
+            if(keyval == IBus.Up and is_press_action):
                 logger.debug('Up-arrow pressed')
-                pass
+                if(self._lookup_table.cursor_up()):
+                    self._update_candidate()
             if(keyval == IBus.space and is_press_action):
                 logger.debug('space-bar pressed while conversion-window is present')
                 # at this point, we hav emultiple further options, (1) space-released, (2) normal-ASCII pressed, (3) other..
@@ -823,7 +825,7 @@ class EnginePSKK(IBus.Engine):
             logger.debug('Case 2 -- S(1)')
             return(self.process_key_event_in_preedit(keyval, is_press_action))
 
-        ## Case 3 - In Forced preedit (S3)
+        ## Case 3 - In Forced preedit (S3) FIXME -- very much WIP
         if(self._typing_mode & MODE_IN_FORCED_PREEDIT):
             logger.debug('Case 3 -- S(1)')
             if(keyval == IBus.space):
@@ -1005,10 +1007,29 @@ class EnginePSKK(IBus.Engine):
                         """
                         # end of lines to be replaced
                         logger.debug('  => SandS key released and this is not considered as part of the transition to the => Transition from PREEDIT mode to CONVERSION mode for conversion')
+                        # check if the conversion could happen uniquely
+                        if(self._preedit_string not in self._dict._dict):
+                            # no candidate is found at all.. Commit it and move on..
+                            # FIXME: at some point, this would need to be made smarter than this..
+                            logger.debug(f'No conversion condidate found for {self._preedit_string}; Commit the preedit and move on..')
+                            self._commit_string(self._preedit_string)
+                            self._preedit_string = ''
+                            self._update_preedit()
+                            self._typing_mode = 0
+                            return(True)
+                        if(len(self._dict._dict[self._preedit_string]) == 1):
+                            # there is only 1 unique conversion candidate found. So use this and move on..
+                            logger.debug(f'Only single candidate found for {self._preedit_string}; Use this candidate and move on..')
+                            self.preedit_to_convert_commit()
+                            self._typing_mode = 0
+                            return(True)
+                        # At this point, multiple conversions are possible. So show the candidates in IBus window
+                        logger.debug('Multiple candidates are found in the dictionary; so show the candidates via IBus')
+                        # The IBus candidate window is already shown at this point; after that, we'll wait for the next stroke
                         logger.debug('MODE_IN_CONVERSION flag is raised')
                         self._typing_mode &= ~MODE_IN_PREEDIT
                         self._typing_mode |= MODE_IN_CONVERSION
-                        self.debug('MODE_IN_CONVERSION flag is raised')
+                        self.show_conversion_window()
                     self._typing_mode &= ~SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT
                     return(True)
         # re-set the MODE_FORCED_PREEDIT_POSSIBLE if other key is typed
@@ -1248,6 +1269,8 @@ class EnginePSKK(IBus.Engine):
         If there is no match found, it will simply
         commit the preedit and move on with return(False).
         """
+        logger.debug('show_conversion_window() called')
+        logger.debug(f'preedit : {self._preedit_string}')
         if(self._preedit_string == ""):
             return(False)
         self._lookup_table.clear()

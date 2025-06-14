@@ -235,6 +235,7 @@ class Dictionary:
         return False
 
     def smart_yomi_to_kanji_lookup(self, yomi):
+        logger.debug(f'dictionary.py smart_yomi_to_kanji_lookup(): {yomi}')
         self.reset()
         # first check for the exact match
         if yomi in self._dict:
