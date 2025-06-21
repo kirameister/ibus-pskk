@@ -731,21 +731,28 @@ class EnginePSKK(IBus.Engine):
         if(self._typing_mode & MODE_IN_CONVERSION):
             logger.debug('Case 0 -- L(0)')
             if(keyval == IBus.Return):
-                self._typing_mode &= ~MODE_IN_CONVERSION
                 logger.debug('  => Return key pressed => conversion mode ended')
+                self._typing_mode &= ~MODE_IN_CONVERSION
+                self._lookup_table.clear()
                 return(True)
             if(keyval == IBus.space and not is_press_action):
                 logger.debug('conversion window should appear')
                 self._modkey_status &= ~STATUS_SPACE
                 self.show_conversion_window()
-            if(keyval == IBus.Down and is_press_action):
-                logger.debug('Down-arrow pressed')
-                if(self._lookup_table.cursor_down()):
-                    self._update_candidate()
-            if(keyval == IBus.Up and is_press_action):
-                logger.debug('Up-arrow pressed')
-                if(self._lookup_table.cursor_up()):
-                    self._update_candidate()
+            if(keyval == IBus.Down):
+                if(is_press_action):
+                    logger.debug('Down-arrow pressed')
+                    return self.do_cursor_down()
+                return(True) # ignore the release action
+                #if(self._lookup_table.cursor_down()):
+                #    self._update_candidate()
+            if(keyval == IBus.Up):
+                if(is_press_action):
+                    logger.debug('Up-arrow pressed')
+                    return self.do_cursor_up()
+                return(True) # ignore the release action
+                #if(self._lookup_table.cursor_up()):
+                #    self._update_candidate()
             if(keyval == IBus.space and is_press_action):
                 logger.debug('space-bar pressed while conversion-window is present')
                 # at this point, we hav emultiple further options, (1) space-released, (2) normal-ASCII pressed, (3) other..
