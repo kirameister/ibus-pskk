@@ -709,6 +709,14 @@ class EnginePSKK(IBus.Engine):
         self._stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         return(self.process_key_event(keyval, state))
 
+    def _confirm_candidate(self):
+        current = self._dict.current()
+        logger.debug(f'_confirm_candidate == current: {current}')
+        if(current):
+            self._dict.reset()
+            self._lookup_table.clear()
+        return(current)
+
     def process_key_event(self, keyval, state):
         """
         This function is the actual implementation of the do_process_key_event()
@@ -731,10 +739,12 @@ class EnginePSKK(IBus.Engine):
         if(self._typing_mode & MODE_IN_CONVERSION):
             logger.debug('Case 0 -- L(0)')
             if(keyval == IBus.Return):
+                # press/release-action is not differentiated in this block as we assume press-action always happens before the release
                 logger.debug('  => Return key pressed => conversion mode ended')
                 self._typing_mode &= ~MODE_IN_CONVERSION
-                self._lookup_table.clear() # FIXME commit the string
                 # we'd need to let the currently selected candidate be committed and move back to the simple typing mode
+                current = self._confirm_candidate()
+                self._commit_string(current)
                 return(True)
             if(keyval == IBus.space):
                 if(is_press_action):
