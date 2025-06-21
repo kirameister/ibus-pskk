@@ -733,35 +733,42 @@ class EnginePSKK(IBus.Engine):
             if(keyval == IBus.Return):
                 logger.debug('  => Return key pressed => conversion mode ended')
                 self._typing_mode &= ~MODE_IN_CONVERSION
-                self._lookup_table.clear()
+                self._lookup_table.clear() # FIXME commit the string
+                # we'd need to let the currently selected candidate be committed and move back to the simple typing mode
                 return(True)
-            if(keyval == IBus.space and not is_press_action):
-                logger.debug('conversion window should appear')
-                self._modkey_status &= ~STATUS_SPACE
-                self.show_conversion_window()
+            if(keyval == IBus.space):
+                if(is_press_action):
+                    pass # press-action itself doesn't have an immediate action at this point.
+                    self._modkey_status |= STATUS_SPACE
+                    return(True)
+                else: # release-action indicates next candidate to be selected (but not yet confirmed)
+                    logger.debug('space-bar is released while the conversion-window is present')
+                    self._modkey_status &= ~STATUS_SPACE
+                    self.show_conversion_window()
+                    return(True)
             if(keyval == IBus.Down):
                 if(is_press_action):
                     logger.debug('Down-arrow pressed')
                     return self.do_cursor_down()
                 return(True) # ignore the release action
-                #if(self._lookup_table.cursor_down()):
-                #    self._update_candidate()
             if(keyval == IBus.Up):
                 if(is_press_action):
                     logger.debug('Up-arrow pressed')
                     return self.do_cursor_up()
                 return(True) # ignore the release action
-                #if(self._lookup_table.cursor_up()):
-                #    self._update_candidate()
-            if(keyval == IBus.space and is_press_action):
-                logger.debug('space-bar pressed while conversion-window is present')
-                # at this point, we hav emultiple further options, (1) space-released, (2) normal-ASCII pressed, (3) other..
-                # this key-press action itself doesn't really do anything
-                self._modkey_status |= STATUS_SPACE
-                return(True)
+            if(self.is_applicable_key_for_kanchoku(keyval) and is_press_action):
+                # A Japanese key (but not the numbers) is pressed while the conversion-window is present. 
+                # Depending on the space-bar is being pressed, different behaviors would apply.
+                # However, such different handlings are implemented in following blocks. 
+                # In this block, only required thing is to commit the preedit.
+                self._typing_mode &= ~MODE_IN_CONVERSION
+                self._lookup_table.clear()
+                pass # FIXME -- commit the string
             # we'll leave this move behind only when there is an appropriate input
             #self._typing_mode &= ~MODE_IN_CONVERSION
-            return(True)
+            else:
+                return(True)
+        # end of the conversion-window handling
 
         # before getting started, check and update the modkey-status
         if(keyval == IBus.space):
