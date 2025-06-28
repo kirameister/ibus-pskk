@@ -860,6 +860,7 @@ class EnginePSKK(IBus.Engine):
         ## Case 3 - In Forced preedit (S3) FIXME -- very much WIP
         if(self._typing_mode & MODE_IN_FORCED_PREEDIT):
             logger.debug('Case 3 -- S(1)')
+            # space-bar handling..
             if(keyval == IBus.space):
                 if(is_press_action):
                     # in this mode, pressing space-bar could mean to trigger both the conversion and 漢直
@@ -873,10 +874,13 @@ class EnginePSKK(IBus.Engine):
                     else: # space released while with non-empty preedit string
                         logger.debug(f"  => space is released with non-empty preedit string => This could mean both it's the end of the 漢直 or it's the trigger for conversion-window")
                         return(True)
-            if(keyval == IBus.Return):
+            # Return-key handling..
+            if(keyval == IBus.Return): # FIXME
                 if(is_press_action):
                     logger.debug("  => Return is pressed => Confirm the currently selected candidate and move on..")
-                pass
+                    return(True)
+                else:
+                    return(True)
             # FIXME: the noirmal Japanese char is typed
 
         # if none of above is applied.. It will be treated as direct input
