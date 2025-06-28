@@ -882,6 +882,9 @@ class EnginePSKK(IBus.Engine):
                 else:
                     return(True)
             # FIXME: the noirmal Japanese char is typed
+            # first, the handling of 漢直 needs to take place
+            # second, handling of the simultaneous typing needs to take place
+            # finally, the handling of the normal typing takes place..
 
         # if none of above is applied.. It will be treated as direct input
         self._typing_mode = 0
