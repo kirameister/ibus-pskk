@@ -745,8 +745,8 @@ class EnginePSKK(IBus.Engine):
                 logger.debug(f'get_candidate: {self._lookup_table.get_candidate(self._lookup_table.get_cursor_pos())}')
                 self._typing_mode &= ~MODE_IN_CONVERSION
                 # we'd need to let the currently selected candidate be committed and move back to the simple typing mode
-                current = self._confirm_candidate()
-                self._commit_string(current)
+                selected_candidate = self._confirm_candidate()
+                self._commit_string(selected_candidate)
                 self._preedit_string = ""
                 self._update_preedit()
                 return(True)
@@ -775,6 +775,10 @@ class EnginePSKK(IBus.Engine):
                 # Depending on the space-bar is being pressed, different behaviors would apply.
                 # However, such different handlings are implemented in following blocks. 
                 # In this block, only required thing is to commit the preedit.
+                selected_candidate = self._confirm_candidate()
+                self._commit_string(selected_candidate)
+                self._preedit_string = ""
+                self._update_preedit()
                 self._typing_mode &= ~MODE_IN_CONVERSION
                 self._lookup_table.clear()
                 pass # FIXME -- commit the string
