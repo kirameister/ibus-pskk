@@ -861,17 +861,23 @@ class EnginePSKK(IBus.Engine):
         if(self._typing_mode & MODE_IN_FORCED_PREEDIT):
             logger.debug('Case 3 -- S(1)')
             if(keyval == IBus.space):
-                if(not is_press_action):
-                    # ignore the SandS.release when preedit is empty - this can only happen at the beginning of the MODE_IN_FORCED_PREEDIT
-                    logger.debug('  => space released => do nothing in this mode')
-                    return(False)
-                else:
-                    # in this mode, pressing space can only mean the conversion..
-                    # FIXME
-                    logger.debug('  => space pressed => Enter into the conversion mode')
-                    pass
-                    return(False)
-            pass
+                if(is_press_action):
+                    # in this mode, pressing space-bar could mean to trigger both the conversion and 漢直
+                    # therefore, the context of relase action makes the actual diff.
+                    logger.debug("  => space pressed => do nothing at thsi point")
+                    return(True)
+                else: # space released
+                    if(self._preedit_string == ""):
+                        logger.debug("  => space released while preedit string is empty => We consider this action to be the first release action right after entering into the forced preedit mode, therefore this release action should be ignored")
+                        return(True)
+                    else: # space released while with non-empty preedit string
+                        logger.debug(f"  => space is released with non-empty preedit string => This could mean both it's the end of the 漢直 or it's the trigger for conversion-window")
+                        return(True)
+            if(keyval == IBus.Return):
+                if(is_press_action):
+                    logger.debug("  => Return is pressed => Confirm the currently selected candidate and move on..")
+                pass
+            # FIXME: the noirmal Japanese char is typed
 
         # if none of above is applied.. It will be treated as direct input
         self._typing_mode = 0
