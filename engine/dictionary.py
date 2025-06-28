@@ -161,6 +161,7 @@ class Dictionary:
         return self._str(self._cand[self._no])
 
     def current(self):
+        logger.debug(f'dictionary.current(): {self._cand}')
         if self._yomi:
             return self._str(self._cand[self._no])
         return ''
@@ -244,6 +245,7 @@ class Dictionary:
             self._no = 0
             self._order = list()
             return self.current()
+        # possibly more to come here... (e.g., 漢字仮名交じり文 into 漢字仮名交じり文)
         return(False)
 
     def lookup(self, yomi, pos):

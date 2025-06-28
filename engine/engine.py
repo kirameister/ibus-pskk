@@ -710,12 +710,12 @@ class EnginePSKK(IBus.Engine):
         return(self.process_key_event(keyval, state))
 
     def _confirm_candidate(self):
-        current = self._dict.current()
-        logger.debug(f'_confirm_candidate == current: {current}')
-        if(current):
+        selected_candidate = self._lookup_table.get_candidate(self._lookup_table.get_cursor_pos()).get_text()
+        logger.debug(f'_confirm_candidate == selected_candidate: {selected_candidate}')
+        if(selected_candidate):
             self._dict.reset()
             self._lookup_table.clear()
-        return(current)
+        return(selected_candidate)
 
     def process_key_event(self, keyval, state):
         """
@@ -741,10 +741,14 @@ class EnginePSKK(IBus.Engine):
             if(keyval == IBus.Return):
                 # press/release-action is not differentiated in this block as we assume press-action always happens before the release
                 logger.debug('  => Return key pressed => conversion mode ended')
+                logger.debug(f'get_cursor_pos: {self._lookup_table.get_cursor_pos()}')
+                logger.debug(f'get_candidate: {self._lookup_table.get_candidate(self._lookup_table.get_cursor_pos())}')
                 self._typing_mode &= ~MODE_IN_CONVERSION
                 # we'd need to let the currently selected candidate be committed and move back to the simple typing mode
                 current = self._confirm_candidate()
                 self._commit_string(current)
+                self._preedit_string = ""
+                self._update_preedit()
                 return(True)
             if(keyval == IBus.space):
                 if(is_press_action):
@@ -806,8 +810,8 @@ class EnginePSKK(IBus.Engine):
         # Filter out the irrelevant combo keys with Ctrl
         if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j','k','l',';','i','o')):
             self._typing_mode = 0
-            self._commit_string(self._preedit_string)
             self._preedit_string = ''
+            self._commit_string(self._preedit_string)
             self._update_preedit()
             return(False)
         # Filter out Ctrol+(jkl;) if it is not in the PREEDIT mode
