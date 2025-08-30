@@ -865,7 +865,7 @@ class EnginePSKK(IBus.Engine):
                 if(is_press_action):
                     # in this mode, pressing space-bar could mean to trigger both the conversion and 漢直
                     # therefore, the context of relase action makes the actual diff.
-                    logger.debug("  => space pressed => do nothing at thsi point")
+                    logger.debug("  => space pressed => do nothing at this point")
                     return(True)
                 else: # space released
                     if(self._preedit_string == ""):
