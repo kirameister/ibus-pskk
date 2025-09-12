@@ -873,6 +873,7 @@ class EnginePSKK(IBus.Engine):
                         return(True)
                     else: # space released while with non-empty preedit string
                         logger.debug(f"  => space is released with non-empty preedit string => This could mean both it's the end of the 漢直 or it's the trigger for conversion-window")
+                        # FIXME
                         return(True)
             # Return-key handling..
             if(keyval == IBus.Return): # FIXME
@@ -880,6 +881,7 @@ class EnginePSKK(IBus.Engine):
                     logger.debug("  => Return is pressed => Confirm the currently selected candidate and move on..")
                     return(True)
                 else:
+                    logger.debug("  => Return is released => For this mode, it would mean going back to the S(0) mode and reset everything")
                     return(True)
             # FIXME: the noirmal Japanese char is typed
             # first, the handling of 漢直 needs to take place
