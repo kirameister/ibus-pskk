@@ -75,6 +75,7 @@ MODE_JUST_FINISHED_KANCHOKU                    = 0x010
 MODE_IN_CONVERSION                             = 0x020
 MODE_IN_FORCED_CONVERSION                      = 0x040
 SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT          = 0x080
+SWITCH_FIRST_SHIFT_PRESSED_IN_FORCED_PREEDIT   = 0x100
 
 HIRAGANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんゔがぎぐげござじずぜぞだぢづでどばびぶべぼぁぃぅぇぉゃゅょっぱぴぷぺぽゎゐゑ・ーゝゞ"
 KATAKANA = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンヴガギグゲゴザジズゼゾダヂヅデドバビブベボァィゥェォャュョッパピプペポヮヰヱ・ーヽヾ"
@@ -837,6 +838,7 @@ class EnginePSKK(IBus.Engine):
                 self._typing_mode &= ~MODE_FORCED_PREEDIT_POSSIBLE
                 self._typing_mode &= ~MODE_IN_PREEDIT # this is because MODE_IN_FORCED_PREEDIT and MODE_IN_PREEDIT need to be mutually exclusive
                 self._typing_mode |= MODE_IN_FORCED_PREEDIT
+                self._typing_mode |= SWITCH_FIRST_SHIFT_PRESSED_IN_FORCED_PREEDIT
                 self._first_kanchoku_stroke = ""
                 self._preedit_string = ""
                 self._update_preedit()
@@ -846,7 +848,7 @@ class EnginePSKK(IBus.Engine):
         ### Once the process goes into one of Case N, it will not go any further block (it always ends with return())
 
         ## Case 1 - Very ordinary Hiragana typing (S0)
-        if(not(self._typing_mode & (MODE_IN_FORCED_PREEDIT|MODE_IN_PREEDIT))):
+        if(not(self._typing_mode & MODE_IN_PREEDIT)):
             logger.debug('Case 1 -- S(0)')
             return(self.process_key_event_simple_type(keyval, is_press_action))
 
@@ -868,6 +870,10 @@ class EnginePSKK(IBus.Engine):
                     logger.debug("  => space pressed => do nothing at this point")
                     return(True)
                 else: # space released
+                    if(self._typing_mode & SWITCH_FIRST_SHIFT_PRESSED_IN_FORCED_PREEDIT):
+                        logger.debug("  => space released right after moving into the forced-preedit mode => Do nothing at this point because no preedit is expected at this point")
+                        self._typing_mode &= SWITCH_FIRST_SHIFT_PRESSED_IN_FORCED_PREEDIT
+                        return(True)
                     if(self._preedit_string == ""):
                         logger.debug("  => space released while preedit string is empty => We consider this action to be the first release action right after entering into the forced preedit mode, therefore this release action should be ignored")
                         return(True)
@@ -885,6 +891,24 @@ class EnginePSKK(IBus.Engine):
                     return(True)
             # FIXME: the noirmal Japanese char is typed
             # first, the handling of 漢直 needs to take place
+            if(self.is_applicable_key_for_kanchoku(keyval) and self._modkey_status & STATUS_SPACE):
+                if(self._first_kanchoku_stroke == ""):
+                    # at this point, it's only about internally storing a key value.
+                    # the rest of the process for this key-stroke is handled in following block
+                    self._first_kanchoku_stroke = chr(keyval)
+                    logger.debug('First 漢直 key-stroke: ' + self._first_kanchoku_stroke)
+                else:
+                    # in the forced preedit mode, normal keyval input while space is pressed can 
+                    # only mean that it's 漢直. So no simultaneous check required. 
+                    # we'll need to check if the stroke was actually meant as a simultaneous strokes
+                    logger.debug('漢直 recognized: ' + self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)])
+                    # flush the preedit before committing the Kanji => This is because we're in S1
+                    self._preedit_string = ""
+                    self._update_preedit()
+                    self.commit_text(IBus.Text.new_from_string(self._kanchoku_layout[self._first_kanchoku_stroke][chr(keyval)]))
+                    self._first_kanchoku_stroke = ""
+                    return(True)
+
             # second, handling of the simultaneous typing needs to take place
             # finally, the handling of the normal typing takes place..
 
