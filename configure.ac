@@ -18,7 +18,7 @@ AC_INIT([ibus-pskk], [0.0.1], [https://github.com/kirameister/ibus-pskk/issues])
 AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([foreign tar-ustar])
 
-AM_GNU_GETTEXT_REQUIRE_VERSION([0.19.8])
+AM_GNU_GETTEXT_REQUIRE_VERSION([0.21])
 AM_GNU_GETTEXT([external])
 
 # Check IBus
