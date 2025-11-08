@@ -679,31 +679,31 @@ class EnginePSKK(IBus.Engine):
         """
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
         # 変換 / 無変換
-        if(keyval == IBus.Muhenkan): # FIXME: ideally this keycode value should not be hard-coded
-            if(is_press_action): # this extra if-clause is necessary not to cascade release signal to further function.
+        if keyval == IBus.Muhenkan: # FIXME: ideally this keycode value should not be hard-coded
+            if is_press_action: # this extra if-clause is necessary not to cascade release signal to further function.
                 logger.debug(f'do_process_key_event -- IME set disabled via Muhenkan')
                 self.set_mode('A', True)
-            return(True) # At this point, no further process would take place. 
-        if(keyval == IBus.Henkan or keyval == IBus.Henkan_Mode):
-            if(is_press_action):
+            return True # At this point, no further process would take place. 
+        if keyval == IBus.Henkan or keyval == IBus.Henkan_Mode:
+            if is_press_action:
                 logger.debug(f'do_process_key_event -- IME set enabled via Henkan')
                 self.set_mode('あ', True)
             self._modkey_status = 0 # we reset everything as we are very much certain that we entered into the Japanese typing mode anew.
             self._typing_mode = 0
-            return(True)
+            return True
         # If the IME is supposed to be disabled (direct mode), do not cascade the keyval any further
-        if(not self.is_enabled()):
+        if not self.is_enabled():
             # this block is for direct-mode (no Japanese char)
-            return(False)
+            return False
         # Following if-clause with Super key should be in this function as Super+space would be used for IME-toggles (by IBus)
-        if(keyval == IBus.Super_L or keyval == IBus.Super_R):
+        if keyval == IBus.Super_L or keyval == IBus.Super_R:
             if(is_press_action):
                 self._modkey_status |= STATUS_SUPERS
             else:
                 self._modkey_status &= ~STATUS_SUPERS
         # Filter out all the key-combos with Super key. Returning False means IME simply pass-thru the keycode
-        if(self._modkey_status & STATUS_SUPERS):
-            return(False)
+        if self._modkey_status & STATUS_SUPERS:
+            return False
         #return(self.process_key_event(keyval, keycode, state))
         # At this point, the simul-timinng diff is taken (to hopefully make it simple)
         current_typed_time = time.perf_counter()
