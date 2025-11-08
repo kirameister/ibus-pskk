@@ -655,6 +655,14 @@ class EnginePSKK(IBus.Engine):
         self._update_input_mode()
         return True
 
+    def _confirm_candidate(self):
+        selected_candidate = self._lookup_table.get_candidate(self._lookup_table.get_cursor_pos()).get_text()
+        logger.debug(f'_confirm_candidate == selected_candidate: {selected_candidate}')
+        if(selected_candidate):
+            self._dict.reset()
+            self._lookup_table.clear()
+        return(selected_candidate)
+
     def _is_simul_condition_met(self, keyval, preedit, stroke_timing_diff):
         """
         This function is to return the boolean value
@@ -709,14 +717,6 @@ class EnginePSKK(IBus.Engine):
         current_typed_time = time.perf_counter()
         self._stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
         return self.process_key_event(keyval, is_press_action)
-
-    def _confirm_candidate(self):
-        selected_candidate = self._lookup_table.get_candidate(self._lookup_table.get_cursor_pos()).get_text()
-        logger.debug(f'_confirm_candidate == selected_candidate: {selected_candidate}')
-        if(selected_candidate):
-            self._dict.reset()
-            self._lookup_table.clear()
-        return(selected_candidate)
 
     def process_key_event(self, keyval, is_press_action):
         """
