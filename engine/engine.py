@@ -814,18 +814,18 @@ class EnginePSKK(IBus.Engine):
         # These set of chars could be used for internally controlling the IME behavior. Other Ctrl-X combinations
         # should be directly pass-thru'ed to the IMF => reset everything and send the combi to IMF.
         # FIXME: these hard-coded set of the chars should eventually be externalized at some point
-        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j','k','l',';','i','o')):
+        if self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j','k','l',';','i','o'):
             self._typing_mode = 0
             self._preedit_string = ''
             self._commit_string(self._preedit_string)
             self._update_preedit()
             return False
         # Filter out Ctrol+(jkl;) if it is not in the PREEDIT mode
-        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('j','k','l',';') and not(self._typing_mode & (MODE_IN_PREEDIT|MODE_IN_FORCED_PREEDIT))):
-            return(False)
+        if self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('j','k','l',';') and not(self._typing_mode & (MODE_IN_PREEDIT|MODE_IN_FORCED_PREEDIT)):
+            return False
         # Filter out Ctrl+(io) if it is not in the CONVERSION mode
-        if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('i','o') and not(self._typing_mode & (MODE_IN_CONVERSION|MODE_IN_FORCED_CONVERSION))):
-            return(False)
+        if self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('i','o') and not(self._typing_mode & (MODE_IN_CONVERSION|MODE_IN_FORCED_CONVERSION)):
+            return False
 
         # forced preedit mode - it is only about entering to the forced mode
         if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE and self._typing_mode & MODE_IN_PREEDIT):
