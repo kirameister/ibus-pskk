@@ -708,7 +708,7 @@ class EnginePSKK(IBus.Engine):
         # At this point, the simul-timinng diff is taken (to hopefully make it simple)
         current_typed_time = time.perf_counter()
         self._stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
-        return self.process_key_event(keyval, state)
+        return self.process_key_event(keyval, is_press_action)
 
     def _confirm_candidate(self):
         selected_candidate = self._lookup_table.get_candidate(self._lookup_table.get_cursor_pos()).get_text()
@@ -718,7 +718,7 @@ class EnginePSKK(IBus.Engine):
             self._lookup_table.clear()
         return(selected_candidate)
 
-    def process_key_event(self, keyval, state):
+    def process_key_event(self, keyval, is_press_action):
         """
         This function is the actual implementation of the do_process_key_event()
         This function could be considered as the core part of the IME
@@ -726,7 +726,6 @@ class EnginePSKK(IBus.Engine):
         which (internal) state the IME is supposed to be. 
         This function is directly called from the IBus; no function call expected (perhaps except for the recursion call)
         """
-        is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
         if is_press_action:
             logger.debug(f'process_key_event -- press("{IBus.keyval_name(keyval)}")     _typing_mode: {bin(self._typing_mode)}')
         else:
@@ -828,7 +827,7 @@ class EnginePSKK(IBus.Engine):
             return False
 
         # forced preedit mode - it is only about entering to the forced mode
-        if(chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE and self._typing_mode & MODE_IN_PREEDIT):
+        if chr(keyval) == self._layout_data['conversion_trigger_key'] and self._modkey_status & STATUS_SPACE and self._typing_mode & MODE_IN_PREEDIT:
             if(is_press_action):
                 self._typing_mode |= MODE_FORCED_PREEDIT_POSSIBLE
                 # do not return at this point..
@@ -843,7 +842,7 @@ class EnginePSKK(IBus.Engine):
                 self._first_kanchoku_stroke = ""
                 self._preedit_string = ""
                 self._update_preedit()
-                return(True)
+                return True
 
         ### From this point, there would be some typings involved..
         ### Once the process goes into one of Case N, it will not go any further block (it always ends with return())
@@ -916,7 +915,7 @@ class EnginePSKK(IBus.Engine):
         # if none of above is applied.. It will be treated as direct input
         self._typing_mode = 0
         logger.debug('Case Z => reset _typing_mode completely and return(False)')
-        return(False)
+        return False
 
 
     def process_key_event_simple_type(self, keyval, is_press_action):
