@@ -679,7 +679,7 @@ class EnginePSKK(IBus.Engine):
         """
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
         # 変換 / 無変換
-        if(keyval == IBus.Muhenkan):
+        if(keyval == IBus.Muhenkan): # FIXME: ideally this keycode value should not be hard-coded
             if(is_press_action): # this extra if-clause is necessary not to cascade release signal to further function.
                 logger.debug(f'do_process_key_event -- IME set disabled via Muhenkan')
                 self.set_mode('A', True)
@@ -701,14 +701,14 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status |= STATUS_SUPERS
             else:
                 self._modkey_status &= ~STATUS_SUPERS
-        # Filter out all the key-combos with Super key
+        # Filter out all the key-combos with Super key. Returning False means IME simply pass-thru the keycode
         if(self._modkey_status & STATUS_SUPERS):
             return(False)
         #return(self.process_key_event(keyval, keycode, state))
         # At this point, the simul-timinng diff is taken (to hopefully make it simple)
         current_typed_time = time.perf_counter()
         self._stroke_timing_diff = int((current_typed_time - self._previous_typed_timestamp)*1000)
-        return(self.process_key_event(keyval, state))
+        return self.process_key_event(keyval, state)
 
     def _confirm_candidate(self):
         selected_candidate = self._lookup_table.get_candidate(self._lookup_table.get_cursor_pos()).get_text()
