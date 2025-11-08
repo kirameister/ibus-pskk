@@ -726,10 +726,8 @@ class EnginePSKK(IBus.Engine):
         which (internal) state the IME is supposed to be. 
         This function is directly called from the IBus; no function call expected (perhaps except for the recursion call)
         """
-        #logger.debug(f'process_key_event -- ("{IBus.keyval_name(keyval)}", {keyval:#04x}, {keycode:#04x}, {state:#010x})')
-        #logger.debug(f'process_key_event -- _typing_mode: {bin(self._typing_mode)}')
         is_press_action = ((state & IBus.ModifierType.RELEASE_MASK) == 0)
-        if(is_press_action):
+        if is_press_action:
             logger.debug(f'process_key_event -- press("{IBus.keyval_name(keyval)}")     _typing_mode: {bin(self._typing_mode)}')
         else:
             logger.debug(f'process_key_event -- release("{IBus.keyval_name(keyval)}")   _typing_mode: {bin(self._typing_mode)}')
@@ -737,9 +735,9 @@ class EnginePSKK(IBus.Engine):
         # if the it is already in the conversion mode, we'll need to let the IBus window handle the key-events
         ## Case 0 - Block for the dictionary-lookup (L)
         #if(self._lookup_table.get_number_of_candidates()):
-        if(self._typing_mode & MODE_IN_CONVERSION):
+        if self._typing_mode & MODE_IN_CONVERSION:
             logger.debug('Case 0 -- L(0)')
-            if(keyval == IBus.Return):
+            if keyval == IBus.Return:
                 # press/release-action is not differentiated in this block as we assume press-action always happens before the release
                 logger.debug('  => Return key pressed => conversion mode ended')
                 logger.debug(f'get_cursor_pos: {self._lookup_table.get_cursor_pos()}')
@@ -750,17 +748,17 @@ class EnginePSKK(IBus.Engine):
                 self._commit_string(selected_candidate)
                 self._preedit_string = ""
                 self._update_preedit()
-                return(True)
+                return True
             if(keyval == IBus.space):
                 if(is_press_action):
                     pass # press-action itself doesn't have an immediate action at this point.
                     self._modkey_status |= STATUS_SPACE
-                    return(True)
+                    return True
                 else: # release-action indicates next candidate to be selected (but not yet confirmed)
                     logger.debug('space-bar is released while the conversion-window is present')
                     self._modkey_status &= ~STATUS_SPACE
                     self.show_conversion_window()
-                    return(True)
+                    return True
             if(keyval == IBus.Down):
                 if(is_press_action):
                     logger.debug('Down-arrow pressed')
@@ -813,12 +811,15 @@ class EnginePSKK(IBus.Engine):
                 self._modkey_status &= ~STATUS_ALTS
 
         # Filter out the irrelevant combo keys with Ctrl
+        # These set of chars could be used for internally controlling the IME behavior. Other Ctrl-X combinations
+        # should be directly pass-thru'ed to the IMF => reset everything and send the combi to IMF.
+        # FIXME: these hard-coded set of the chars should eventually be externalized at some point
         if(self._modkey_status & STATUS_CONTROLS and chr(keyval) not in ('j','k','l',';','i','o')):
             self._typing_mode = 0
             self._preedit_string = ''
             self._commit_string(self._preedit_string)
             self._update_preedit()
-            return(False)
+            return False
         # Filter out Ctrol+(jkl;) if it is not in the PREEDIT mode
         if(self._modkey_status & STATUS_CONTROLS and chr(keyval) in ('j','k','l',';') and not(self._typing_mode & (MODE_IN_PREEDIT|MODE_IN_FORCED_PREEDIT))):
             return(False)
