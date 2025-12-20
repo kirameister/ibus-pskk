@@ -748,8 +748,8 @@ class EnginePSKK(IBus.Engine):
                 self._preedit_string = ""
                 self._update_preedit()
                 return True
-            if(keyval == IBus.space):
-                if(is_press_action):
+            if keyval == IBus.space:
+                if is_press_action:
                     pass # press-action itself doesn't have an immediate action at this point.
                     self._modkey_status |= STATUS_SPACE
                     return True
@@ -758,17 +758,17 @@ class EnginePSKK(IBus.Engine):
                     self._modkey_status &= ~STATUS_SPACE
                     self.show_conversion_window()
                     return True
-            if(keyval == IBus.Down):
+            if keyval == IBus.Down:
                 if(is_press_action):
                     logger.debug('Down-arrow pressed')
                     return self.do_cursor_down()
                 return(True) # ignore the release action
-            if(keyval == IBus.Up):
+            if keyval == IBus.Up:
                 if(is_press_action):
                     logger.debug('Up-arrow pressed')
                     return self.do_cursor_up()
                 return(True) # ignore the release action
-            if(self.is_applicable_key_for_kanchoku(keyval) and is_press_action):
+            if self.is_applicable_key_for_kanchoku(keyval) and is_press_action:
                 # A Japanese key (but not the numbers) is pressed while the conversion-window is present. 
                 # Depending on the space-bar is being pressed, different behaviors would apply.
                 # However, such different handlings are implemented in following blocks. 
@@ -783,7 +783,7 @@ class EnginePSKK(IBus.Engine):
             # we'll leave this move behind only when there is an appropriate input
             #self._typing_mode &= ~MODE_IN_CONVERSION
             else:
-                return(True)
+                return True
         # end of the conversion-window handling
 
         # before getting started, check and update the modkey-status
