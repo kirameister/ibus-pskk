@@ -19,7 +19,6 @@ SUBDIRS = \
 	engine \
 	icons \
 	layouts \
-	po \
 	setup \
 	$(NULL)
 
@@ -45,7 +44,6 @@ noinst_DIST = \
 	$(NULL)
 
 DISTCLEANFILES = \
-	po/stamp-it \
 	ABOUT-NLS \
 	$(NULL)
 
@@ -86,17 +84,6 @@ l:
 	rm -f layouts/Makefile
 	rm -f layouts/Makefile.in
 	rm -f missing
-	rm -f po/Makefile
-	rm -f po/Makefile.in
-	rm -f po/Makefile.in.in
-	rm -f po/Makevars.template
-	rm -f po/Rules-quot
-	rm -f po/boldquot.sed
-	rm -f po/en@boldquot.header
-	rm -f po/en@quot.header
-	rm -f po/insert-header.sed
-	rm -f po/quot.sed
-	rm -f po/remove-potcdate.sed
 	rm -f py-compile
 	rm -f setup/Makefile
 	rm -f setup/Makefile.in
@@ -107,8 +94,6 @@ l:
 	rm -f engine/org.freedesktop.ibus.engine.pskk.gschema.xml
 	rm -f engine/pskk.xml
 	rm -f engine/util.py
-	rm -f po/ja.gmo
-	rm -f po/stamp-po
 	rm -f setup/ibus-setup-pskk
 	rm -f setup/ibus-setup-pskk.desktop
 	rm -f setup/util.py
