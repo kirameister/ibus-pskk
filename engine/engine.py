@@ -126,6 +126,7 @@ class EnginePSKK(IBus.Engine):
         self._lookup_table.set_orientation(IBus.Orientation.VERTICAL)
 
         self._init_props()
+        self.register_properties(self._prop_list)
 
         self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
         self._settings.connect('changed', self._config_value_changed_cb)
@@ -145,6 +146,15 @@ class EnginePSKK(IBus.Engine):
 
         self._about_dialog = None
         self._q = queue.Queue()
+
+
+    def do_focus_in(self):
+        self._event.reset()
+        self.register_properties(self._prop_list)
+        self._update_preedit()
+        # Request the initial surrounding-text in addition to the "enable" handler.
+        self.get_surrounding_text()
+
 
     def _init_props(self):
         '''
@@ -345,6 +355,38 @@ class EnginePSKK(IBus.Engine):
         """
 
 
+    def do_property_activate(self, prop_name, state):
+        '''
+        '''
+        logger.info(f'property_activate({prop_name}, {state})')
+        if prop_name == 'About':
+            if self._about_dialog:
+                self._about_dialog.present()
+                return
+            dialog = Gtk.AboutDialog()
+            dialog.set_program_name("PSKK")
+            dialog.set_copyright("Copyright 2021-2024 Akira K.")
+            dialog.set_authors(["Akira K."])
+            dialog.set_documenters(["Akira K."])
+            dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
+            dialog.set_website_label("Introduction to PSKK")
+            dialog.set_logo_icon_name(util.get_package_name())
+            dialog.set_default_icon_name(util.get_package_name())
+            dialog.set_version(util.get_version())
+            dialog.set_comments("config files location : ${HOME}/.config/ibus-pskk")
+            # To close the dialog when "close" is clicked, e.g. on RPi,
+            # we connect the "response" signal to about_response_callback
+            dialog.connect("response", self.about_response_callback)
+            self._about_dialog = dialog
+            dialog.show()
+        elif prop_name.startswith('InputMode.'):
+            if state == IBus.PropState.CHECKED:
+                # At this point, we only support direct input and Hiragana. Nothing else..
+                mode = {
+                    'InputMode.Alphanumeric': 'A',
+                    'InputMode.Hiragana': 'あ',
+                }.get(prop_name, 'A')
+                self.set_mode(mode, True)
 
 
     def _update_input_mode(self):
