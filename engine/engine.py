@@ -126,7 +126,7 @@ class EnginePSKK(IBus.Engine):
         self._lookup_table.set_orientation(IBus.Orientation.VERTICAL)
 
         self._init_props()
-        self.register_properties(self._prop_list)
+        #self.register_properties(self._prop_list)
 
         self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
         self._settings.connect('changed', self._config_value_changed_cb)
@@ -170,7 +170,8 @@ class EnginePSKK(IBus.Engine):
             key='InputMode',
             prop_type=IBus.PropType.MENU,
             symbol=IBus.Text.new_from_string(self._mode),
-            label=IBus.Text.new_from_string("Input mode (" + self._mode + ")"),
+            #label=IBus.Text.new_from_string("Input mode (" + self._mode + ")"),
+            label=IBus.Text.new_from_string(f"Input mode ({self._mode})"),
             icon=None,
             tooltip=None,
             sensitive=True,
@@ -356,8 +357,6 @@ class EnginePSKK(IBus.Engine):
 
 
     def do_property_activate(self, prop_name, state):
-        '''
-        '''
         logger.info(f'property_activate({prop_name}, {state})')
         if prop_name == 'About':
             if self._about_dialog:
@@ -365,7 +364,7 @@ class EnginePSKK(IBus.Engine):
                 return
             dialog = Gtk.AboutDialog()
             dialog.set_program_name("PSKK")
-            dialog.set_copyright("Copyright 2021-2024 Akira K.")
+            dialog.set_copyright("Copyright 2021-2025 Akira K.")
             dialog.set_authors(["Akira K."])
             dialog.set_documenters(["Akira K."])
             dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
@@ -388,6 +387,10 @@ class EnginePSKK(IBus.Engine):
                 }.get(prop_name, 'A')
                 self.set_mode(mode, True)
 
+
+    def about_response_callback(self, dialog, response):
+        dialog.destroy()
+        self._about_dialog = None
 
     def _update_input_mode(self):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))

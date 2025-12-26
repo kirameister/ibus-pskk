@@ -45,6 +45,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/ibus/component/*
 %{_datadir}/glib-2.0/schemas/org.freedesktop.ibus.engine.pskk.gschema.xml
 %{_datadir}/icons
+%{_datadir}/icons/hicolor/scalable/apps/ibus-pskk.svg
 %{_libexecdir}/ibus-engine-pskk
 %{_libexecdir}/ibus-setup-pskk
 

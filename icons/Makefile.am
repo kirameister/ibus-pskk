@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dist_hicolor_icon_32_DATA = ibus-hiragana.png ibus-setup-hiragana.png
-hicolor_icon_32dir = $(datadir)/icons/hicolor/32x32/apps
+#dist_hicolor_icon_32_DATA = ibus-hiragana.png ibus-setup-hiragana.png
+#hicolor_icon_32dir = $(datadir)/icons/hicolor/32x32/apps
 
-dist_hicolor_icon_scalable_DATA = ibus-hiragana.svg ibus-setup-hiragana.svg
+dist_hicolor_icon_scalable_DATA = ibus-pskk.svg
 hicolor_icon_scalabledir = $(datadir)/icons/hicolor/scalable/apps
