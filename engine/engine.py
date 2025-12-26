@@ -95,7 +95,6 @@ class EnginePSKK(IBus.Engine):
     __gtype_name__ = 'EnginePSKK'
 
     def __init__(self):
-        logger.error(f'started')
         super().__init__()
         # setting the initial input mode
         self._mode = 'A'  # _mode must be one of _input_mode_names
@@ -146,6 +145,73 @@ class EnginePSKK(IBus.Engine):
 
         self._about_dialog = None
         self._q = queue.Queue()
+
+    def _init_props(self):
+        '''
+        This function is called as part of the instantiation (__init__). 
+        This function creates the GUI menu list (typically top-right corner).
+
+        http://lazka.github.io/pgi-docs/IBus-1.0/classes/PropList.html
+        http://lazka.github.io/pgi-docs/IBus-1.0/classes/Property.html
+        '''
+        logger.debug('_init_props()')
+        self._prop_list = IBus.PropList()
+        self._input_mode_prop = IBus.Property(
+            key='InputMode',
+            prop_type=IBus.PropType.MENU,
+            symbol=IBus.Text.new_from_string(self._mode),
+            label=IBus.Text.new_from_string("Input mode (" + self._mode + ")"),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.UNCHECKED,
+            sub_props=None)
+        # This is to add the options for different modes in separate function
+        self._input_mode_prop.set_sub_props(self._init_input_mode_props())
+        self._prop_list.append(self._input_mode_prop)
+        prop = IBus.Property(
+            key='About',
+            prop_type=IBus.PropType.NORMAL,
+            label=IBus.Text.new_from_string("About PSKK..."),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.UNCHECKED,
+            sub_props=None)
+        self._prop_list.append(prop)
+        logger.debug('_init_props() -- end')
+
+    def _init_input_mode_props(self):
+        '''
+        This is a function to produce GUI (sub) component for
+        different input modes.
+        This function is meant to be only called from _init_props()
+        '''
+        logger.debug('_init_input_mode_props()')
+        props = IBus.PropList()
+        props.append(IBus.Property(key='InputMode.Alphanumeric',
+                                   prop_type=IBus.PropType.RADIO,
+                                   label=IBus.Text.new_from_string("Alphanumeric (A)"),
+                                   icon=None,
+                                   tooltip=None,
+                                   sensitive=True,
+                                   visible=True,
+                                   state=IBus.PropState.CHECKED,
+                                   sub_props=None))
+        props.append(IBus.Property(key='InputMode.Hiragana',
+                                   prop_type=IBus.PropType.RADIO,
+                                   label=IBus.Text.new_from_string("Hiragana (あ)"),
+                                   icon=None,
+                                   tooltip=None,
+                                   sensitive=True,
+                                   visible=True,
+                                   state=IBus.PropState.UNCHECKED,
+                                   sub_props=None))
+        logger.debug('_init_input_mode_props() -- end')
+        return props
+
 
 
     def _load_kanchoku_layout(self):
@@ -241,7 +307,7 @@ class EnginePSKK(IBus.Engine):
         if mode not in INPUT_MODE_NAMES:
             mode = 'A'
             settings.reset('mode')
-        logger.info(f'input mode: {mode}')
+        logger.debug(f'_load_input_mode(); mode = {mode}')
         return mode
 
     def set_mode(self, mode, override=False):
@@ -255,80 +321,36 @@ class EnginePSKK(IBus.Engine):
             return False
         logger.debug(f'set_mode({mode})')
         self._preedit_string = ''
-        #self._commit()
+        self._commit()
         self._mode = mode
         #self._update_preedit()
         #self._update_lookup_table()
         self._update_input_mode()
         return True
 
+    def _commit(self):
+        pass
+        """
+        current = self._dict.current()
+        if current:
+            self._dict.confirm(''.join(self._shrunk))
+            self._dict.reset()
+            self._lookup_table.clear()
+        text = self._previous_text + current
+        self._previous_text = ''
+        #self._update_preedit()
+        if text:
+            logger.debug(f'_commit(): "{text}"')
+            self.commit_text(IBus.Text.new_from_string(text))
+        """
+
+
+
+
     def _update_input_mode(self):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))
-        self._input_mode_prop.set_label(IBus.Text.new_from_string(f"Input mode ({self._mode})"))
+        self._input_mode_prop.set_label(IBus.Text.new_from_string("Input mode (" + self._mode + ")"))
         self.update_property(self._input_mode_prop)
-
-    def _init_props(self):
-        '''
-        This function is called as part of the instantiation (__init__). 
-        This function creates the GUI menu list (typically top-right corner).
-
-        http://lazka.github.io/pgi-docs/IBus-1.0/classes/PropList.html
-        http://lazka.github.io/pgi-docs/IBus-1.0/classes/Property.html
-        '''
-        self._prop_list = IBus.PropList()
-        self._input_mode_prop = IBus.Property(
-            key='InputMode',
-            prop_type=IBus.PropType.MENU,
-            symbol=IBus.Text.new_from_string(self._mode),
-            label=IBus.Text.new_from_string(f"Input mode ({self._mode})"),
-            icon=None,
-            tooltip=None,
-            sensitive=True,
-            visible=True,
-            state=IBus.PropState.UNCHECKED,
-            sub_props=None)
-        # This is to add the options for different modes in separate function
-        self._input_mode_prop.set_sub_props(self._init_input_mode_props())
-        self._prop_list.append(self._input_mode_prop)
-        prop = IBus.Property(
-            key='About',
-            prop_type=IBus.PropType.NORMAL,
-            label=IBus.Text.new_from_string("About PSKK..."),
-            icon=None,
-            tooltip=None,
-            sensitive=True,
-            visible=True,
-            state=IBus.PropState.UNCHECKED,
-            sub_props=None)
-        self._prop_list.append(prop)
-
-    def _init_input_mode_props(self):
-        '''
-        This is a function to produce GUI (sub) component for
-        different input modes.
-        This function is meant to be only called from _init_props()
-        '''
-        props = IBus.PropList()
-        props.append(IBus.Property(key='InputMode.Alphanumeric',
-                                   prop_type=IBus.PropType.RADIO,
-                                   label=IBus.Text.new_from_string("Alphanumeric (A)"),
-                                   icon=None,
-                                   tooltip=None,
-                                   sensitive=True,
-                                   visible=True,
-                                   state=IBus.PropState.CHECKED,
-                                   sub_props=None))
-        props.append(IBus.Property(key='InputMode.Hiragana',
-                                   prop_type=IBus.PropType.RADIO,
-                                   label=IBus.Text.new_from_string("Hiragana (あ)"),
-                                   icon=None,
-                                   tooltip=None,
-                                   sensitive=True,
-                                   visible=True,
-                                   state=IBus.PropState.UNCHECKED,
-                                   sub_props=None))
-        return props
-
 
     def _load_layout(self):
         """
