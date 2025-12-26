@@ -100,8 +100,10 @@ class EnginePSKK(IBus.Engine):
         # setting the initial input mode
         self._mode = 'A'  # _mode must be one of _input_mode_names
         self._mode = 'あ'  # DEBUG I do not like to click extra...
+        self._override = True
         # loading the layout
         self._layout_data = dict() # this is complete data of layout JSON
+        self._layout = dict() # this is the modified layout of JSON
         self._kanchoku_layout = dict()
         # _layout[INPUT]: {"output": OUTPUT_STR, "pending": PENDING_STR, "simul_limit_ms": INT}
         self._simul_candidate_char_set = set()
@@ -119,7 +121,6 @@ class EnginePSKK(IBus.Engine):
 
         self._preedit_string = ''
         self._previous_text = ''
-        self._shrunk = []
 
         # This property is for confirming the kanji-kana converted string
         self._lookup_table = IBus.LookupTable.new(10, 0, True, False)
@@ -133,22 +134,101 @@ class EnginePSKK(IBus.Engine):
 
         # load configs
         self._load_configs()
-        #self._layout_data = self._load_layout() # this will also update self._layout
-        #self._kanchoku_layout = self._load_kanchoku_layout()
+        self._layout_data = self._load_layout() # this will also update self._layout
+        self._kanchoku_layout = self._load_kanchoku_layout()
         # This will create an object defined in event.py
         self._event = Event(self, self._layout_data)
 
         self.set_mode(self._load_input_mode(self._settings))
-        self.set_mode('あ')
-        #self.character_after_n = "aiueo'wy"
+        #self.set_mode('あ')
 
-        #self.connect('set-cursor-location', self.set_cursor_location_cb)
+        self.connect('set-cursor-location', self.set_cursor_location_cb)
 
         self._about_dialog = None
         self._q = queue.Queue()
 
+
+    def _load_kanchoku_layout(self):
+        """
+        Purpose of this function is to load the kanchoku (漢直) layout
+        as form of dict. 
+        The term "layout" may not be very accurate, but I haven't found
+        a better term for this concept yet (people say "漢直配列").
+        """
+        return_dict = dict()
+        path = ""
+        if('kanchoku_layout' in self._config):
+            if(os.path.exists(os.path.join(util.get_user_configdir(), self._config['kanchoku_layout']))):
+                path = os.path.join(util.get_user_configdir(), self._config['kanchoku_layout'])
+                logger.debug(f"Specified kanchoku layout {self._config['kanchokulayout']} found in {util.get_user_configdir()}")
+            elif(os.path.exists(os.path.join(util.get_datadir(), 'layouts', self._config['layout']))):
+                path = os.path.join(util.get_datadir(), 'layouts', self._config['kanchoku_layout'])
+                logger.debug(f"Specified layout {self._config['kanchoku_layout']} found in {util.get_datadir()}")
+            else:
+                path = os.path.join(util.get_datadir(), 'layouts', 'aki_code.json')
+            logger.info(f'kanchoku-layout: {path}')
+        default_kanchoku_layout_path = os.path.join(util.get_datadir(), 'layouts', 'aki_code.json')
+        kanchoku_layout_data = dict()
+        try:
+            with open(path) as f:
+                kanchoku_layout_data = json.load(f)
+                logger.info(f'kanchoku-layout JSON file loaded: {path}')
+        except Exception as error:
+            logger.error(f'Error loading the kanchoku data {path} : {error}')
+        if(len(kanchoku_layout_data) == 0):
+            try:
+                with open(default_kanchoku_layout_path) as f:
+                    kanchoku_layout_data = json.load(f)
+                    logger.info(f'default kanchoku layout JSON file loaded: {default_kanchoku_layout_path}')
+            except Exception as error:
+                logger.error(f'Error loading the default kanchoku data {default_kanchoku_layout_path}: {error}')
+        # initialize the layout first..
+        for first in KANCHOKU_KEY_SET:
+            return_dict[first] = dict()
+            for second in KANCHOKU_KEY_SET:
+                return_dict[first][second] = kanchoku_layout_data[first][second]
+        # actually loading the layout..
+        for first in kanchoku_layout_data.keys():
+            if(first not in KANCHOKU_KEY_SET):
+                continue
+            for second in kanchoku_layout_data[first].keys():
+                if(second not in KANCHOKU_KEY_SET):
+                    continue
+                return_dict[first][second] = kanchoku_layout_data[first][second]
+        #logger.debug(f'Loaded kanchoku data: {return_dict}')
+        return(return_dict)
+
+
     def _load_configs(self):
-        pass
+        '''
+        This function loads the necessary (and optional) configs from the config JSON file
+        The logging level value would be set to WARNING, if it's absent in the config JSON.
+        '''
+        self._config = util.get_config_data()
+        self._logging_level = self._load_logging_level(self._config)
+        logger.debug('config.json loaded')
+        #logger.debug(self._config)
+        # loading layout should be part of (re-)loading config
+        self._layout_data = self._load_layout()
+        self._kanchoku_layout = self._load_kanchoku_layout()
+        self._event = Event(self, self._layout_data)
+
+    def _load_logging_level(self, config):
+        '''
+        This function sets the logging level
+        which can be obtained from the config.json
+        When the value is not present (or incorrect) in config.json,
+        warning is used as default.
+        '''
+        level = 'WARNING' # default value
+        if('logging_level' in config):
+            level = config['logging_level']
+        if(level not in NAME_TO_LOGGING_LEVEL):
+            logger.warning(f'Specified logging level {level} is not recognized. Using the default WARNING level.')
+            level = 'WARNING'
+        logger.info(f'logging_level: {level}')
+        logging.getLogger().setLevel(NAME_TO_LOGGING_LEVEL[level])
+        return level
 
     def _config_value_changed_cb(self, settings, key):
         logger.debug(f'config_value_changed("{key}")')
@@ -175,12 +255,17 @@ class EnginePSKK(IBus.Engine):
             return False
         logger.debug(f'set_mode({mode})')
         self._preedit_string = ''
-        self._commit()
+        #self._commit()
         self._mode = mode
-        self._update_preedit()
-        self._update_lookup_table()
+        #self._update_preedit()
+        #self._update_lookup_table()
         self._update_input_mode()
         return True
+
+    def _update_input_mode(self):
+        self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))
+        self._input_mode_prop.set_label(IBus.Text.new_from_string(f"Input mode ({self._mode})"))
+        self.update_property(self._input_mode_prop)
 
     def _init_props(self):
         '''
@@ -339,3 +424,20 @@ class EnginePSKK(IBus.Engine):
                 return(True)
         return(False)
 
+    def set_cursor_location_cb(self, engine, x, y, w, h):
+        """
+        This function (presumably) detects the location of (new) position
+        of mouse pointer..
+        This would most likely be helpful when detecting a "pause" in the 
+        typing.. (i.e., typing intervened by mouse move)
+        ...It seems taht this function is called periodically. It may be an idea to store the position of the mouse pointer and commit(?) the hiragana only with pointer-position value mismatch? 
+        """
+        logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
+        #self._update_lookup_table()
+
+    def _forward_backspaces(self, size):
+        logger.debug(f'_forward_backspaces({size})')
+        for i in range(size):
+            self.forward_key_event(IBus.BackSpace, 14, 0)
+            time.sleep(EVENT_DELAY)
+            self.forward_key_event(IBus.BackSpace, 14, IBus.ModifierType.RELEASE_MASK)
