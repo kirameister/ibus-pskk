@@ -125,7 +125,7 @@ class EnginePSKK(IBus.Engine):
 
     def do_focus_in(self):
         self.register_properties(self._prop_list)
-        self._update_preedit()
+        #self._update_preedit()
         # Request the initial surrounding-text in addition to the "enable" handler.
         self.get_surrounding_text()
 
@@ -211,7 +211,7 @@ class EnginePSKK(IBus.Engine):
         if('kanchoku_layout' in self._config):
             if(os.path.exists(os.path.join(util.get_user_configdir(), self._config['kanchoku_layout']))):
                 path = os.path.join(util.get_user_configdir(), self._config['kanchoku_layout'])
-                logger.debug(f"Specified kanchoku layout {self._config['kanchokulayout']} found in {util.get_user_configdir()}")
+                logger.debug(f"Specified kanchoku layout {self._config['kanchoku_layout']} found in {util.get_user_configdir()}")
             elif(os.path.exists(os.path.join(util.get_datadir(), 'layouts', self._config['layout']))):
                 path = os.path.join(util.get_datadir(), 'layouts', self._config['kanchoku_layout'])
                 logger.debug(f"Specified layout {self._config['kanchoku_layout']} found in {util.get_datadir()}")

@@ -38,10 +38,13 @@ install-icons:
 install-files:
     mkdir -p {{install_root}}/models
     mkdir -p {{install_root}}/lib
+    mkdir -p {{install_root}}/layout
     cp -r src/* {{install_root}}/lib/
     #cp -r models/* {{install_root}}/models/ ## FIXME
     cp data/pskk.xml {{ibus_component_dir}}/
     chmod 644 {{ibus_component_dir}}/pskk.xml
+    cp -r data/layout/* {{install_root}}/layout/
+    chmod 644 {{install_root}}/layout/*
 
 # Full installation
 install: install-deps install-files install-schema install-icons
