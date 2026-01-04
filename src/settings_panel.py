@@ -451,6 +451,10 @@ class SettingsPanel(Gtk.Window):
                 background-image: none;
                 border: 1px solid #999;
                 color: #000000;
+                font-size: 14pt;
+                font-weight: bold;
+                padding: 12px 15px;
+                min-height: 40px;
             }
             treeview header button:hover {
                 background-color: #c0c0c0;
@@ -465,6 +469,10 @@ class SettingsPanel(Gtk.Window):
         first_renderer.set_property("editable", True)
         first_renderer.set_property("cell-background", "#ffffff")  # White background
         first_renderer.set_property("cell-background-set", True)
+        first_renderer.set_property("ypad", 10)  # Vertical padding
+        first_renderer.set_property("xpad", 15)  # Horizontal padding
+        first_renderer.set_property("height", 40)  # Minimum cell height
+        first_renderer.set_property("size-points", 14.0)  # Font size in points
         first_renderer.connect("edited", self.on_murenso_first_edited)
         first_column = Gtk.TreeViewColumn("First Key", first_renderer, text=0)
         self.murenso_view.append_column(first_column)
@@ -474,6 +482,10 @@ class SettingsPanel(Gtk.Window):
         second_renderer.set_property("editable", True)
         second_renderer.set_property("cell-background", "#ffffff")  # White background
         second_renderer.set_property("cell-background-set", True)
+        second_renderer.set_property("ypad", 10)  # Vertical padding
+        second_renderer.set_property("xpad", 15)  # Horizontal padding
+        second_renderer.set_property("height", 40)  # Minimum cell height
+        second_renderer.set_property("size-points", 14.0)  # Font size in points
         second_renderer.connect("edited", self.on_murenso_second_edited)
         second_column = Gtk.TreeViewColumn("Second Key", second_renderer, text=1)
         self.murenso_view.append_column(second_column)
@@ -483,6 +495,10 @@ class SettingsPanel(Gtk.Window):
         kanji_renderer.set_property("editable", True)
         kanji_renderer.set_property("cell-background", "#ffffff")  # White background
         kanji_renderer.set_property("cell-background-set", True)
+        kanji_renderer.set_property("ypad", 10)  # Vertical padding
+        kanji_renderer.set_property("xpad", 15)  # Horizontal padding
+        kanji_renderer.set_property("height", 40)  # Minimum cell height
+        kanji_renderer.set_property("size-points", 16.0)  # Larger font for Kanji
         kanji_renderer.connect("edited", self.on_murenso_kanji_edited)
         kanji_column = Gtk.TreeViewColumn("Kanji", kanji_renderer, text=2)
         self.murenso_view.append_column(kanji_column)
