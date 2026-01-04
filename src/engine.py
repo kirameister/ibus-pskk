@@ -346,7 +346,6 @@ class EnginePSKK(IBus.Engine):
             dialog.set_default_icon_name(util.get_package_name())
             dialog.set_version(util.get_version())
             dialog.set_comments("config files location : ${HOME}/.config/ibus-pskk")
-            # To close the dialog when "close" is clicked, e.g. on RPi,
             # we connect the "response" signal to about_response_callback
             dialog.connect("response", self.about_response_callback)
             self._about_dialog = dialog
