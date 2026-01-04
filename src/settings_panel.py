@@ -430,9 +430,41 @@ class SettingsPanel(Gtk.Window):
         self.murenso_store = Gtk.ListStore(str, str, str)
         self.murenso_view = Gtk.TreeView(model=self.murenso_store)
 
+        # Enable grid lines for better visibility
+        self.murenso_view.set_grid_lines(Gtk.TreeViewGridLines.BOTH)
+
+        # Apply CSS for visible cell borders and gray headers
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+            treeview {
+                -GtkTreeView-grid-line-width: 1;
+                -GtkTreeView-grid-line-pattern: '';
+            }
+            treeview.view {
+                border: 1px solid #ccc;
+            }
+            treeview.view:selected {
+                background-color: #4a90d9;
+            }
+            treeview header button {
+                background-color: #d0d0d0;
+                background-image: none;
+                border: 1px solid #999;
+                color: #000000;
+            }
+            treeview header button:hover {
+                background-color: #c0c0c0;
+            }
+        """)
+        screen = Gdk.Screen.get_default()
+        style_context = Gtk.StyleContext()
+        style_context.add_provider_for_screen(screen, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+
         # First key column
         first_renderer = Gtk.CellRendererText()
         first_renderer.set_property("editable", True)
+        first_renderer.set_property("cell-background", "#ffffff")  # White background
+        first_renderer.set_property("cell-background-set", True)
         first_renderer.connect("edited", self.on_murenso_first_edited)
         first_column = Gtk.TreeViewColumn("First Key", first_renderer, text=0)
         self.murenso_view.append_column(first_column)
@@ -440,6 +472,8 @@ class SettingsPanel(Gtk.Window):
         # Second key column
         second_renderer = Gtk.CellRendererText()
         second_renderer.set_property("editable", True)
+        second_renderer.set_property("cell-background", "#ffffff")  # White background
+        second_renderer.set_property("cell-background-set", True)
         second_renderer.connect("edited", self.on_murenso_second_edited)
         second_column = Gtk.TreeViewColumn("Second Key", second_renderer, text=1)
         self.murenso_view.append_column(second_column)
@@ -447,6 +481,8 @@ class SettingsPanel(Gtk.Window):
         # Kanji column
         kanji_renderer = Gtk.CellRendererText()
         kanji_renderer.set_property("editable", True)
+        kanji_renderer.set_property("cell-background", "#ffffff")  # White background
+        kanji_renderer.set_property("cell-background-set", True)
         kanji_renderer.connect("edited", self.on_murenso_kanji_edited)
         kanji_column = Gtk.TreeViewColumn("Kanji", kanji_renderer, text=2)
         self.murenso_view.append_column(kanji_column)
