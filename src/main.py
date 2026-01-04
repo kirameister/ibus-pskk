@@ -53,7 +53,7 @@ class IMApp:
                 name="org.freedesktop.IBus.PSKK",
                 description="PSKK",
                 version=util.get_version(),
-                license="Apache",
+                license="MIT",
                 author="Akira K.",
                 homepage="https://github.com/kirameister/" + util.get_package_name(),
                 textdomain=util.get_package_name())
@@ -62,7 +62,7 @@ class IMApp:
                 longname="PSKK",
                 description="PSKK",
                 language="ja",
-                license="Apache",
+                license="MIT",
                 author="Akira K.",
                 icon=util.get_package_name(),
                 layout="default")
