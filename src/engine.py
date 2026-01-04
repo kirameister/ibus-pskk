@@ -1,4 +1,5 @@
 import util
+import settings_panel
 
 import gettext
 import json
@@ -120,6 +121,7 @@ class EnginePSKK(IBus.Engine):
         self.connect('set-cursor-location', self.set_cursor_location_cb)
 
         self._about_dialog = None
+        self._settings_panel = None
         self._q = queue.Queue()
 
 
@@ -155,6 +157,17 @@ class EnginePSKK(IBus.Engine):
         # This is to add the options for different modes in separate function
         self._input_mode_prop.set_sub_props(self._init_input_mode_props())
         self._prop_list.append(self._input_mode_prop)
+        settings_prop = IBus.Property(
+            key='Settings',
+            prop_type=IBus.PropType.NORMAL,
+            label=IBus.Text.new_from_string("Settings..."),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.UNCHECKED,
+            sub_props=None)
+        self._prop_list.append(settings_prop)
         prop = IBus.Property(
             key='About',
             prop_type=IBus.PropType.NORMAL,
@@ -355,10 +368,26 @@ class EnginePSKK(IBus.Engine):
 
         return False  # Don't repeat this idle callback
 
+    def _show_settings_panel(self):
+        if self._settings_panel:
+            self._settings_panel.present()
+            return False  # Don't repeat this idle callback
+
+        panel = settings_panel.SettingsPanel()
+        panel.connect("destroy", self.settings_panel_closed_callback)
+        self._settings_panel = panel
+        panel.show_all()
+
+        return False  # Don't repeat this idle callback
+
 
     def do_property_activate(self, prop_name, state):
         logger.info(f'property_activate({prop_name}, {state})')
-        if prop_name == 'About':
+        if prop_name == 'Settings':
+            # Schedule settings panel creation on the main loop
+            GLib.idle_add(self._show_settings_panel)
+            return
+        elif prop_name == 'About':
             # Schedule dialog creation on the main loop
             GLib.idle_add(self._show_about_dialog)
             return
@@ -375,6 +404,9 @@ class EnginePSKK(IBus.Engine):
     def about_response_callback(self, dialog, response):
         dialog.destroy()
         self._about_dialog = None
+
+    def settings_panel_closed_callback(self, panel):
+        self._settings_panel = None
 
     def _update_input_mode(self):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))
