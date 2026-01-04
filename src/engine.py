@@ -1,6 +1,3 @@
-from dictionary import Dictionary
-import event
-from event import Event
 import util
 
 import gettext
@@ -116,8 +113,6 @@ class EnginePSKK(IBus.Engine):
         self._load_configs()
         self._layout_data = self._load_layout() # this will also update self._layout
         self._kanchoku_layout = self._load_kanchoku_layout()
-        # This will create an object defined in event.py
-        self._event = Event(self, self._layout_data)
 
         self.set_mode(self._load_input_mode(self._settings))
         #self.set_mode('あ')
@@ -129,7 +124,6 @@ class EnginePSKK(IBus.Engine):
 
 
     def do_focus_in(self):
-        self._event.reset()
         self.register_properties(self._prop_list)
         self._update_preedit()
         # Request the initial surrounding-text in addition to the "enable" handler.
@@ -268,7 +262,6 @@ class EnginePSKK(IBus.Engine):
         # loading layout should be part of (re-)loading config
         self._layout_data = self._load_layout()
         self._kanchoku_layout = self._load_kanchoku_layout()
-        self._event = Event(self, self._layout_data)
 
     def _load_logging_level(self, config):
         '''
@@ -482,9 +475,3 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
         #self._update_lookup_table()
 
-    def _forward_backspaces(self, size):
-        logger.debug(f'_forward_backspaces({size})')
-        for i in range(size):
-            self.forward_key_event(IBus.BackSpace, 14, 0)
-            time.sleep(EVENT_DELAY)
-            self.forward_key_event(IBus.BackSpace, 14, IBus.ModifierType.RELEASE_MASK)
