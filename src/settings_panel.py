@@ -11,7 +11,7 @@ import os
 class SettingsPanel(Gtk.Window):
     """
     GUI Settings Panel for IBus-PSKK configuration.
-    
+
     Features:
     - Enable/disable features (SandS, Murenso, Forced Preedit, Learning)
     - Configure mode switch keys
@@ -20,7 +20,6 @@ class SettingsPanel(Gtk.Window):
     - Edit Murenso mappings
     - Import/export configuration
     """
-    
     def __init__(self):
         super().__init__(title="IBus-PSKK Settings")
         
@@ -36,7 +35,8 @@ class SettingsPanel(Gtk.Window):
         
         # Load current settings into UI
         self.load_settings_to_ui()
-    
+
+
     def load_config(self):
         """Load configuration from file"""
         if os.path.exists(self.config_path):
@@ -48,7 +48,8 @@ class SettingsPanel(Gtk.Window):
         
         # Return default config
         return self.get_default_config()
-    
+
+
     def get_default_config(self):
         """Get default configuration"""
         return {
@@ -90,7 +91,8 @@ class SettingsPanel(Gtk.Window):
                 "show_annotations": True
             }
         }
-    
+
+
     def save_config(self):
         """Save configuration to file"""
         try:
@@ -120,7 +122,8 @@ class SettingsPanel(Gtk.Window):
             dialog.format_secondary_text(f"Error saving configuration: {e}")
             dialog.run()
             dialog.destroy()
-    
+
+
     def create_ui(self):
         """Create the user interface"""
         # Main container
@@ -151,7 +154,8 @@ class SettingsPanel(Gtk.Window):
         close_button = Gtk.Button(label="Close")
         close_button.connect("clicked", lambda x: self.destroy())
         button_box.pack_end(close_button, False, False, 0)
-    
+
+
     def create_general_tab(self):
         """Create General settings tab"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -212,7 +216,8 @@ class SettingsPanel(Gtk.Window):
         box.pack_start(ui_frame, False, False, 0)
         
         return box
-    
+
+
     def create_input_tab(self):
         """Create Input settings tab"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -260,7 +265,8 @@ class SettingsPanel(Gtk.Window):
         box.pack_start(murenso_frame, False, False, 0)
         
         return box
-    
+
+
     def create_conversion_tab(self):
         """Create Conversion settings tab"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -315,7 +321,8 @@ class SettingsPanel(Gtk.Window):
         box.pack_start(keys_frame, False, False, 0)
         
         return box
-    
+
+
     def create_dictionaries_tab(self):
         """Create Dictionaries tab"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -388,7 +395,8 @@ class SettingsPanel(Gtk.Window):
         box.pack_start(user_frame, True, True, 0)
 
         return box
-    
+
+
     def create_murenso_tab(self):
         """Create Murenso mappings tab"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -458,7 +466,8 @@ class SettingsPanel(Gtk.Window):
         box.pack_start(btn_box, False, False, 0)
 
         return box
-    
+
+
     def load_settings_to_ui(self):
         """Load current settings into UI widgets"""
         # General tab
@@ -523,7 +532,8 @@ class SettingsPanel(Gtk.Window):
 
         # Murenso tab
         self.load_murenso_mappings()
-    
+
+
     def on_save_clicked(self, button):
         """Save button clicked"""
         # Update config from UI
@@ -587,6 +597,7 @@ class SettingsPanel(Gtk.Window):
         # Save to file
         self.save_config()
 
+
     # Dictionary management methods
     def on_add_system_dict(self, button):
         """Add system dictionary"""
@@ -612,12 +623,14 @@ class SettingsPanel(Gtk.Window):
 
         dialog.destroy()
 
+
     def on_remove_system_dict(self, button):
         """Remove selected system dictionary"""
         selection = self.sys_dict_view.get_selection()
         model, treeiter = selection.get_selected()
         if treeiter:
             model.remove(treeiter)
+
 
     def on_add_user_dict(self, button):
         """Add user dictionary or pattern"""
@@ -652,12 +665,14 @@ class SettingsPanel(Gtk.Window):
 
         dialog.destroy()
 
+
     def on_remove_user_dict(self, button):
         """Remove selected user dictionary"""
         selection = self.user_dict_view.get_selection()
         model, treeiter = selection.get_selected()
         if treeiter:
             model.remove(treeiter)
+
 
     def on_import_skk_jisyo(self, button):
         """Import SKK-JISYO file"""
@@ -735,6 +750,7 @@ class SettingsPanel(Gtk.Window):
         else:
             dialog.destroy()
 
+
     # Murenso management methods
     def load_murenso_mappings(self):
         """Load murenso mappings from file"""
@@ -756,6 +772,7 @@ class SettingsPanel(Gtk.Window):
 
             except Exception as e:
                 print(f"Error loading murenso mappings: {e}")
+
 
     def save_murenso_mappings(self, path=None):
         """Save murenso mappings to file"""
@@ -789,9 +806,11 @@ class SettingsPanel(Gtk.Window):
             error_dialog.run()
             error_dialog.destroy()
 
+
     def on_add_murenso(self, button):
         """Add new murenso mapping"""
         self.murenso_store.append(["", "", ""])
+
 
     def on_remove_murenso(self, button):
         """Remove selected murenso mapping"""
@@ -799,6 +818,7 @@ class SettingsPanel(Gtk.Window):
         model, treeiter = selection.get_selected()
         if treeiter:
             model.remove(treeiter)
+
 
     def on_load_murenso(self, button):
         """Load murenso mappings from custom file"""
@@ -846,6 +866,7 @@ class SettingsPanel(Gtk.Window):
         else:
             dialog.destroy()
 
+
     def on_save_murenso(self, button):
         """Save murenso mappings to custom file"""
         dialog = Gtk.FileChooserDialog(
@@ -878,13 +899,16 @@ class SettingsPanel(Gtk.Window):
         else:
             dialog.destroy()
 
+
     def on_murenso_first_edited(self, widget, path, text):
         """First key cell edited"""
         self.murenso_store[path][0] = text
 
+
     def on_murenso_second_edited(self, widget, path, text):
         """Second key cell edited"""
         self.murenso_store[path][1] = text
+
 
     def on_murenso_kanji_edited(self, widget, path, text):
         """Kanji cell edited"""
