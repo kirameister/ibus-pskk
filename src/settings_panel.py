@@ -964,12 +964,50 @@ class SettingsPanel(Gtk.Window):
 
     def on_murenso_first_edited(self, widget, path, text):
         """First key cell edited"""
-        self.murenso_store[path][0] = text
+        if len(text) > 1:
+            # Show warning dialog
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.OK,
+                text="Invalid Input"
+            )
+            dialog.format_secondary_text(
+                f"First Key must be a single character.\n"
+                f"You entered: '{text}' ({len(text)} characters)\n"
+                f"Only the first character '{text[0]}' will be saved."
+            )
+            dialog.run()
+            dialog.destroy()
+            # Save only the first character
+            self.murenso_store[path][0] = text[0] if text else ""
+        else:
+            self.murenso_store[path][0] = text
 
 
     def on_murenso_second_edited(self, widget, path, text):
         """Second key cell edited"""
-        self.murenso_store[path][1] = text
+        if len(text) > 1:
+            # Show warning dialog
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.OK,
+                text="Invalid Input"
+            )
+            dialog.format_secondary_text(
+                f"Second Key must be a single character.\n"
+                f"You entered: '{text}' ({len(text)} characters)\n"
+                f"Only the first character '{text[0]}' will be saved."
+            )
+            dialog.run()
+            dialog.destroy()
+            # Save only the first character
+            self.murenso_store[path][1] = text[0] if text else ""
+        else:
+            self.murenso_store[path][1] = text
 
 
     def on_murenso_kanji_edited(self, widget, path, text):
