@@ -11,7 +11,7 @@ import time
 import gi
 gi.require_version('IBus', '1.0')
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gio, Gtk, IBus
+from gi.repository import Gio, Gtk, IBus, GLib
 # http://lazka.github.io/pgi-docs/IBus-1.0/index.html?fbclid=IwY2xjawG9hapleHRuA2FlbQIxMAABHXaZwlJVVZEl9rr2SWsvIy2x85xW-XJuu32OZYxQ3gxF-E__9kWOUqGNzA_aem_2zw0hES6WqJcXPds_9CEdA
 # http://lazka.github.io/pgi-docs/Gtk-4.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHVsKSY24bv9C75Mweq54yhLsePdGA25YfLnwMwCx7vEq03oV61qn_qEntg_aem_3k1P3ltIMb17cBH0fdPr4w
 # http://lazka.github.io/pgi-docs/GLib-2.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHXaZwlJVVZEl9rr2SWsvIy2x85xW-XJuu32OZYxQ3gxF-E__9kWOUqGNzA_aem_2zw0hES6WqJcXPds_9CEdA
@@ -328,28 +328,40 @@ class EnginePSKK(IBus.Engine):
             self.commit_text(IBus.Text.new_from_string(text))
         """
 
+    def _show_about_dialog(self):
+        if self._about_dialog:
+          self._about_dialog.present()
+          return False  # Don't repeat this idle callback
+
+        dialog = Gtk.AboutDialog()
+        dialog.set_program_name("PSKK")
+        dialog.set_copyright("Copyright 2021-2026 Akira K.")
+        dialog.set_authors(["Akira K."])
+        dialog.set_documenters(["Akira K."])
+        dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
+        dialog.set_website_label("Introduction to PSKK")
+        dialog.set_logo_icon_name(util.get_package_name())
+        dialog.set_default_icon_name(util.get_package_name())
+        dialog.set_version(util.get_version())
+        dialog.set_comments("config files location : ${HOME}/.config/ibus-pskk")
+
+        # Make dialog modal and keep it on top
+        dialog.set_modal(True)
+        dialog.set_keep_above(True)
+
+        dialog.connect("response", self.about_response_callback)
+        self._about_dialog = dialog
+        dialog.show()
+
+        return False  # Don't repeat this idle callback
+
 
     def do_property_activate(self, prop_name, state):
         logger.info(f'property_activate({prop_name}, {state})')
         if prop_name == 'About':
-            if self._about_dialog:
-                self._about_dialog.present()
-                return
-            dialog = Gtk.AboutDialog()
-            dialog.set_program_name("PSKK")
-            dialog.set_copyright("Copyright 2021-2026 Akira K.")
-            dialog.set_authors(["Akira K."])
-            dialog.set_documenters(["Akira K."])
-            dialog.set_website("file://" + os.path.join(util.get_datadir(), "help/index.html"))
-            dialog.set_website_label("Introduction to PSKK")
-            dialog.set_logo_icon_name(util.get_package_name())
-            dialog.set_default_icon_name(util.get_package_name())
-            dialog.set_version(util.get_version())
-            dialog.set_comments("config files location : ${HOME}/.config/ibus-pskk")
-            # we connect the "response" signal to about_response_callback
-            dialog.connect("response", self.about_response_callback)
-            self._about_dialog = dialog
-            dialog.show()
+            # Schedule dialog creation on the main loop
+            GLib.idle_add(self._show_about_dialog)
+            return
         elif prop_name.startswith('InputMode.'):
             if state == IBus.PropState.CHECKED:
                 # At this point, we only support direct input and Hiragana. Nothing else..

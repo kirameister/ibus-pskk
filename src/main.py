@@ -11,8 +11,9 @@ import sys
 from shutil import copyfile
 
 import gi
-gi.require_version('IBus', '1.0')
-from gi.repository import GLib, GObject, IBus
+gi.require_version('Gtk', '3.0')
+from gi.repository import GLib, GObject, IBus, Gtk
+
 
 _ = lambda a : gettext.dgettext(util.get_package_name(), a)
 
@@ -34,6 +35,9 @@ class IMApp:
         if not isinstance(exec_by_ibus, bool):
             raise TypeError("The `exec_by_ibus` parameter must be a boolean value.")
         self.exec_by_ibus = exec_by_ibus
+
+        # Initialize GTK (this is important for --ibus mode)
+        Gtk.init(None)
 
         self._mainloop = GLib.MainLoop()
         self._bus = IBus.Bus()
