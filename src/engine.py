@@ -132,7 +132,7 @@ class EnginePSKK(IBus.Engine):
 
     def _init_props(self):
         '''
-        This function is called as part of the instantiation (__init__). 
+        This function is called as part of the instantiation (__init__).
         This function creates the GUI menu list (typically top-right corner).
 
         http://lazka.github.io/pgi-docs/IBus-1.0/classes/PropList.html

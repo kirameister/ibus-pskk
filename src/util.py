@@ -30,7 +30,7 @@ def get_datadir():
     Return the path to the data directory under user-independent (central)
     location (= not under the HOME)
     '''
-    return '/usr/local/share/ibus-pskk'
+    return '/opt/ibus-pskk'
 
 
 def get_user_datadir():
