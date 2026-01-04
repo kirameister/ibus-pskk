@@ -3,7 +3,8 @@
 
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GLib
+gi.require_version('Gdk', '3.0')
+from gi.repository import Gtk, Gdk, GLib
 import json
 import os
 
@@ -22,20 +23,29 @@ class SettingsPanel(Gtk.Window):
     """
     def __init__(self):
         super().__init__(title="IBus-PSKK Settings")
-        
+
         self.set_default_size(800, 600)
         self.set_border_width(10)
-        
+
         # Config file path
         self.config_path = os.path.expanduser("~/.config/ibus-pskk/config.json")
         self.config = self.load_config()
-        
+
         # Create UI
         self.create_ui()
-        
+
         # Load current settings into UI
         self.load_settings_to_ui()
 
+        # Connect Esc key to close window
+        self.connect("key-press-event", self.on_key_press)
+
+    def on_key_press(self, widget, event):
+        """Handle key press events"""
+        if event.keyval == Gdk.KEY_Escape:
+            self.destroy()
+            return True
+        return False
 
     def load_config(self):
         """Load configuration from file"""
