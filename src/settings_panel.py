@@ -7,6 +7,8 @@ gi.require_version('Gdk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
 import json
 import os
+import logging
+logger = logging.getLogger(__name__)
 
 import util
 
@@ -33,6 +35,7 @@ class SettingsPanel(Gtk.Window):
         #self.config_path = os.path.expanduser("~/.config/ibus-pskk/config.json")
         #self.config = self.load_config()
         self.config = util.get_config_data()
+        self.default_config = util.get_default_config_data()
 
         # do some sanity-check before processing further.
         self.run_sanity_check()
@@ -51,7 +54,13 @@ class SettingsPanel(Gtk.Window):
         This function checks the content of the config file.
         If a value was missing or having unexpected type, replace it with the values read from the default config at util.get_default_config_path()
         """
-        pass
+        # type check
+        for k in self.default_config:
+            if k not in self.config:
+                logger.warning(f'The key "{k}" was not found in the config.json under {util.get_user_configdir} . Copying the default key-value')
+                self.config[k] = self.default_config[k]
+            if isinstance(self.config[k]) != isinstance(self.default_config[k]):
+                logger.warning(f'Type mismatch found for the key "{k}" between config.json under {util.get_user_configdir} and default config.json. Replacing the value of this key with the value in default config.json')
 
     def on_key_press(self, widget, event):
         """Handle key press events"""
