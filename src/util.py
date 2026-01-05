@@ -30,13 +30,27 @@ def get_datadir():
     Return the path to the data directory under user-independent (central)
     location (= not under the HOME)
     '''
-    return '/opt/ibus-pskk'
+    try:
+        # Try to import the auto-generated paths from installation
+        from . import paths
+        return paths.INSTALL_ROOT
+    except ImportError:
+        # Fallback for development environment
+        return '/opt/ibus-pskk'
+
+
+def get_default_config_path():
+    '''
+    Return the path to the default config file in the system installation.
+    This is the config.json that gets copied to user's home on first run.
+    '''
+    return os.path.join(get_datadir(), 'config.json')
 
 
 def get_user_datadir():
     '''
     Return the path to the data directory under /home/kira.
-    Typically, it would be /home/kira/.local/share/pskk
+    Typically, it would be $HOME/.local/share/pskk
     '''
     return os.path.join(GLib.get_user_data_dir(), 'ibus-pskk')
 
@@ -51,15 +65,15 @@ def get_localedir():
 
 def get_user_configdir():
     '''
-    Return the path to the config directory under /home/kira.
-    Typically, it would be /home/kira/.config/ibus-pskk
+    Return the path to the config directory under $HOME.
+    Typically, it would be $HOME/.config/ibus-pskk
     '''
     return os.path.join(GLib.get_user_config_dir(), get_package_name())
 
 
 def get_homedir():
     '''
-    Return the path to the /home/kira directory.
+    Return the path to the $HOME directory.
     '''
     return GLib.get_home_dir()
 
@@ -71,13 +85,15 @@ def get_user_configdir_relative_to_home():
 def get_config_data():
     '''
     This function is to load the config JSON file from the HOME/.config/ibus-pskk
-    When the file is not present (e.g., after initial installation), it will copy 
-    the deafult config.json from the central location. 
+    When the file is not present (e.g., after initial installation), it will copy
+    the deafult config.json from the central location.
     '''
     configfile_path = os.path.join(get_user_configdir(), 'config.json')
+    default_config_path = get_default_config_path()
+
     if(not os.path.exists(configfile_path)):
-        logger.warning(f'config.json is not found under {get_user_configdir()} . Copying the default config.json from {get_datadir()} ..')
-        default_config = json.load(codecs.open(os.path.join(get_datadir(), 'config.json')))
+        logger.warning(f'config.json is not found under {get_user_configdir()} . Copying the default config.json from {default_config_path} ..')
+        default_config = json.load(codecs.open(default_config_path))
         with open(configfile_path, 'w', encoding='utf-8') as f:
             json.dump(default_config, f, ensure_ascii=False)
         return(default_config)
@@ -86,9 +102,9 @@ def get_config_data():
     except json.decoder.JSONDecodeError as e:
         logger.error(f'Error loading the config.json under {get_user_configdir()}')
         logger.error(e)
-        logger.error(f'Using (but not copying) the default config.json from {get_datadir()} ..')
-        default_config = json.load(codecs.open(os.path.join(get_datadir(), 'config.json')))
-        # not writing the config.json under HOME, in order to let the user inspect. 
+        logger.error(f'Using (but not copying) the default config.json from {default_config_path} ..')
+        default_config = json.load(codecs.open(default_config_path))
+        # not writing the config.json under HOME, in order to let the user inspect.
         return(default_config)
     return None
 
