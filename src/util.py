@@ -103,10 +103,17 @@ def get_config_data():
         logger.error(f'Error loading the config.json under {get_user_configdir()}')
         logger.error(e)
         logger.error(f'Using (but not copying) the default config.json from {default_config_path} ..')
-        default_config = json.load(codecs.open(default_config_path))
-        # not writing the config.json under HOME, in order to let the user inspect.
-        return(default_config)
+        return get_default_config_data()
     return None
+
+
+def get_default_config_data():
+    default_config_path = get_default_config_path()
+    if not os.path.exists(default_config_path):
+        logger.error(f'config.json is not found under {get_default_config_path()}. Please check that installation was done without problem!')
+        return None
+    default_config = json.load(codecs.open(default_config_path))
+    return default_config
 
 
 def get_layout(config):
