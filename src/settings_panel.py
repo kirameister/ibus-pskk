@@ -8,6 +8,8 @@ from gi.repository import Gtk, Gdk, GLib
 import json
 import os
 
+import util
+
 
 class SettingsPanel(Gtk.Window):
     """
@@ -28,8 +30,12 @@ class SettingsPanel(Gtk.Window):
         self.set_border_width(10)
 
         # Config file path
-        self.config_path = os.path.expanduser("~/.config/ibus-pskk/config.json")
-        self.config = self.load_config()
+        #self.config_path = os.path.expanduser("~/.config/ibus-pskk/config.json")
+        #self.config = self.load_config()
+        self.config = util.get_config_data()
+
+        # do some sanity-check before processing further.
+        self.run_sanity_check()
 
         # Create UI
         self.create_ui()
@@ -39,6 +45,13 @@ class SettingsPanel(Gtk.Window):
 
         # Connect Esc key to close window
         self.connect("key-press-event", self.on_key_press)
+
+    def run_sanity_check(self):
+        """
+        This function checks the content of the config file.
+        If a value was missing or having unexpected type, replace it with the values read from the default config at util.get_default_config_path()
+        """
+        pass
 
     def on_key_press(self, widget, event):
         """Handle key press events"""
