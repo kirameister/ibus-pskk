@@ -90,21 +90,29 @@ def get_config_data():
     '''
     configfile_path = os.path.join(get_user_configdir(), 'config.json')
     default_config_path = get_default_config_path()
+    default_config = json.load(codecs.open(default_config_path))
 
     if(not os.path.exists(configfile_path)):
         logger.warning(f'config.json is not found under {get_user_configdir()} . Copying the default config.json from {default_config_path} ..')
-        default_config = json.load(codecs.open(default_config_path))
         with open(configfile_path, 'w', encoding='utf-8') as f:
             json.dump(default_config, f, ensure_ascii=False)
         return(default_config)
     try:
-        return(json.load(codecs.open(configfile_path)))
+        config_data = json.load(codecs.open(configfile_path))
     except json.decoder.JSONDecodeError as e:
         logger.error(f'Error loading the config.json under {get_user_configdir()}')
         logger.error(e)
         logger.error(f'Using (but not copying) the default config.json from {default_config_path} ..')
         return get_default_config_data()
-    return None
+
+    for k in default_config:
+        if k not in config_data:
+            logger.warning(f'The key "{k}" was not found in the config.json under {get_user_configdir()} . Copying the default key-value')
+            config_data[k] = default_config[k]
+        if isinstance(config_data[k]) != isinstance(default_config[k]):
+            logger.warning(f'Type mismatch found for the key "{k}" between config.json under {get_user_configdir()} and default config.json. Replacing the value of this key with the value in default config.json')
+    return config_data
+
 
 
 def get_default_config_data():
