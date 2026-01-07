@@ -117,10 +117,11 @@ def get_config_data():
             logger.warning(warning_msg)
             warnings += ("\n" if warnings else "") + warning_msg
             config_data[k] = default_config[k]
-        if isinstance(config_data[k]) != isinstance(default_config[k]):
+        if type(config_data[k]) != type(default_config[k]):
             warning_msg = f'Type mismatch found for the key "{k}" between config.json under {get_user_configdir()} and default config.json. Replacing the value of this key with the value in default config.json'
             logger.warning(warning_msg)
             warnings += ("\n" if warnings else "") + warning_msg
+            config_data[k] = default_config[k]
     return config_data, warnings
 
 
