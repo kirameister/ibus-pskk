@@ -34,14 +34,17 @@ class SettingsPanel(Gtk.Window):
         # Config file path
         #self.config_path = os.path.expanduser("~/.config/ibus-pskk/config.json")
         #self.config = self.load_config()
-        self.config = util.get_config_data()
-        self.default_config = util.get_default_config_data()
+        self.config, warnings = util.get_config_data()
 
         # Create UI
         self.create_ui()
 
         # Load current settings into UI
         self.load_settings_to_ui()
+
+        # Show warnings if any
+        if warnings:
+            GLib.idle_add(self.show_config_warnings, warnings)
 
         # Connect Esc key to close window
         self.connect("key-press-event", self.on_key_press)
@@ -52,6 +55,20 @@ class SettingsPanel(Gtk.Window):
             self.destroy()
             return True
         return False
+
+    def show_config_warnings(self, warnings):
+        """Display configuration warnings in a dialog"""
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=0,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.OK,
+            text="Configuration Warnings"
+        )
+        dialog.format_secondary_text(warnings)
+        dialog.run()
+        dialog.destroy()
+        return False  # Don't call again
 
     def load_config(self):
         """Load configuration from file"""
