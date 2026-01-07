@@ -1,2 +1,2 @@
 src/paths.py
-src/__pycache__
+*/__pycache__
