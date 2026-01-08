@@ -35,6 +35,8 @@ class SettingsPanel(Gtk.Window):
         #self.config_path = os.path.expanduser("~/.config/ibus-pskk/config.json")
         #self.config = self.load_config()
         self.config, warnings = util.get_config_data()
+        # save (back) the config to file
+        util.save_config_data(self.config)
 
         # Create UI
         self.create_ui()
