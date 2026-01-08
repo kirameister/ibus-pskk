@@ -38,7 +38,6 @@ install-icons:
 install-files:
     mkdir -p {{install_root}}/models
     mkdir -p {{install_root}}/lib
-    mkdir -p {{install_root}}/layout
     cp -r src/* {{install_root}}/lib/
     # Generate paths.py with installation paths
     echo '# Auto-generated during installation - do not edit manually' > {{install_root}}/lib/paths.py
@@ -53,11 +52,9 @@ install-files:
     #cp -r models/* {{install_root}}/models/ ## FIXME
     cp data/pskk.xml {{ibus_component_dir}}/
     chmod 644 {{ibus_component_dir}}/pskk.xml
-    cp -r data/layout/* {{install_root}}/layout/
-    chmod 644 {{install_root}}/layout/*
 
 # Full installation
-install: install-deps install-files install-schema install-icons
+install: install-deps install-files install-schema install-icons setup-user-config
     chmod 755 {{install_root}}/lib/*
     @echo "Installation complete!"
     @echo "Run 'ibus restart' to activate the IME"
@@ -103,20 +100,51 @@ clean:
 test:
     ./venv/bin/pytest tests/
 
+# Setup user config directory in $HOME/.config/ibus-pskk/
+setup-user-config:
+    @echo "Setting up user config directory..."
+    mkdir -p ~/.config/ibus-pskk/layouts
+    mkdir -p ~/.config/ibus-pskk/kanchoku_layouts
+    # Copy default config if not exists
+    @if [ ! -f ~/.config/ibus-pskk/config.json ]; then \
+        cp data/default_user_config.json ~/.config/ibus-pskk/config.json; \
+        echo "Copied default config to ~/.config/ibus-pskk/config.json"; \
+    else \
+        echo "Config file already exists at ~/.config/ibus-pskk/config.json (skipping)"; \
+    fi
+    # Copy layout files (always overwrite to get latest versions)
+    cp data/layout/*.json ~/.config/ibus-pskk/kanchoku_layouts/
+    @echo "User config directory setup complete at ~/.config/ibus-pskk/"
+
 ## Project Structure
-### 
-### your-ime/
-### ├── justfile
-### ├── requirements.txt
-### ├── setup.py (optional)
-### ├── src/
-### │   ├── __init__.py
-### │   ├── main.py (IBus engine entry point)
-### │   ├── engine.py
-### │   └── converter.py
-### ├── models/
-### │   └── crf_model.pkl
-### ├── data/
-### │   └── ibus-your-ime.xml
-### └── tests/
-###     └── test_converter.py
+###
+### ibus-pskk/
+### ├── justfile                     # Build and installation automation
+### ├── requirements.txt              # Python dependencies
+### ├── LICENSE
+### ├── README.md
+### ├── src/                          # Source code
+### │   ├── main.py                   # IBus engine entry point
+### │   ├── engine.py                 # Main engine implementation
+### │   ├── util.py                   # Utility functions (config, paths)
+### │   ├── settings_panel.py         # GTK settings UI
+### │   └── paths.py                  # Auto-generated installation paths
+### ├── models/                       # ML models (future use)
+### ├── data/                         # Installation data
+### │   ├── pskk.xml                  # IBus component definition
+### │   ├── default_user_config.json # Default configuration
+### │   ├── org.freedesktop.ibus.engine.pskk.gschema.xml  # GSettings schema
+### │   ├── icons/
+### │   │   └── ibus-pskk.svg        # Application icon
+### │   └── layouts/                   # Kanchoku layout files
+### │       ├── shingeta.json
+### │       └── aki_code.json
+### └── tests/                        # Unit tests
+###     └── test_util.py              # Tests for util.py functions
+###
+### Installation Locations:
+### - System files: /opt/ibus-pskk/
+### - User config: ~/.config/ibus-pskk/
+### - IBus component: /usr/share/ibus/component/
+### - GSettings schema: /usr/share/glib-2.0/schemas/
+### - Icons: /usr/local/share/icons/hicolor/

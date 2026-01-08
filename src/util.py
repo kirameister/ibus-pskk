@@ -165,12 +165,12 @@ def get_default_config_data():
 def get_layout(config):
     layout_file_name = config['layout']
     layout_file_path = ''
-    if os.path.exists(os.path.join(get_user_configdir(), layout_file_name)):
-        layout_file_path = os.path.join(get_user_configdir(), layout_file_name)
+    if os.path.exists(os.path.join(get_user_configdir(), 'layouts', layout_file_name)):
+        layout_file_path = os.path.join(get_user_configdir(), 'layouts', layout_file_name)
     elif os.path.exists(os.path.join(get_datadir(), 'layouts', layout_file_name)):
         layout_file_path = os.path.join(get_datadir(), 'layouts', layout_file_name)
     else:
-        layout_file_path = os.path.join(get_datadir(), 'layouts', 'roman.json')
+        layout_file_path = os.path.join(get_datadir(), 'layouts', 'shingeta.json')
     try:
         with open(layout_file_path) as layout_json:
             return json.load(layout_json)
