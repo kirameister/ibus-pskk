@@ -70,62 +70,6 @@ class SettingsPanel(Gtk.Window):
         dialog.destroy()
         return False  # Don't call again
 
-    def load_config(self):
-        """Load configuration from file"""
-        if os.path.exists(self.config_path):
-            try:
-                with open(self.config_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                print(f"Error loading config: {e}")
-        
-        # Return default config
-        return self.get_default_config()
-
-
-    def get_default_config(self):
-        """Get default configuration"""
-        return {
-            "dictionaries": {
-                "system": [],
-                "user": ["~/.config/ibus-pskk/dictionary/*.json"]
-            },
-            "learning": {
-                "enabled": True,
-                "priority_file": "~/.config/ibus-pskk/candidate_priority.json"
-            },
-            "layout": {
-                "type": "shingeta"
-            },
-            "sands": {
-                "enabled": True,
-                "keys": ["space"]
-            },
-            "input_mode": {
-                "hiragana_key": "Alt_R",
-                "direct_key": "Alt_L"
-            },
-            "conversion_keys": {
-                "to_katakana": "Ctrl+K",
-                "to_hiragana": "Ctrl+J",
-                "to_ascii": "Ctrl+L",
-                "to_zenkaku": "Ctrl+Shift+L"
-            },
-            "forced_preedit": {
-                "enabled": True,
-                "trigger_key": "f"
-            },
-            "murenso": {
-                "enabled": True,
-                "mapping_file": "~/.config/ibus-pskk/murenso.json"
-            },
-            "ui": {
-                "candidate_window_size": 9,
-                "show_annotations": True
-            }
-        }
-
-
     def save_config(self):
         """Save configuration to file"""
         try:
