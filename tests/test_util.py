@@ -230,5 +230,141 @@ class TestGetConfigData:
         assert created_config == default_config_data
 
 
+class TestSaveConfigData:
+    """Test suite for save_config_data() function"""
+
+    @pytest.fixture
+    def temp_dirs(self):
+        """Create temporary directories for testing"""
+        temp_home = tempfile.mkdtemp()
+
+        yield {
+            'home': temp_home,
+            'config_dir': os.path.join(temp_home, '.config', 'ibus-pskk'),
+            'config_file': os.path.join(temp_home, '.config', 'ibus-pskk', 'config.json')
+        }
+
+        # Cleanup
+        shutil.rmtree(temp_home, ignore_errors=True)
+
+    @pytest.fixture
+    def sample_config(self):
+        """Sample configuration data"""
+        return {
+            "layout": "roman.json",
+            "kanchoku_layout": "aki_code.json",
+            "dictionaries": {
+                "system": ["/usr/share/dict.json"],
+                "user": ["~/.config/ibus-pskk/dict.json"]
+            },
+            "learning": {
+                "enabled": True,
+                "priority_file": "priority.json"
+            }
+        }
+
+    def test_save_config_creates_directory(self, temp_dirs, sample_config):
+        """Test that save_config_data creates the config directory if it doesn't exist"""
+        # Directory doesn't exist yet
+        assert not os.path.exists(temp_dirs['config_dir'])
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.save_config_data(sample_config)
+
+        assert result is True
+        assert os.path.exists(temp_dirs['config_dir'])
+        assert os.path.exists(temp_dirs['config_file'])
+
+    def test_save_config_writes_correct_data(self, temp_dirs, sample_config):
+        """Test that save_config_data writes the correct data"""
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.save_config_data(sample_config)
+
+        assert result is True
+
+        # Read back and verify
+        with open(temp_dirs['config_file'], 'r', encoding='utf-8') as f:
+            saved_config = json.load(f)
+
+        assert saved_config == sample_config
+        assert saved_config["layout"] == "roman.json"
+        assert saved_config["learning"]["enabled"] is True
+
+    def test_save_config_overwrites_existing(self, temp_dirs, sample_config):
+        """Test that save_config_data overwrites existing config"""
+        os.makedirs(temp_dirs['config_dir'], exist_ok=True)
+
+        # Write initial config
+        initial_config = {"test": "old_value"}
+        with open(temp_dirs['config_file'], 'w', encoding='utf-8') as f:
+            json.dump(initial_config, f)
+
+        # Save new config
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.save_config_data(sample_config)
+
+        assert result is True
+
+        # Verify old data is replaced
+        with open(temp_dirs['config_file'], 'r', encoding='utf-8') as f:
+            saved_config = json.load(f)
+
+        assert "test" not in saved_config
+        assert saved_config == sample_config
+
+    def test_save_config_preserves_unicode(self, temp_dirs):
+        """Test that save_config_data preserves Unicode characters"""
+        unicode_config = {
+            "layout": "新下駄配列",
+            "murenso": {
+                "mappings": {
+                    "test": "漢字"
+                }
+            }
+        }
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.save_config_data(unicode_config)
+
+        assert result is True
+
+        # Read back and verify Unicode is preserved
+        with open(temp_dirs['config_file'], 'r', encoding='utf-8') as f:
+            saved_config = json.load(f)
+
+        assert saved_config["layout"] == "新下駄配列"
+        assert saved_config["murenso"]["mappings"]["test"] == "漢字"
+
+    def test_save_config_formats_with_indent(self, temp_dirs, sample_config):
+        """Test that save_config_data formats JSON with proper indentation"""
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.save_config_data(sample_config)
+
+        assert result is True
+
+        # Read file as text to check formatting
+        with open(temp_dirs['config_file'], 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Should have indentation (2 spaces)
+        assert '  "layout"' in content
+        assert '  "learning"' in content
+
+    def test_save_config_handles_permission_error(self, temp_dirs, sample_config):
+        """Test that save_config_data handles permission errors gracefully"""
+        # Create a read-only directory to simulate permission error
+        os.makedirs(temp_dirs['config_dir'], exist_ok=True)
+        os.chmod(temp_dirs['config_dir'], 0o444)
+
+        try:
+            with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+                result = util.save_config_data(sample_config)
+
+            assert result is False
+        finally:
+            # Restore permissions for cleanup
+            os.chmod(temp_dirs['config_dir'], 0o755)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

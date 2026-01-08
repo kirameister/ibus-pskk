@@ -125,6 +125,33 @@ def get_config_data():
     return config_data, warnings
 
 
+def save_config_data(config_data):
+    '''
+    Save config data to the user config directory.
+
+    Args:
+        config_data: Dictionary containing configuration data to save
+
+    Returns:
+        bool: True if save was successful, False otherwise
+    '''
+    configfile_path = os.path.join(get_user_configdir(), 'config.json')
+
+    try:
+        # Ensure the config directory exists
+        os.makedirs(get_user_configdir(), exist_ok=True)
+
+        # Write the config file with proper formatting
+        with open(configfile_path, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, ensure_ascii=False, indent=2)
+
+        logger.info(f'Configuration saved successfully to {configfile_path}')
+        return True
+    except Exception as e:
+        logger.error(f'Error saving config.json to {configfile_path}')
+        logger.error(e)
+        return False
+
 
 def get_default_config_data():
     default_config_path = get_default_config_path()
