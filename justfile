@@ -113,7 +113,7 @@ setup-user-config:
         echo "Config file already exists at ~/.config/ibus-pskk/config.json (skipping)"; \
     fi
     # Copy layout files (always overwrite to get latest versions)
-    cp data/layout/*.json ~/.config/ibus-pskk/kanchoku_layouts/
+    cp data/layouts/*.json ~/.config/ibus-pskk/kanchoku_layouts/
     @echo "User config directory setup complete at ~/.config/ibus-pskk/"
 
 ## Project Structure
