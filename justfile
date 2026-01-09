@@ -102,19 +102,37 @@ test:
 
 # Setup user config directory in $HOME/.config/ibus-pskk/
 setup-user-config:
-    @echo "Setting up user config directory..."
-    mkdir -p ~/.config/ibus-pskk/layouts
-    mkdir -p ~/.config/ibus-pskk/kanchoku_layouts
-    # Copy default config if not exists
-    @if [ ! -f ~/.config/ibus-pskk/config.json ]; then \
-        cp data/default_user_config.json ~/.config/ibus-pskk/config.json; \
-        echo "Copied default config to ~/.config/ibus-pskk/config.json"; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Determine the actual user's home directory (handles sudo case)
+    if [ -n "${SUDO_USER:-}" ]; then \
+        USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6); \
+        ACTUAL_USER="$SUDO_USER"; \
     else \
-        echo "Config file already exists at ~/.config/ibus-pskk/config.json (skipping)"; \
+        USER_HOME="$HOME"; \
+        ACTUAL_USER="$USER"; \
+    fi
+    echo "Setting up user config directory for user: $ACTUAL_USER"
+    USER_CONFIG_DIR="$USER_HOME/.config/ibus-pskk"
+    # Create directories
+    mkdir -p "$USER_CONFIG_DIR/layouts"
+    mkdir -p "$USER_CONFIG_DIR/kanchoku_layouts"
+    # Copy default config if not exists
+    if [ ! -f "$USER_CONFIG_DIR/config.json" ]; then \
+        cp data/default_user_config.json "$USER_CONFIG_DIR/config.json"; \
+        echo "Copied default config to $USER_CONFIG_DIR/config.json"; \
+    else \
+        echo "Config file already exists at $USER_CONFIG_DIR/config.json (skipping)"; \
     fi
     # Copy layout files (always overwrite to get latest versions)
-    cp data/layouts/*.json ~/.config/ibus-pskk/kanchoku_layouts/
-    @echo "User config directory setup complete at ~/.config/ibus-pskk/"
+    cp data/layouts/*.json "$USER_CONFIG_DIR/layouts/"
+    cp data/kanchoku_layouts/*.json "$USER_CONFIG_DIR/kanchoku_layouts/"
+    # Fix ownership if run with sudo
+    if [ -n "${SUDO_USER:-}" ]; then \
+        chown -R "$SUDO_USER:$SUDO_USER" "$USER_CONFIG_DIR"; \
+        echo "Set ownership to $SUDO_USER"; \
+    fi
+    echo "User config directory setup complete at $USER_CONFIG_DIR"
 
 ## Project Structure
 ###
