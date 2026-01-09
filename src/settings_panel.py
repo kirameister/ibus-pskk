@@ -38,6 +38,9 @@ class SettingsPanel(Gtk.Window):
         # save (back) the config to file
         util.save_config_data(self.config)
 
+        # Load kanchoku layout
+        self.kanchoku_layout = util.get_kanchoku_layout(self.config)
+
         # Create UI
         self.create_ui()
 
@@ -383,8 +386,10 @@ class SettingsPanel(Gtk.Window):
 
         # Info label
         info_label = Gtk.Label()
+        kanchoku_file = self.config.get('kanchoku_layout', 'N/A')
         info_label.set_markup(
             "<b>無連想配列 (Direct Kanji Input)</b>\n"
+            f"Loaded from: <i>{kanchoku_file}</i>\n"
             "Map 2-key sequences to Kanji characters while holding Space.\n"
             "Example: Space + i + 1 → 一"
         )
@@ -790,33 +795,32 @@ class SettingsPanel(Gtk.Window):
 
     # Murenso management methods
     def load_murenso_mappings(self):
-        """Load murenso mappings from file"""
+        """Load murenso mappings from kanchoku layout"""
         self.murenso_store.clear()
 
-        murenso_path = os.path.expanduser(
-            self.config.get("murenso", {}).get("mapping_file", "~/.config/ibus-pskk/murenso.json")
-        )
-
-        if os.path.exists(murenso_path):
+        # Load from kanchoku layout if available
+        if self.kanchoku_layout:
             try:
-                with open(murenso_path, 'r', encoding='utf-8') as f:
-                    mappings = json.load(f)
-
                 # Convert nested dict to flat list for display
-                for first_key, second_dict in mappings.items():
+                for first_key, second_dict in self.kanchoku_layout.items():
                     for second_key, kanji in second_dict.items():
                         self.murenso_store.append([first_key, second_key, kanji])
 
+                logger.info(f"Loaded {len(self.murenso_store)} kanchoku mappings")
             except Exception as e:
-                print(f"Error loading murenso mappings: {e}")
+                logger.error(f"Error loading kanchoku layout mappings: {e}")
+        else:
+            logger.warning("No kanchoku layout loaded")
 
 
     def save_murenso_mappings(self, path=None):
-        """Save murenso mappings to file"""
+        """Save murenso mappings to user config directory"""
         if path is None:
-            path = os.path.expanduser(
-                self.config.get("murenso", {}).get("mapping_file", "~/.config/ibus-pskk/murenso.json")
-            )
+            # Save to user's config directory with the same filename as kanchoku_layout
+            # This allows user edits to override the system layout
+            kanchoku_filename = self.config.get('kanchoku_layout', 'aki_code.json')
+            user_config_dir = util.get_user_configdir()
+            path = os.path.join(user_config_dir, kanchoku_filename)
 
         # Convert flat list to nested dict
         mappings = {}
@@ -831,7 +835,9 @@ class SettingsPanel(Gtk.Window):
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(mappings, f, ensure_ascii=False, indent=2)
 
+            logger.info(f"Saved kanchoku layout mappings to {path}")
         except Exception as e:
+            logger.error(f"Error saving kanchoku layout mappings: {e}")
             error_dialog = Gtk.MessageDialog(
                 transient_for=self,
                 flags=0,

@@ -366,5 +366,162 @@ class TestSaveConfigData:
             os.chmod(temp_dirs['config_dir'], 0o755)
 
 
+class TestGetKanchokuLayout:
+    """Test suite for get_kanchoku_layout() function"""
+
+    @pytest.fixture
+    def temp_dirs(self):
+        """Create temporary directories for testing"""
+        temp_home = tempfile.mkdtemp()
+        temp_data = tempfile.mkdtemp()
+
+        yield {
+            'home': temp_home,
+            'data': temp_data,
+            'config_dir': os.path.join(temp_home, '.config', 'ibus-pskk'),
+            'data_kanchoku': os.path.join(temp_data, 'kanchoku_layouts')
+        }
+
+        # Cleanup
+        shutil.rmtree(temp_home, ignore_errors=True)
+        shutil.rmtree(temp_data, ignore_errors=True)
+
+    @pytest.fixture
+    def sample_kanchoku_layout(self):
+        """Sample kanchoku layout data"""
+        return {
+            "q": {
+                "q": "一",
+                "w": "二",
+                "e": "三"
+            },
+            "w": {
+                "q": "人",
+                "w": "日",
+                "e": "月"
+            }
+        }
+
+    def test_load_kanchoku_layout_from_data_dir(self, temp_dirs, sample_kanchoku_layout):
+        """Test loading kanchoku layout from system data directory"""
+        # Create kanchoku_layouts directory and file
+        os.makedirs(temp_dirs['data_kanchoku'], exist_ok=True)
+        layout_path = os.path.join(temp_dirs['data_kanchoku'], 'test_layout.json')
+        with open(layout_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_kanchoku_layout, f, ensure_ascii=False)
+
+        config = {'kanchoku_layout': 'test_layout.json'}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            with patch('util.get_datadir', return_value=temp_dirs['data']):
+                layout = util.get_kanchoku_layout(config)
+
+        assert layout is not None
+        assert layout["q"]["q"] == "一"
+        assert layout["w"]["w"] == "日"
+
+    def test_load_kanchoku_layout_from_user_dir(self, temp_dirs, sample_kanchoku_layout):
+        """Test loading kanchoku layout from user config directory (priority)"""
+        # Create both directories with different layouts
+        os.makedirs(temp_dirs['config_dir'], exist_ok=True)
+        os.makedirs(temp_dirs['data_kanchoku'], exist_ok=True)
+
+        # User layout (should take priority)
+        user_layout_path = os.path.join(temp_dirs['config_dir'], 'my_layout.json')
+        user_layout = {"a": {"a": "ユーザー"}}
+        with open(user_layout_path, 'w', encoding='utf-8') as f:
+            json.dump(user_layout, f, ensure_ascii=False)
+
+        # System layout (should be ignored)
+        system_layout_path = os.path.join(temp_dirs['data_kanchoku'], 'my_layout.json')
+        with open(system_layout_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_kanchoku_layout, f, ensure_ascii=False)
+
+        config = {'kanchoku_layout': 'my_layout.json'}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            with patch('util.get_datadir', return_value=temp_dirs['data']):
+                layout = util.get_kanchoku_layout(config)
+
+        # Should load user layout, not system layout
+        assert layout is not None
+        assert layout["a"]["a"] == "ユーザー"
+        assert "q" not in layout
+
+    def test_fallback_to_aki_code_when_not_found(self, temp_dirs, sample_kanchoku_layout):
+        """Test fallback to aki_code.json when specified layout is not found"""
+        # Create only the default aki_code.json
+        os.makedirs(temp_dirs['data_kanchoku'], exist_ok=True)
+        default_path = os.path.join(temp_dirs['data_kanchoku'], 'aki_code.json')
+        with open(default_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_kanchoku_layout, f, ensure_ascii=False)
+
+        # Request non-existent layout
+        config = {'kanchoku_layout': 'nonexistent.json'}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            with patch('util.get_datadir', return_value=temp_dirs['data']):
+                layout = util.get_kanchoku_layout(config)
+
+        # Should fall back to aki_code.json
+        assert layout is not None
+        assert layout["q"]["q"] == "一"
+
+    def test_kanchoku_layout_preserves_unicode(self, temp_dirs):
+        """Test that kanchoku layout preserves Japanese Unicode characters"""
+        os.makedirs(temp_dirs['data_kanchoku'], exist_ok=True)
+
+        unicode_layout = {
+            "あ": {
+                "い": "漢",
+                "う": "字"
+            }
+        }
+
+        layout_path = os.path.join(temp_dirs['data_kanchoku'], 'unicode.json')
+        with open(layout_path, 'w', encoding='utf-8') as f:
+            json.dump(unicode_layout, f, ensure_ascii=False)
+
+        config = {'kanchoku_layout': 'unicode.json'}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            with patch('util.get_datadir', return_value=temp_dirs['data']):
+                layout = util.get_kanchoku_layout(config)
+
+        assert layout is not None
+        assert layout["あ"]["い"] == "漢"
+        assert layout["あ"]["う"] == "字"
+
+    def test_kanchoku_layout_handles_invalid_json(self, temp_dirs):
+        """Test that get_kanchoku_layout handles invalid JSON gracefully"""
+        os.makedirs(temp_dirs['data_kanchoku'], exist_ok=True)
+
+        # Write invalid JSON
+        invalid_path = os.path.join(temp_dirs['data_kanchoku'], 'invalid.json')
+        with open(invalid_path, 'w') as f:
+            f.write("{ invalid json }")
+
+        config = {'kanchoku_layout': 'invalid.json'}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            with patch('util.get_datadir', return_value=temp_dirs['data']):
+                layout = util.get_kanchoku_layout(config)
+
+        # Should return None on error
+        assert layout is None
+
+    def test_kanchoku_layout_returns_none_when_all_fail(self, temp_dirs):
+        """Test that get_kanchoku_layout returns None when all attempts fail"""
+        # Don't create any layout files
+        config = {'kanchoku_layout': 'missing.json'}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            with patch('util.get_datadir', return_value=temp_dirs['data']):
+                layout = util.get_kanchoku_layout(config)
+
+        # Should return None when all attempts fail
+        assert layout is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
