@@ -77,11 +77,9 @@ class SettingsPanel(Gtk.Window):
 
     def save_config(self):
         """Save configuration to file"""
-        try:
-            os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
-            with open(self.config_path, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, ensure_ascii=False, indent=2)
-            
+        success = util.save_config_data(self.config)
+
+        if success:
             dialog = Gtk.MessageDialog(
                 transient_for=self,
                 flags=0,
@@ -92,8 +90,7 @@ class SettingsPanel(Gtk.Window):
             dialog.format_secondary_text("Configuration saved successfully!")
             dialog.run()
             dialog.destroy()
-            
-        except Exception as e:
+        else:
             dialog = Gtk.MessageDialog(
                 transient_for=self,
                 flags=0,
@@ -101,7 +98,7 @@ class SettingsPanel(Gtk.Window):
                 buttons=Gtk.ButtonsType.OK,
                 text="Save Failed"
             )
-            dialog.format_secondary_text(f"Error saving configuration: {e}")
+            dialog.format_secondary_text("Error saving configuration. Check logs for details.")
             dialog.run()
             dialog.destroy()
 
@@ -150,9 +147,7 @@ class SettingsPanel(Gtk.Window):
         layout_frame.add(layout_box)
         
         self.layout_combo = Gtk.ComboBoxText()
-        self.layout_combo.append("shingeta", "新下駄配列 (ShinGeta)")
-        self.layout_combo.append("qwerty-romaji", "QWERTY Romaji")
-        self.layout_combo.append("custom", "Custom Layout")
+        # Layout options will be populated dynamically in load_settings_to_ui()
         layout_box.pack_start(Gtk.Label(label="Input Layout:", xalign=0), False, False, 0)
         layout_box.pack_start(self.layout_combo, False, False, 0)
         
@@ -512,10 +507,53 @@ class SettingsPanel(Gtk.Window):
 
     def load_settings_to_ui(self):
         """Load current settings into UI widgets"""
-        # General tab
-        layout = self.config.get("layout", "shin-geta")
+        # General tab - populate layout combo with available layout files
+        self.layout_combo.remove_all()
+
+        # Search for layout JSON files in both user and system directories
+        user_layouts_dir = os.path.join(util.get_user_configdir(), 'layouts')
+        system_layouts_dir = os.path.join(util.get_datadir(), 'layouts')
+
+        # Track files and their locations
+        user_files = set()
+        system_files = set()
+
+        # Scan user layouts directory
+        if os.path.exists(user_layouts_dir):
+            for filename in os.listdir(user_layouts_dir):
+                if filename.endswith('.json'):
+                    user_files.add(filename)
+
+        # Scan system layouts directory
+        if os.path.exists(system_layouts_dir):
+            for filename in os.listdir(system_layouts_dir):
+                if filename.endswith('.json'):
+                    system_files.add(filename)
+
+        # Get all unique filenames
+        all_files = user_files | system_files
+
+        # Add found layouts to combo box with location info
+        for filename in sorted(all_files):
+            in_user = filename in user_files
+            in_system = filename in system_files
+
+            # Build display label with location info
+            if in_user and in_system:
+                # File exists in both locations - user version takes precedence
+                display_label = f"{filename} (User: $HOME/.config/, System: /opt/)"
+            elif in_user:
+                display_label = f"{filename} (User: $HOME/.config/)"
+            else:
+                display_label = f"{filename} (System: /opt/)"
+
+            # Use filename as ID for selection
+            self.layout_combo.append(filename, display_label)
+
+        # Set the current selection
+        layout = self.config.get("layout", "shingeta.json")
         if isinstance(layout, dict):
-            layout_type = layout.get("type", "shin-geta")
+            layout_type = layout.get("type", "shingeta.json")
         else:
             layout_type = layout  # layout is a string
         self.layout_combo.set_active_id(layout_type)
@@ -579,12 +617,8 @@ class SettingsPanel(Gtk.Window):
     def on_save_clicked(self, button):
         """Save button clicked"""
         # Update config from UI
-        # Handle layout - ensure it's a dict
-        if "layout" not in self.config:
-            self.config["layout"] = {}
-        if isinstance(self.config["layout"], str):
-            self.config["layout"] = {"type": self.config["layout"]}
-        self.config["layout"]["type"] = self.layout_combo.get_active_id()
+        # Save layout as filename string
+        self.config["layout"] = self.layout_combo.get_active_id()
 
         if "input_mode" not in self.config:
             self.config["input_mode"] = {}
