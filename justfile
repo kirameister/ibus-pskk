@@ -50,6 +50,11 @@ install-files:
     cp data/default_user_config.json {{install_root}}/config.json
     chmod 644 {{install_root}}/config.json
     #cp -r models/* {{install_root}}/models/ ## FIXME
+    # Copy layout files
+    mkdir -p {{install_root}}/layouts
+    cp data/layouts/* {{install_root}}/layouts/
+    mkdir -p {{install_root}}/kanchoku_layouts
+    cp data/kanchoku_layouts/* {{install_root}}/kanchoku_layouts/
     cp data/pskk.xml {{ibus_component_dir}}/
     chmod 644 {{ibus_component_dir}}/pskk.xml
 
