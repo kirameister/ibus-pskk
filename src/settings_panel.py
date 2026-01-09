@@ -576,7 +576,7 @@ class SettingsPanel(Gtk.Window):
             sands = {}
         self.sands_enabled_check.set_active(sands.get("enabled", True))
 
-        fp = self.config.get("forced_preedit") or {}
+        fp = self.config.get("forced_preedit_trigger_entry") or {}
         if not isinstance(fp, dict):
             fp = {}
         self.forced_preedit_enabled_check.set_active(fp.get("enabled", True))

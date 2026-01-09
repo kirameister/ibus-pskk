@@ -11,6 +11,9 @@
     "disable_hiragana_key": ["Alt_L"],
     "disable_hiragana_key_": "List of the keys to disablej hiragana/Japnaese typing",
 
+    "forced_preedit_trigger_key_": "The key to trigger the forceed preedit mode",
+    "forced_preedit_trigger_key": "f",
+
     "layout": "shingeta.json",
     "layout_": "Name of the JSON file containing the typing layout. It will be searched under ${config_dir} and then '/opt/ibus-pskk/layout'. When specified file is not found, shingeta.json under '/opt/ibus-pskk/layout' will be used as default",
     "layout_ja": "タイピング配列のレイアウトが記述されている JSON ファイルの名前を指定します。ファイルは ${config_dir}、そして '/opt/ibus-pskk/layout' 以下に存在するかチェックされ、見つからない場合はデフォルト値として '/opt/ibus-pskk/layout' 以下にある shingeta.json が使用されます。",
