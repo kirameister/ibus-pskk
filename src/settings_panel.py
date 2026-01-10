@@ -391,13 +391,51 @@ class SettingsPanel(Gtk.Window):
         info_label.set_line_wrap(True)
         box.pack_start(info_label, False, False, 0)
 
+        # Search box with 3 separate fields
+        search_box = Gtk.Box(spacing=6)
+        search_box.set_border_width(5)
+
+        # First key search
+        first_key_label = Gtk.Label(label="1st Key:")
+        search_box.pack_start(first_key_label, False, False, 0)
+        self.murenso_search_first = Gtk.Entry()
+        self.murenso_search_first.set_placeholder_text("Filter by 1st key...")
+        self.murenso_search_first.set_width_chars(15)
+        self.murenso_search_first.connect("changed", self.on_murenso_search_changed)
+        search_box.pack_start(self.murenso_search_first, True, True, 0)
+
+        # Second key search
+        second_key_label = Gtk.Label(label="2nd Key:")
+        search_box.pack_start(second_key_label, False, False, 0)
+        self.murenso_search_second = Gtk.Entry()
+        self.murenso_search_second.set_placeholder_text("Filter by 2nd key...")
+        self.murenso_search_second.set_width_chars(15)
+        self.murenso_search_second.connect("changed", self.on_murenso_search_changed)
+        search_box.pack_start(self.murenso_search_second, True, True, 0)
+
+        # Kanji search
+        kanji_label = Gtk.Label(label="Kanji:")
+        search_box.pack_start(kanji_label, False, False, 0)
+        self.murenso_search_kanji = Gtk.Entry()
+        self.murenso_search_kanji.set_placeholder_text("Filter by kanji...")
+        self.murenso_search_kanji.set_width_chars(15)
+        self.murenso_search_kanji.connect("changed", self.on_murenso_search_changed)
+        search_box.pack_start(self.murenso_search_kanji, True, True, 0)
+
+        box.pack_start(search_box, False, False, 0)
+
         # Murenso mapping table
         scroll = Gtk.ScrolledWindow()
         scroll.set_min_content_height(400)
 
         # Store: first_key, second_key, kanji
         self.murenso_store = Gtk.ListStore(str, str, str)
-        self.murenso_view = Gtk.TreeView(model=self.murenso_store)
+
+        # Create filter model
+        self.murenso_filter = self.murenso_store.filter_new()
+        self.murenso_filter.set_visible_func(self.murenso_filter_func)
+
+        self.murenso_view = Gtk.TreeView(model=self.murenso_filter)
 
         # Enable grid lines for better visibility
         self.murenso_view.set_grid_lines(Gtk.TreeViewGridLines.BOTH)
@@ -894,7 +932,9 @@ class SettingsPanel(Gtk.Window):
         selection = self.murenso_view.get_selection()
         model, treeiter = selection.get_selected()
         if treeiter:
-            model.remove(treeiter)
+            # Convert filtered iter to store iter
+            store_iter = self.murenso_filter.convert_iter_to_child_iter(treeiter)
+            self.murenso_store.remove(store_iter)
 
 
     def on_load_murenso(self, button):
@@ -979,6 +1019,10 @@ class SettingsPanel(Gtk.Window):
 
     def on_murenso_first_edited(self, widget, path, text):
         """First key cell edited"""
+        # Convert filtered path to store path
+        filter_iter = self.murenso_filter.get_iter(path)
+        store_iter = self.murenso_filter.convert_iter_to_child_iter(filter_iter)
+
         if len(text) > 1:
             # Show warning dialog
             dialog = Gtk.MessageDialog(
@@ -996,13 +1040,17 @@ class SettingsPanel(Gtk.Window):
             dialog.run()
             dialog.destroy()
             # Save only the first character
-            self.murenso_store[path][0] = text[0] if text else ""
+            self.murenso_store[store_iter][0] = text[0] if text else ""
         else:
-            self.murenso_store[path][0] = text
+            self.murenso_store[store_iter][0] = text
 
 
     def on_murenso_second_edited(self, widget, path, text):
         """Second key cell edited"""
+        # Convert filtered path to store path
+        filter_iter = self.murenso_filter.get_iter(path)
+        store_iter = self.murenso_filter.convert_iter_to_child_iter(filter_iter)
+
         if len(text) > 1:
             # Show warning dialog
             dialog = Gtk.MessageDialog(
@@ -1020,14 +1068,45 @@ class SettingsPanel(Gtk.Window):
             dialog.run()
             dialog.destroy()
             # Save only the first character
-            self.murenso_store[path][1] = text[0] if text else ""
+            self.murenso_store[store_iter][1] = text[0] if text else ""
         else:
-            self.murenso_store[path][1] = text
+            self.murenso_store[store_iter][1] = text
 
 
     def on_murenso_kanji_edited(self, widget, path, text):
         """Kanji cell edited"""
-        self.murenso_store[path][2] = text
+        # Convert filtered path to store path
+        filter_iter = self.murenso_filter.get_iter(path)
+        store_iter = self.murenso_filter.convert_iter_to_child_iter(filter_iter)
+
+        self.murenso_store[store_iter][2] = text
+
+    def on_murenso_search_changed(self, entry):
+        """Handle search text changes"""
+        # Refilter the tree view when search text changes
+        self.murenso_filter.refilter()
+
+    def murenso_filter_func(self, model, iter, data):
+        """Filter function for murenso mappings"""
+        # Get search text from each field
+        search_first = self.murenso_search_first.get_text().lower()
+        search_second = self.murenso_search_second.get_text().lower()
+        search_kanji = self.murenso_search_kanji.get_text().lower()
+
+        # Get row data
+        first_key = model[iter][0].lower()
+        second_key = model[iter][1].lower()
+        kanji = model[iter][2].lower()
+
+        # All non-empty search fields must match (AND logic)
+        if search_first and search_first not in first_key:
+            return False
+        if search_second and search_second not in second_key:
+            return False
+        if search_kanji and search_kanji not in kanji:
+            return False
+
+        return True
 
 
 def main():
