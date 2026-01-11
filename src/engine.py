@@ -268,7 +268,7 @@ class EnginePSKK(IBus.Engine):
         This function loads the necessary (and optional) configs from the config JSON file
         The logging level value would be set to WARNING, if it's absent in the config JSON.
         '''
-        self._config = util.get_config_data()
+        self._config = util.get_config_data()[0] # the 2nd element of tuple is list of warning messages
         self._logging_level = self._load_logging_level(self._config)
         logger.debug('config.json loaded')
         #logger.debug(self._config)
@@ -429,34 +429,9 @@ class EnginePSKK(IBus.Engine):
         This method returns a dict, which is the complete JSON data of specified layout file.
         However, it also stores dict-type layout property.
         """
-        path = ""
-        if('layout' in self._config):
-            if(os.path.exists(os.path.join(util.get_user_configdir(), self._config['layout']))):
-                path = os.path.join(util.get_user_configdir(), self._config['layout'])
-                logger.debug(f"Specified layout {self._config['layout']} found in {util.get_user_configdir()}")
-            elif(os.path.exists(os.path.join(util.get_datadir(), 'layouts', self._config['layout']))):
-                path = os.path.join(util.get_datadir(), 'layouts', self._config['layout'])
-                logger.debug(f"Specified layout {self._config['layout']} found in {util.get_datadir()}")
-            else:
-                path = os.path.join(util.get_datadir(), 'layouts', 'shingeta.json')
-            logger.info(f'layout: {path}')
-        default_layout_path = os.path.join(util.get_datadir(), 'layouts', 'shingeta.json')
-        layout_data = dict()
-        try:
-            with open(path) as f:
-                layout_data = json.load(f)
-                logger.info(f'layout JSON file loaded: {path}')
-        except Exception as error:
-            logger.error(error)
-        if(len(layout_data) == 0):
-            try:
-                with open(default_layout_path) as f:
-                    layout_data = json.load(f)
-                    logger.info(f'default layout JSON file loaded: {default_layout_path}')
-            except Exception as error:
-                logger.error(error)
+        layout_data = util.get_layout_data(self._config)
         # add simultaneous chars..
-        for l in layout_data['layout']:
+        for l in layout_data:
             # l is a list where the 0th element is input
             input_len = len(l[0])
             input_str = l[0]
@@ -480,13 +455,6 @@ class EnginePSKK(IBus.Engine):
                 self._simul_candidate_char_set.add(input_str[:-1])
         logger.debug(f'_load_layout -- _max_simul_limit_ms: {self._max_simul_limit_ms}')
         self._stroke_timing_diff = self._max_simul_limit_ms
-        if("sands_keys" in layout_data):
-            # Note that element/s of this set is str, not keyval
-            self._sands_key_set = set(layout_data['sands_keys'])
-        else:
-            # By default, we apply SandS because it is cool
-            self._sands_key_set.add('space')
-        logger.debug(f'_simul_candidate_char_set:  {self._simul_candidate_char_set}')
         return layout_data
 
 

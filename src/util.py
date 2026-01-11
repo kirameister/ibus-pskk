@@ -162,7 +162,7 @@ def get_default_config_data():
     return default_config
 
 
-def get_layout(config):
+def get_layout_data(config):
     layout_file_name = config['layout']
     layout_file_path = ''
     if os.path.exists(os.path.join(get_user_configdir(), 'layouts', layout_file_name)):
