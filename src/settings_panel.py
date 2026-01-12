@@ -1089,6 +1089,15 @@ class SettingsPanel(Gtk.Window):
             Gtk.STOCK_OPEN, Gtk.ResponseType.OK
         )
 
+        # Set default directory to kanchoku_layouts subdirectory
+        kanchoku_dir = os.path.join(util.get_user_configdir(), 'kanchoku_layouts')
+        if os.path.exists(kanchoku_dir):
+            dialog.set_current_folder(kanchoku_dir)
+        else:
+            # Create it if it doesn't exist
+            os.makedirs(kanchoku_dir, exist_ok=True)
+            dialog.set_current_folder(kanchoku_dir)
+
         filter_json = Gtk.FileFilter()
         filter_json.set_name("JSON files")
         filter_json.add_pattern("*.json")
@@ -1135,6 +1144,16 @@ class SettingsPanel(Gtk.Window):
             Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
             Gtk.STOCK_SAVE, Gtk.ResponseType.OK
         )
+
+        # Set default directory to kanchoku_layouts subdirectory
+        kanchoku_dir = os.path.join(util.get_user_configdir(), 'kanchoku_layouts')
+        if os.path.exists(kanchoku_dir):
+            dialog.set_current_folder(kanchoku_dir)
+        else:
+            # Create it if it doesn't exist
+            os.makedirs(kanchoku_dir, exist_ok=True)
+            dialog.set_current_folder(kanchoku_dir)
+
         dialog.set_current_name("murenso.json")
 
         response = dialog.run()
