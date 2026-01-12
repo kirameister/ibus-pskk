@@ -75,6 +75,129 @@ class SettingsPanel(Gtk.Window):
         dialog.destroy()
         return False  # Don't call again
 
+    def on_hiragana_key_button_clicked(self, button):
+        """Show key capture dialog for hiragana mode key"""
+        result = self.show_key_capture_dialog("Hiragana Mode Key", self.hiragana_key_value)
+        if result is not None:
+            self.hiragana_key_value = result
+            if result:
+                self.hiragana_key_button.set_label("+".join(result))
+            else:
+                self.hiragana_key_button.set_label("Not Set")
+
+    def on_direct_key_button_clicked(self, button):
+        """Show key capture dialog for direct mode key"""
+        result = self.show_key_capture_dialog("Direct Mode Key", self.direct_key_value)
+        if result is not None:
+            self.direct_key_value = result
+            if result:
+                self.direct_key_button.set_label("+".join(result))
+            else:
+                self.direct_key_button.set_label("Not Set")
+
+    def show_key_capture_dialog(self, title, current_value):
+        """Show dialog to capture key press
+
+        Returns:
+            list: List of keys if saved
+            []: Empty list if removed
+            None: If canceled
+        """
+        dialog = Gtk.Dialog(
+            title=title,
+            transient_for=self,
+            flags=Gtk.DialogFlags.MODAL
+        )
+        dialog.set_default_size(400, 150)
+
+        content = dialog.get_content_area()
+        content.set_spacing(10)
+        content.set_border_width(10)
+
+        # Instruction label
+        instruction = Gtk.Label()
+        current_str = "+".join(current_value) if current_value else "Not Set"
+        instruction.set_markup(
+            f"<b>Press a key or key combination</b>\n\n"
+            f"Current: <i>{current_str}</i>"
+        )
+        content.pack_start(instruction, False, False, 0)
+
+        # Display for captured key
+        self.captured_keys = []
+        self.key_display = Gtk.Label(label="Waiting for key press...")
+        content.pack_start(self.key_display, False, False, 0)
+
+        # Connect key press handler
+        dialog.connect("key-press-event", self.on_key_capture)
+        dialog.connect("key-release-event", self.on_key_release)
+
+        # Button box
+        button_box = dialog.get_action_area()
+        button_box.set_layout(Gtk.ButtonBoxStyle.END)
+        button_box.set_spacing(6)
+
+        # Remove button
+        remove_button = Gtk.Button(label="Remove")
+        remove_button.connect("clicked", lambda w: dialog.response(Gtk.ResponseType.REJECT))
+        button_box.pack_start(remove_button, False, False, 0)
+
+        # Cancel button
+        cancel_button = Gtk.Button(label="Cancel")
+        cancel_button.connect("clicked", lambda w: dialog.response(Gtk.ResponseType.CANCEL))
+        button_box.pack_start(cancel_button, False, False, 0)
+
+        # Save button
+        save_button = Gtk.Button(label="Save")
+        save_button.connect("clicked", lambda w: dialog.response(Gtk.ResponseType.OK))
+        button_box.pack_start(save_button, False, False, 0)
+
+        dialog.show_all()
+        response = dialog.run()
+        dialog.destroy()
+
+        if response == Gtk.ResponseType.OK:
+            return self.captured_keys if self.captured_keys else current_value
+        elif response == Gtk.ResponseType.REJECT:
+            return []  # Remove
+        else:
+            return None  # Cancel
+
+    def on_key_capture(self, widget, event):
+        """Capture key press"""
+        # Get key name
+        keyval = event.keyval
+        keyname = Gdk.keyval_name(keyval)
+
+        # Build list of pressed keys (modifiers + key)
+        keys = []
+
+        # Check for modifiers
+        if event.state & Gdk.ModifierType.CONTROL_MASK:
+            keys.append("Control")
+        if event.state & Gdk.ModifierType.SHIFT_MASK:
+            keys.append("Shift")
+        if event.state & Gdk.ModifierType.MOD1_MASK:  # Alt
+            keys.append("Alt")
+        if event.state & Gdk.ModifierType.SUPER_MASK:
+            keys.append("Super")
+
+        # Add the main key if it's not a modifier
+        if keyname not in ["Control_L", "Control_R", "Shift_L", "Shift_R",
+                           "Alt_L", "Alt_R", "Super_L", "Super_R"]:
+            keys.append(keyname)
+
+        # If we have a valid key combination, save it
+        if keys:
+            self.captured_keys = keys
+            self.key_display.set_label("+".join(keys))
+
+        return True
+
+    def on_key_release(self, widget, event):
+        """Handle key release"""
+        return True
+
     def save_config(self):
         """Save configuration to file"""
         success = util.save_config_data(self.config)
@@ -161,15 +284,21 @@ class SettingsPanel(Gtk.Window):
         
         hiragana_box = Gtk.Box(spacing=6)
         hiragana_box.pack_start(Gtk.Label(label="Hiragana Mode:"), False, False, 0)
-        self.hiragana_key_entry = Gtk.Entry()
-        hiragana_box.pack_start(self.hiragana_key_entry, True, True, 0)
+        self.hiragana_key_button = Gtk.Button(label="Not Set")
+        self.hiragana_key_button.connect("clicked", self.on_hiragana_key_button_clicked)
+        hiragana_box.pack_start(self.hiragana_key_button, True, True, 0)
         mode_box.pack_start(hiragana_box, False, False, 0)
-        
+
         direct_box = Gtk.Box(spacing=6)
         direct_box.pack_start(Gtk.Label(label="Direct Mode:"), False, False, 0)
-        self.direct_key_entry = Gtk.Entry()
-        direct_box.pack_start(self.direct_key_entry, True, True, 0)
+        self.direct_key_button = Gtk.Button(label="Not Set")
+        self.direct_key_button.connect("clicked", self.on_direct_key_button_clicked)
+        direct_box.pack_start(self.direct_key_button, True, True, 0)
         mode_box.pack_start(direct_box, False, False, 0)
+
+        # Store key values
+        self.hiragana_key_value = None
+        self.direct_key_value = None
         
         box.pack_start(mode_frame, False, False, 0)
         
@@ -596,11 +725,23 @@ class SettingsPanel(Gtk.Window):
             layout_type = layout  # layout is a string
         self.layout_combo.set_active_id(layout_type)
 
-        input_mode = self.config.get("input_mode") or {}
-        if not isinstance(input_mode, dict):
-            input_mode = {}
-        self.hiragana_key_entry.set_text(input_mode.get("hiragana_key", "Alt_R"))
-        self.direct_key_entry.set_text(input_mode.get("direct_key", "Alt_L"))
+        # Load enable_hiragana_key from config
+        enable_hiragana_key = self.config.get("enable_hiragana_key", ["Alt_R"])
+        if isinstance(enable_hiragana_key, list) and enable_hiragana_key:
+            hiragana_key_str = "+".join(enable_hiragana_key)
+        else:
+            hiragana_key_str = ""
+        self.hiragana_key_value = enable_hiragana_key
+        self.hiragana_key_button.set_label(hiragana_key_str if hiragana_key_str else "Not Set")
+
+        # Load disable_hiragana_key from config
+        disable_hiragana_key = self.config.get("disable_hiragana_key", ["Alt_L"])
+        if isinstance(disable_hiragana_key, list) and disable_hiragana_key:
+            direct_key_str = "+".join(disable_hiragana_key)
+        else:
+            direct_key_str = ""
+        self.direct_key_value = disable_hiragana_key
+        self.direct_key_button.set_label(direct_key_str if direct_key_str else "Not Set")
 
         ui = self.config.get("ui") or {}
         if not isinstance(ui, dict):
@@ -658,10 +799,9 @@ class SettingsPanel(Gtk.Window):
         # Save layout as filename string
         self.config["layout"] = self.layout_combo.get_active_id()
 
-        if "input_mode" not in self.config:
-            self.config["input_mode"] = {}
-        self.config["input_mode"]["hiragana_key"] = self.hiragana_key_entry.get_text()
-        self.config["input_mode"]["direct_key"] = self.direct_key_entry.get_text()
+        # Save mode switch keys
+        self.config["enable_hiragana_key"] = self.hiragana_key_value if self.hiragana_key_value else []
+        self.config["disable_hiragana_key"] = self.direct_key_value if self.direct_key_value else []
 
         if "ui" not in self.config:
             self.config["ui"] = {}
