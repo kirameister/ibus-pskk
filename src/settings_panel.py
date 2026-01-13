@@ -843,65 +843,81 @@ class SettingsPanel(Gtk.Window):
 
 
     def on_save_clicked(self, button):
-        """Save button clicked"""
-        # Update config from UI
-        # Save layout as filename string
-        self.config["layout"] = self.layout_combo.get_active_id()
-
-        # Save kanchoku layout
-        self.config["kanchoku_layout"] = self.kanchoku_layout_combo.get_active_id()
-
-        # Save mode switch keys
+        """Save button clicked - collect all UI values and save to config.json"""
+        # General tab
+        self.config["layout"] = self.layout_combo.get_active_id() or "shingeta.json"
+        self.config["kanchoku_layout"] = self.kanchoku_layout_combo.get_active_id() or "aki_code.json"
         self.config["enable_hiragana_key"] = self.hiragana_key_value if self.hiragana_key_value else []
         self.config["disable_hiragana_key"] = self.direct_key_value if self.direct_key_value else []
 
-        if "ui" not in self.config:
-            self.config["ui"] = {}
-        self.config["ui"]["show_annotations"] = self.show_annotations_check.get_active()
-        self.config["ui"]["candidate_window_size"] = int(self.page_size_spin.get_value())
+        self.config["ui"] = {
+            "show_annotations": self.show_annotations_check.get_active(),
+            "candidate_window_size": int(self.page_size_spin.get_value())
+        }
 
-        if "sands" not in self.config:
-            self.config["sands"] = {}
-        self.config["sands"]["enabled"] = self.sands_enabled_check.get_active()
+        # Input tab
+        self.config["sands"] = {
+            "enabled": self.sands_enabled_check.get_active()
+        }
 
-        if "forced_preedit" not in self.config:
-            self.config["forced_preedit"] = {}
-        self.config["forced_preedit"]["enabled"] = self.forced_preedit_enabled_check.get_active()
-        self.config["forced_preedit"]["trigger_key"] = self.forced_preedit_trigger_entry.get_text()
+        self.config["forced_preedit_trigger_key"] = self.forced_preedit_trigger_entry.get_text()
 
-        if "murenso" not in self.config:
-            self.config["murenso"] = {}
-        self.config["murenso"]["enabled"] = self.murenso_enabled_check.get_active()
+        self.config["murenso"] = {
+            "enabled": self.murenso_enabled_check.get_active()
+        }
 
-        if "learning" not in self.config:
-            self.config["learning"] = {}
-        self.config["learning"]["enabled"] = self.learning_enabled_check.get_active()
+        # Conversion tab
+        self.config["learning"] = {
+            "enabled": self.learning_enabled_check.get_active()
+        }
 
-        if "conversion_keys" not in self.config:
-            self.config["conversion_keys"] = {}
-        self.config["conversion_keys"]["to_katakana"] = self.to_katakana_entry.get_text()
-        self.config["conversion_keys"]["to_hiragana"] = self.to_hiragana_entry.get_text()
-        self.config["conversion_keys"]["to_ascii"] = self.to_ascii_entry.get_text()
-        self.config["conversion_keys"]["to_zenkaku"] = self.to_zenkaku_entry.get_text()
+        self.config["conversion_keys"] = {
+            "to_katakana": self.to_katakana_entry.get_text(),
+            "to_hiragana": self.to_hiragana_entry.get_text(),
+            "to_ascii": self.to_ascii_entry.get_text(),
+            "to_zenkaku": self.to_zenkaku_entry.get_text()
+        }
 
-        # Update dictionaries from UI
-        if "dictionaries" not in self.config:
-            self.config["dictionaries"] = {}
-        sys_dicts = []
-        for row in self.sys_dict_store:
-            sys_dicts.append(row[0])
-        self.config["dictionaries"]["system"] = sys_dicts
+        # Dictionaries tab
+        self.config["dictionaries"] = {
+            "system": [row[0] for row in self.sys_dict_store],
+            "user": [row[0] for row in self.user_dict_store]
+        }
 
-        user_dicts = []
-        for row in self.user_dict_store:
-            user_dicts.append(row[0])
-        self.config["dictionaries"]["user"] = user_dicts
+        # Save config to JSON file
+        config_path = os.path.join(util.get_user_configdir(), 'config.json')
+        try:
+            os.makedirs(util.get_user_configdir(), exist_ok=True)
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, ensure_ascii=False, indent=2)
+            logger.info(f"Configuration saved to {config_path}")
 
-        # Save murenso mappings
-        self.save_murenso_mappings()
+            # Save murenso/kanchoku mappings to separate file
+            self.save_murenso_mappings()
 
-        # Save to file
-        self.save_config()
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.INFO,
+                buttons=Gtk.ButtonsType.OK,
+                text="Settings Saved"
+            )
+            dialog.format_secondary_text(f"Configuration saved to:\n{config_path}")
+            dialog.run()
+            dialog.destroy()
+
+        except Exception as e:
+            logger.error(f"Error saving configuration: {e}")
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Save Failed"
+            )
+            dialog.format_secondary_text(f"Error saving configuration:\n{e}")
+            dialog.run()
+            dialog.destroy()
 
 
     # Dictionary management methods
