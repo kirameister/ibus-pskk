@@ -508,17 +508,20 @@ class SettingsPanel(Gtk.Window):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
 
-        # Info label
-        info_label = Gtk.Label()
-        kanchoku_file = self.config.get('kanchoku_layout', 'N/A')
-        info_label.set_markup(
-            "<b>無連想配列 (Direct Kanji Input)</b>\n"
-            f"Loaded from: <i>{kanchoku_file}</i>\n"
-            "Map 2-key sequences to Kanji characters while holding Space.\n"
-            "Example: Space + i + 1 → 一"
-        )
-        info_label.set_line_wrap(True)
-        box.pack_start(info_label, False, False, 0)
+        # Kanchoku layout selection
+        layout_frame = Gtk.Frame(label="Kanchoku Layout")
+        layout_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        layout_box.set_border_width(10)
+        layout_frame.add(layout_box)
+
+        layout_label = Gtk.Label(label="Select Layout:")
+        layout_box.pack_start(layout_label, False, False, 0)
+
+        self.kanchoku_layout_combo = Gtk.ComboBoxText()
+        self.kanchoku_layout_combo.connect("changed", self.on_kanchoku_layout_changed)
+        layout_box.pack_start(self.kanchoku_layout_combo, True, True, 0)
+
+        box.pack_start(layout_frame, False, False, 0)
 
         # Search box with 3 separate fields
         search_box = Gtk.Box(spacing=6)
@@ -789,7 +792,53 @@ class SettingsPanel(Gtk.Window):
         for path in dictionaries.get("user", []) or []:
             self.user_dict_store.append([path])
 
-        # Murenso tab
+        # Murenso tab - populate kanchoku layout combo
+        self.kanchoku_layout_combo.remove_all()
+
+        # Search for kanchoku layout JSON files in both user and system directories
+        user_kanchoku_dir = os.path.join(util.get_user_configdir(), 'kanchoku_layouts')
+        system_kanchoku_dir = os.path.join(util.get_datadir(), 'kanchoku_layouts')
+
+        # Track files and their locations
+        user_kanchoku_files = set()
+        system_kanchoku_files = set()
+
+        # Scan user kanchoku layouts directory
+        if os.path.exists(user_kanchoku_dir):
+            for filename in os.listdir(user_kanchoku_dir):
+                if filename.endswith('.json'):
+                    user_kanchoku_files.add(filename)
+
+        # Scan system kanchoku layouts directory
+        if os.path.exists(system_kanchoku_dir):
+            for filename in os.listdir(system_kanchoku_dir):
+                if filename.endswith('.json'):
+                    system_kanchoku_files.add(filename)
+
+        # Get all unique filenames
+        all_kanchoku_files = user_kanchoku_files | system_kanchoku_files
+
+        # Add found layouts to combo box with location info
+        for filename in sorted(all_kanchoku_files):
+            in_user = filename in user_kanchoku_files
+            in_system = filename in system_kanchoku_files
+
+            # Build display label with location info
+            if in_user and in_system:
+                display_label = f"{filename} (User: $HOME/.config/, System: /opt/)"
+            elif in_user:
+                display_label = f"{filename} (User: $HOME/.config/)"
+            else:
+                display_label = f"{filename} (System: /opt/)"
+
+            # Use filename as ID for selection
+            self.kanchoku_layout_combo.append(filename, display_label)
+
+        # Set the current selection
+        kanchoku_layout = self.config.get("kanchoku_layout", "aki_code.json")
+        self.kanchoku_layout_combo.set_active_id(kanchoku_layout)
+
+        # Load mappings
         self.load_murenso_mappings()
 
 
@@ -798,6 +847,9 @@ class SettingsPanel(Gtk.Window):
         # Update config from UI
         # Save layout as filename string
         self.config["layout"] = self.layout_combo.get_active_id()
+
+        # Save kanchoku layout
+        self.config["kanchoku_layout"] = self.kanchoku_layout_combo.get_active_id()
 
         # Save mode switch keys
         self.config["enable_hiragana_key"] = self.hiragana_key_value if self.hiragana_key_value else []
@@ -1239,6 +1291,17 @@ class SettingsPanel(Gtk.Window):
         store_iter = self.murenso_filter.convert_iter_to_child_iter(filter_iter)
 
         self.murenso_store[store_iter][2] = text
+
+    def on_kanchoku_layout_changed(self, combo):
+        """Handle kanchoku layout selection change"""
+        selected_layout = combo.get_active_id()
+        if selected_layout:
+            # Update config
+            self.config["kanchoku_layout"] = selected_layout
+            # Reload kanchoku layout
+            self.kanchoku_layout = util.get_kanchoku_layout(self.config)
+            # Reload mappings in the table
+            self.load_murenso_mappings()
 
     def on_murenso_search_changed(self, entry):
         """Handle search text changes"""
