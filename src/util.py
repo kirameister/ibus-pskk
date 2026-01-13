@@ -182,7 +182,9 @@ def get_layout_data(config):
 def get_kanchoku_layout(config):
     kanchoku_layout_file_name = config['kanchoku_layout']
     kanchoku_layout_file_path = ''
-    if os.path.exists(os.path.join(get_user_configdir(), kanchoku_layout_file_name)):
+    if os.path.exists(os.path.join(get_user_configdir(), 'kanchoku_layouts', kanchoku_layout_file_name)):
+        kanchoku_layout_file_path = os.path.join(get_user_configdir(), 'kanchoku_layouts', kanchoku_layout_file_name)
+    elif os.path.exists(os.path.join(get_user_configdir(), kanchoku_layout_file_name)):
         kanchoku_layout_file_path = os.path.join(get_user_configdir(), kanchoku_layout_file_name)
     elif os.path.exists(os.path.join(get_datadir(), 'kanchoku_layouts', kanchoku_layout_file_name)):
         kanchoku_layout_file_path = os.path.join(get_datadir(), 'kanchoku_layouts', kanchoku_layout_file_name)
