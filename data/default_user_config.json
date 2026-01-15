@@ -29,18 +29,22 @@
     "dictionaries_": "List of user-defined dictionaries. Dictionary files are stored under ${config_dir} and look-up is conducted based on the order of the elements in the list.",
     "dictionaries_ja": "ユーザー定義された辞書のリスト。辞書ファイルは ${config_dir} 以下に格納され、リスト要素の順序に従って検索が行われます。",
 
+    "sands_": "Setting to determine whether or not the SandS is enabled",
     "sands": {
         "enabled": true
     },
+    "learning_": "Setting to determine whether or not the conversion order is learned",
     "learning": {
         "enabled": true
     },
-    "conversiono_keys": {
+    "conversion_keys_": "Each key-combo to convert the preedit string into specified character representation",
+    "conversion_keys": {
         "to_katakana": "Ctrl+K",
         "to_hiragana": "Ctrl+J",
         "to_ascii": "Ctrl+L",
         "to_zenkaku": "Ctrl+Shift+L"
     },
+    "murenso_": "Setting to determine whether or not the murenso typing is enabled",
     "murenso": {
         "enabled": true
     },
