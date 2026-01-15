@@ -281,16 +281,23 @@ class SettingsPanel(Gtk.Window):
         mode_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         mode_box.set_border_width(10)
         mode_frame.add(mode_box)
-        
+
+        # Create size group for labels to ensure equal button widths
+        mode_label_size_group = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+
         hiragana_box = Gtk.Box(spacing=6)
-        hiragana_box.pack_start(Gtk.Label(label="Hiragana Mode:"), False, False, 0)
+        hiragana_label = Gtk.Label(label="Hiragana Mode:")
+        mode_label_size_group.add_widget(hiragana_label)
+        hiragana_box.pack_start(hiragana_label, False, False, 0)
         self.hiragana_key_button = Gtk.Button(label="Not Set")
         self.hiragana_key_button.connect("clicked", self.on_hiragana_key_button_clicked)
         hiragana_box.pack_start(self.hiragana_key_button, True, True, 0)
         mode_box.pack_start(hiragana_box, False, False, 0)
 
         direct_box = Gtk.Box(spacing=6)
-        direct_box.pack_start(Gtk.Label(label="Direct Mode:"), False, False, 0)
+        direct_label = Gtk.Label(label="Direct Mode:")
+        mode_label_size_group.add_widget(direct_label)
+        direct_box.pack_start(direct_label, False, False, 0)
         self.direct_key_button = Gtk.Button(label="Not Set")
         self.direct_key_button.connect("clicked", self.on_direct_key_button_clicked)
         direct_box.pack_start(self.direct_key_button, True, True, 0)
@@ -395,31 +402,42 @@ class SettingsPanel(Gtk.Window):
         keys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         keys_box.set_border_width(10)
         keys_frame.add(keys_box)
-        
+
+        # Create size group for labels to ensure equal entry widths
+        conv_label_size_group = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+
         # Katakana
         kata_box = Gtk.Box(spacing=6)
-        kata_box.pack_start(Gtk.Label(label="To Katakana:"), False, False, 0)
+        kata_label = Gtk.Label(label="To Katakana:")
+        conv_label_size_group.add_widget(kata_label)
+        kata_box.pack_start(kata_label, False, False, 0)
         self.to_katakana_entry = Gtk.Entry()
         kata_box.pack_start(self.to_katakana_entry, True, True, 0)
         keys_box.pack_start(kata_box, False, False, 0)
-        
+
         # Hiragana
         hira_box = Gtk.Box(spacing=6)
-        hira_box.pack_start(Gtk.Label(label="To Hiragana:"), False, False, 0)
+        hira_label = Gtk.Label(label="To Hiragana:")
+        conv_label_size_group.add_widget(hira_label)
+        hira_box.pack_start(hira_label, False, False, 0)
         self.to_hiragana_entry = Gtk.Entry()
         hira_box.pack_start(self.to_hiragana_entry, True, True, 0)
         keys_box.pack_start(hira_box, False, False, 0)
-        
+
         # ASCII
         ascii_box = Gtk.Box(spacing=6)
-        ascii_box.pack_start(Gtk.Label(label="To ASCII:"), False, False, 0)
+        ascii_label = Gtk.Label(label="To ASCII:")
+        conv_label_size_group.add_widget(ascii_label)
+        ascii_box.pack_start(ascii_label, False, False, 0)
         self.to_ascii_entry = Gtk.Entry()
         ascii_box.pack_start(self.to_ascii_entry, True, True, 0)
         keys_box.pack_start(ascii_box, False, False, 0)
-        
+
         # Zenkaku
         zen_box = Gtk.Box(spacing=6)
-        zen_box.pack_start(Gtk.Label(label="To Zenkaku:"), False, False, 0)
+        zen_label = Gtk.Label(label="To Zenkaku:")
+        conv_label_size_group.add_widget(zen_label)
+        zen_box.pack_start(zen_label, False, False, 0)
         self.to_zenkaku_entry = Gtk.Entry()
         zen_box.pack_start(self.to_zenkaku_entry, True, True, 0)
         keys_box.pack_start(zen_box, False, False, 0)
