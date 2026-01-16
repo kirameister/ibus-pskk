@@ -23,18 +23,17 @@ class SimultaneousInputProcessor:
                          loaded from a layout JSON file.
         """
         self.layout_data = layout_data # this is raw-loaded data
-        self._layout = dict() # this is processed data
+        self.simultaneous_map = dict() # this is the parsed and modified dictionary
+        self.simul_candidate_char_set = set()
+        self.max_simul_limit_ms = 0 # this is to identify the max limit of simul-typing -- passed this limit, there is no simul-typing
+
         self._build_simultaneous_map()
-        self._simul_candidate_char_set = set()
-        self._max_simul_limit_ms = 0 # this is to identify the max limit of simul-typing -- passed this limit, there is no simul-typing
 
     def _build_simultaneous_map(self):
         """
         Build internal mapping for simultaneous input detection
         from the layout data.
         """
-        self.simultaneous_map = {}
-
         if not self.layout_data:
             logger.warning("No layout data provided")
             return
@@ -54,14 +53,14 @@ class SimultaneousInputProcessor:
             list_values["output"] = str(l[1])
             list_values["pending"] = str(l[2])
             if(len(l) == 4 and type(l[3]) == int): # this entry is about simultaneous input
-                self._max_simul_limit_ms = max(l[3], self._max_simul_limit_ms)
+                self.max_simul_limit_ms = max(l[3], self.max_simul_limit_ms)
                 list_values["simul_limit_ms"] = l[3]
             else:
                 list_values["simul_limit_ms"] = 0
-            self._layout[input_str] = list_values
+            self.simultaneous_map[input_str] = list_values
             #logger.debug(f'_load_layout -- layout element added {input_str} => {list_values}')
             if(input_len >= 2):
-                self._simul_candidate_char_set.add(input_str[:-1])
+                self.simul_candidate_char_set.add(input_str[:-1])
 
     def is_simultaneous_trigger(self, input_entry):
         """
