@@ -22,8 +22,11 @@ class SimultaneousInputProcessor:
             layout_data: Dictionary containing the layout configuration,
                          loaded from a layout JSON file.
         """
-        self.layout_data = layout_data
+        self.layout_data = layout_data # this is raw-loaded data
+        self._layout = dict() # this is processed data
         self._build_simultaneous_map()
+        self._simul_candidate_char_set = set()
+        self._max_simul_limit_ms = 0 # this is to identify the max limit of simul-typing -- passed this limit, there is no simul-typing
 
     def _build_simultaneous_map(self):
         """
@@ -37,8 +40,28 @@ class SimultaneousInputProcessor:
             return
 
         # Extract simultaneous input definitions from layout
-        if "simultaneous" in self.layout_data:
-            self.simultaneous_map = self.layout_data["simultaneous"]
+        for l in self.layout_data:
+            # l is a list where the 0th element is input
+            input_len = len(l[0])
+            input_str = l[0]
+            list_values = dict()
+            if(input_len == 0):
+                logger.warning('input str len == 0 detected; skipping..')
+                continue
+            if(input_len > 3):
+                logger.warning(f'len of input str is bigger than 3; skipping.. : {l}')
+                continue
+            list_values["output"] = str(l[1])
+            list_values["pending"] = str(l[2])
+            if(len(l) == 4 and type(l[3]) == int): # this entry is about simultaneous input
+                self._max_simul_limit_ms = max(l[3], self._max_simul_limit_ms)
+                list_values["simul_limit_ms"] = l[3]
+            else:
+                list_values["simul_limit_ms"] = 0
+            self._layout[input_str] = list_values
+            #logger.debug(f'_load_layout -- layout element added {input_str} => {list_values}')
+            if(input_len >= 2):
+                self._simul_candidate_char_set.add(input_str[:-1])
 
     def is_simultaneous_trigger(self, input_entry):
         """
