@@ -66,6 +66,15 @@ class SimultaneousInputProcessor:
             if(input_len >= 2):
                 self.simul_candidate_char_set.add(input_str[:-1])
 
+    def simultaneous_reset(self):
+        """
+        Offset the internal origin_timestamp backward
+        The purpuse is that the following stroke will not be
+        part of the simul-input
+        """
+        self.origin_timestamp -= (self.max_simul_limit_ms) * 1000
+
+
     def is_simultaneous_trigger(self, input_entry):
         """
         Check if the given input entry should trigger simultaneous input.
