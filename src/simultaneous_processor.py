@@ -2,6 +2,7 @@
 # simultaneous_processor.py - Processor for simultaneous key input detection
 
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,9 @@ class SimultaneousInputProcessor:
         self.max_simul_limit_ms = 0 # this is to identify the max limit of simul-typing -- passed this limit, there is no simul-typing
 
         self._build_simultaneous_map()
+        self.origin_timestamp = time.perf_counter()
+        self.previous_typed_timestamp = time.perf_counter()
+        self.stroke_timing_diff = time.perf_counter()
 
     def _build_simultaneous_map(self):
         """
