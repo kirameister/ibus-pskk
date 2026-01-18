@@ -1,5 +1,6 @@
 import util
 import settings_panel
+from simultaneous_processor import SimultaneousInputProcessor
 
 import gettext
 import json
@@ -79,17 +80,9 @@ class EnginePSKK(IBus.Engine):
         self._mode = 'あ'  # DEBUG I do not like to click extra...
         self._override = True
         # loading the layout
-        self._layout_data = dict() # this is complete data of layout JSON
-        self._layout = dict() # this is the modified layout of JSON
+        self._layout_data = None  # raw layout JSON data
+        self._simul_processor = None  # SimultaneousInputProcessor instance
         self._kanchoku_layout = dict()
-        # _layout[INPUT]: {"output": OUTPUT_STR, "pending": PENDING_STR, "simul_limit_ms": INT}
-        self._simul_candidate_char_set = set()
-        self._max_simul_limit_ms = 0
-
-        # as part of init, set the timestamp anchor
-        self._origin_timestamp = time.perf_counter()
-        self._previous_typed_timestamp = time.perf_counter()
-        self._stroke_timing_diff = time.perf_counter()
         # SandS vars
         self._modkey_status = 0 # This is supposed to be bitwise status
         self._typing_mode = 0 # This is to indicate which state the stroke is supposed to be
@@ -112,7 +105,8 @@ class EnginePSKK(IBus.Engine):
 
         # load configs
         self._load_configs()
-        self._layout_data = self._load_layout() # this will also update self._layout
+        self._layout_data = util.get_layout_data(self._config)
+        self._simul_processor = SimultaneousInputProcessor(self._layout_data)
         self._kanchoku_layout = self._load_kanchoku_layout()
 
         self.set_mode(self._load_input_mode(self._settings))
@@ -271,9 +265,9 @@ class EnginePSKK(IBus.Engine):
         self._config = util.get_config_data()[0] # the 2nd element of tuple is list of warning messages
         self._logging_level = self._load_logging_level(self._config)
         logger.debug('config.json loaded')
-        #logger.debug(self._config)
         # loading layout should be part of (re-)loading config
-        self._layout_data = self._load_layout()
+        self._layout_data = util.get_layout_data(self._config)
+        self._simul_processor = SimultaneousInputProcessor(self._layout_data)
         self._kanchoku_layout = self._load_kanchoku_layout()
 
     def _load_logging_level(self, config):
@@ -412,68 +406,6 @@ class EnginePSKK(IBus.Engine):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))
         self._input_mode_prop.set_label(IBus.Text.new_from_string("Input mode (" + self._mode + ")"))
         self.update_property(self._input_mode_prop)
-
-    def _load_layout(self):
-        """
-        This function loads the keyboard layout, which is expected
-        to be stored in the JSON format.
-        This function first tries to load the JSON file specified
-        in the config file; if not specified, it defaults back to the
-        "default_layout" JSON file.
-        All the layouts are meant to be stored as Romazi-like layout,
-        meaning that it consists of input, output, pending, and optional
-        simul_limit_ms values. However, the layout is assumed to be simultaneous
-        layout, as opposed to the sequential-typing layout like the normal Romazi.
-        Therefore, the max len of input char is 2. 
-
-        This method returns a dict, which is the complete JSON data of specified layout file.
-        However, it also stores dict-type layout property.
-        """
-        layout_data = util.get_layout_data(self._config)
-        # add simultaneous chars..
-        for l in layout_data:
-            # l is a list where the 0th element is input
-            input_len = len(l[0])
-            input_str = l[0]
-            list_values = dict()
-            if(input_len == 0):
-                logger.warning('input str len == 0 detected; skipping..')
-                continue
-            if(input_len > 3):
-                logger.warning(f'len of input str is bigger than 3; skipping.. : {l}')
-                continue
-            list_values["output"] = str(l[1])
-            list_values["pending"] = str(l[2])
-            if(len(l) == 4 and type(l[3]) == int):
-                self._max_simul_limit_ms = max(l[3], self._max_simul_limit_ms)
-                list_values["simul_limit_ms"] = l[3]
-            else:
-                list_values["simul_limit_ms"] = 0
-            self._layout[input_str] = list_values
-            #logger.debug(f'_load_layout -- layout element added {input_str} => {list_values}')
-            if(input_len >= 2):
-                self._simul_candidate_char_set.add(input_str[:-1])
-        logger.debug(f'_load_layout -- _max_simul_limit_ms: {self._max_simul_limit_ms}')
-        self._stroke_timing_diff = self._max_simul_limit_ms
-        return layout_data
-
-
-    def _is_simul_condition_met(self, keyval, preedit, stroke_timing_diff):
-        """
-        This function is to return the boolean value
-        if the given keycode (given the loaded layout)
-        is supposed to be captured as simultaneous stroke. 
-
-        In order to have the modularity, preedit value is 
-        also deined as argument.
-        """
-        c = chr(keyval)
-        preedit_and_c = preedit + c
-        if(preedit in self._simul_candidate_char_set and preedit_and_c in self._layout):
-            logger.debug(f'_is_simul_condition_met -- simul-check : {stroke_timing_diff} vs ' + str(self._layout[preedit_and_c]['simul_limit_ms']))
-            if(stroke_timing_diff < self._layout[preedit_and_c]['simul_limit_ms']):
-                return(True)
-        return(False)
 
     def set_cursor_location_cb(self, engine, x, y, w, h):
         """
