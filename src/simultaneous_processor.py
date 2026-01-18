@@ -25,10 +25,10 @@ class SimultaneousInputProcessor:
         """
         self.layout_data = layout_data # this is raw-loaded data
         self.max_simul_limit_ms = 0 # this is to identify the max limit of simul-typing -- passed this limit, there is no simul-typing
-        self.previous_typed_timestamp = time.perf_counter()
 
         self._build_simultaneous_map()
-        self.simultaneous_reset() # this offsets the timestamp so first keystroke won't be treated as simultaneous
+        # Initialize timestamp with offset so first keystroke won't be treated as simultaneous
+        self.previous_typed_timestamp = time.perf_counter() - (self.max_simul_limit_ms * 1000)
 
     def _build_simultaneous_map(self):
         """
@@ -160,17 +160,3 @@ class SimultaneousInputProcessor:
         self.previous_typed_timestamp = current_time
         return past_pending + input_char, None
 
-    def get_simultaneous_output(self, input_entry):
-        """
-        Get the output for a simultaneous input entry.
-
-        Args:
-            input_entry: The input entry to look up
-
-        Returns:
-            The output value if found, None otherwise.
-        """
-        if not self.simultaneous_map:
-            return None
-
-        return self.simultaneous_map.get(input_entry)
