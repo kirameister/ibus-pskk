@@ -24,7 +24,6 @@ class SimultaneousInputProcessor:
                          loaded from a layout JSON file.
         """
         self.layout_data = layout_data # this is raw-loaded data
-        self.simul_candidate_char_set = set()
         self.max_simul_limit_ms = 0 # this is to identify the max limit of simul-typing -- passed this limit, there is no simul-typing
 
         self._build_simultaneous_map()
@@ -65,8 +64,6 @@ class SimultaneousInputProcessor:
             else:
                 list_values["simul_limit_ms"] = -1 # Negative value in this case means that the layout has nothing to do with simul-typing; it works like normal romaji input
             self.simultaneous_map[input_len - 1][input_str] = list_values
-            if input_len >= 2 and type(l[3]) == int and l[3] > 0:
-                self.simul_candidate_char_set.add(input_str[:-1])
 
     def simultaneous_reset(self):
         """
@@ -94,44 +91,68 @@ class SimultaneousInputProcessor:
             self.simultaneous_reset()
             return past_pending, None
 
-        if input_char not in self.simul_candidate_char_set:
-            self.simultaneous_reset()
-            return past_pending, None
-
         current_time = time.perf_counter()
         time_diff_ms = (current_time - self.previous_typed_timestamp) * 1000
 
-        # Only consider the last 2 chars of past_pending (max input length is 3)
-        pending_tail = past_pending[-2:] if len(past_pending) > 2 else past_pending
+        # ============================================================
+        # LOOKUP STRATEGY: Try longest key first, then fall back to shorter keys
+        # ============================================================
+        #
+        # Example: past_pending="ab", input_char="c"
+        #   1. Try "abc" (full combination)
+        #   2. If no match or timed out, try "bc" (last 1 char of past_pending + input)
+        #   3. If still no match, try "c" (just input_char)
+        #
+        # Why? Simultaneous typing "jk" within 50ms should produce a special output.
+        # But if typed slowly (>50ms), we should fall back to processing "k" alone.
+        #
+        # self.simultaneous_map structure:
+        #   - List of dicts, where index i contains entries with key length (i + 1)
+        #   - simultaneous_map[0] = {"a": {...}, "b": {...}}  # length-1 keys
+        #   - simultaneous_map[1] = {"ab": {...}, "jk": {...}}  # length-2 keys
+        #   - simultaneous_map[2] = {"abc": {...}}  # length-3 keys
+        # ============================================================
 
-        # Form the lookup key combining pending tail with new input
-        lookup_key = pending_tail + input_char
+        # Calculate max useful tail length to avoid unnecessary iterations
+        # (no point trying keys longer than what the layout supports)
+        max_tail_len = min(len(past_pending), len(self.simultaneous_map) - 1)
 
-        # Check if this combination exists in the map
-        entry = self.simultaneous_map.get(lookup_key)
+        # Try keys from longest to shortest
+        for tail_len in range(max_tail_len, -1, -1):
+            # Build lookup key: take last 'tail_len' chars from past_pending + input_char
+            # tail_len=2: "ab"[-2:] + "c" = "abc"
+            # tail_len=1: "ab"[-1:] + "c" = "bc"
+            # tail_len=0: "" + "c" = "c"
+            pending_tail = past_pending[-tail_len:] if tail_len > 0 else ""
+            lookup_key = pending_tail + input_char
 
-        if entry:
-            simul_limit = entry.get("simul_limit_ms", 0)
+            # Direct index into the correct bucket based on key length
+            key_idx = len(lookup_key) - 1
+            entry = self.simultaneous_map[key_idx].get(lookup_key, None)
 
-            # If it's a simultaneous entry, check if within time window
-            if simul_limit > 0 and time_diff_ms > simul_limit:
-                # Timed out - simultaneous window expired
-                entry = None
+            if not entry:
+                continue  # no match at this length, try shorter
+
+            # Found an entry - check if it's simultaneous or regular romaji
+            simul_limit = entry.get("simul_limit_ms", None)
+
+            if simul_limit and simul_limit > 0:
+                # This is a SIMULTANEOUS entry - must be typed within time limit
+                if time_diff_ms < simul_limit:
+                    # Within time window - use this simultaneous combo
+                    self.previous_typed_timestamp = current_time
+                    return entry['output'], entry['pending']
+                else:
+                    # Timed out - don't use this entry, try shorter key
+                    continue
             else:
-                # Valid match (non-simultaneous or within time window)
+                # This is a REGULAR romaji entry (no timing requirement)
                 self.previous_typed_timestamp = current_time
                 return entry["output"], entry["pending"]
 
-        # No valid combination match - try single character lookup
-        entry = self.simultaneous_map.get(input_char)
-        if entry:
-            # Reset timing for new potential simultaneous sequence
-            self.previous_typed_timestamp = current_time
-            return entry["output"], entry["pending"]
-
-        # No match found
+        # No match found at any length - return everything as output, clear pending
         self.previous_typed_timestamp = current_time
-        return None, None
+        return past_pending + input_char, None
 
     def get_simultaneous_output(self, input_entry):
         """
