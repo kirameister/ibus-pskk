@@ -25,9 +25,10 @@ class SimultaneousInputProcessor:
         """
         self.layout_data = layout_data # this is raw-loaded data
         self.max_simul_limit_ms = 0 # this is to identify the max limit of simul-typing -- passed this limit, there is no simul-typing
+        self.previous_typed_timestamp = time.perf_counter()
 
         self._build_simultaneous_map()
-        self.simultaneous_reset() # this is sort of an initialization
+        self.simultaneous_reset() # this offsets the timestamp so first keystroke won't be treated as simultaneous
 
     def _build_simultaneous_map(self):
         """
@@ -62,7 +63,7 @@ class SimultaneousInputProcessor:
                 self.max_simul_limit_ms = max(l[3], self.max_simul_limit_ms)
                 list_values["simul_limit_ms"] = l[3]
             else:
-                list_values["simul_limit_ms"] = -1 # Negative value in this case means that the layout has nothing to do with simul-typing; it works like normal romaji input
+                list_values["simul_limit_ms"] = None # None value in this case means that the layout has nothing to do with simul-typing; it works like normal romaji input
             self.simultaneous_map[input_len - 1][input_str] = list_values
 
     def simultaneous_reset(self):
