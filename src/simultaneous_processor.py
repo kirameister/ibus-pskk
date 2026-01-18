@@ -120,11 +120,14 @@ class SimultaneousInputProcessor:
         # Try keys from longest to shortest
         for tail_len in range(max_tail_len, -1, -1):
             # Build lookup key: take last 'tail_len' chars from past_pending + input_char
-            # tail_len=2: "ab"[-2:] + "c" = "abc"
-            # tail_len=1: "ab"[-1:] + "c" = "bc"
-            # tail_len=0: "" + "c" = "c"
+            # tail_len=2: "ab"[-2:] + "c" = "abc", dropped_prefix = ""
+            # tail_len=1: "ab"[-1:] + "c" = "bc",  dropped_prefix = "a"
+            # tail_len=0: "" + "c" = "c",          dropped_prefix = "ab"
             pending_tail = past_pending[-tail_len:] if tail_len > 0 else ""
             lookup_key = pending_tail + input_char
+
+            # The prefix we're NOT using - must be included in output if we match
+            dropped_prefix = past_pending[:-tail_len] if tail_len > 0 else past_pending
 
             # Direct index into the correct bucket based on key length
             key_idx = len(lookup_key) - 1
@@ -140,15 +143,17 @@ class SimultaneousInputProcessor:
                 # This is a SIMULTANEOUS entry - must be typed within time limit
                 if time_diff_ms < simul_limit:
                     # Within time window - use this simultaneous combo
+                    # Prepend dropped_prefix to output so we don't lose those chars
                     self.previous_typed_timestamp = current_time
-                    return entry['output'], entry['pending']
+                    return dropped_prefix + entry['output'], entry['pending']
                 else:
                     # Timed out - don't use this entry, try shorter key
                     continue
             else:
                 # This is a REGULAR romaji entry (no timing requirement)
+                # Prepend dropped_prefix to output so we don't lose those chars
                 self.previous_typed_timestamp = current_time
-                return entry["output"], entry["pending"]
+                return dropped_prefix + entry["output"], entry["pending"]
 
         # No match found at any length - return everything as output, clear pending
         self.previous_typed_timestamp = current_time
