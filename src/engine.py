@@ -411,10 +411,60 @@ class EnginePSKK(IBus.Engine):
         """
         This function (presumably) detects the location of (new) position
         of mouse pointer..
-        This would most likely be helpful when detecting a "pause" in the 
+        This would most likely be helpful when detecting a "pause" in the
         typing.. (i.e., typing intervened by mouse move)
-        ...It seems taht this function is called periodically. It may be an idea to store the position of the mouse pointer and commit(?) the hiragana only with pointer-position value mismatch? 
+        ...It seems taht this function is called periodically. It may be an idea to store the position of the mouse pointer and commit(?) the hiragana only with pointer-position value mismatch?
         """
         logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
         #self._update_lookup_table()
+
+    # =========================================================================
+    # KEY EVENT PROCESSING
+    # =========================================================================
+
+    def do_process_key_event(self, keyval, keycode, state):
+        """
+        Main entry point for handling keyboard input from IBus.
+
+        Args:
+            keyval: The key value (e.g., ord('a'), IBus.KEY_BackSpace)
+            keycode: The hardware keycode
+            state: Modifier state (Shift, Ctrl, etc. and RELEASE_MASK)
+
+        Returns:
+            True if we handled the key, False to pass through to application
+        """
+        # Alphanumeric mode: pass everything through
+        if self._mode == 'A':
+            return False
+
+        # Determine if this is a key press or release
+        is_pressed = not (state & IBus.ModifierType.RELEASE_MASK)
+
+        # Delegate to intermediate handler
+        return self._process_key_event(keyval, keycode, state, is_pressed)
+
+    def _process_key_event(self, keyval, keycode, state, is_pressed):
+        """
+        Intermediate handler for key events (non-Alphanumeric mode).
+
+        This function handles:
+        - Modifier key press/release (SandS, etc.)
+        - Special keys (Enter, Backspace, Escape) with conditional handling
+        - Regular character input via SimultaneousInputProcessor
+
+        Args:
+            keyval: The key value
+            keycode: The hardware keycode
+            state: Modifier state
+            is_pressed: True if key press, False if key release
+
+        Returns:
+            True if we handled the key, False to pass through
+        """
+        logger.debug(f'_process_key_event: keyval={keyval}, keycode={keycode}, '
+                     f'state={state}, is_pressed={is_pressed}')
+
+        # TODO: Implement modifier handling, special keys, and regular input
+        return False
 
