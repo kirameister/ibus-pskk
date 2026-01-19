@@ -434,15 +434,20 @@ class EnginePSKK(IBus.Engine):
         Returns:
             True if we handled the key, False to pass through to application
         """
-        # Alphanumeric mode: pass everything through
+        # Alphanumeric mode: pass everything through (no modkey tracking needed)
         if self._mode == 'A':
             return False
 
         # Determine if this is a key press or release
         is_pressed = not (state & IBus.ModifierType.RELEASE_MASK)
 
-        # Delegate to intermediate handler
-        return self._process_key_event(keyval, keycode, state, is_pressed)
+        # Process the key event
+        result = self._process_key_event(keyval, keycode, state, is_pressed)
+
+        # Update modifier key status before returning
+        self._update_modkey_status(keyval, is_pressed)
+
+        return result
 
     def _process_key_event(self, keyval, keycode, state, is_pressed):
         """
@@ -496,6 +501,48 @@ class EnginePSKK(IBus.Engine):
         self._update_preedit()
 
         return True
+
+    # =========================================================================
+    # MODIFIER KEY STATUS TRACKING
+    # =========================================================================
+
+    def _update_modkey_status(self, keyval, is_pressed):
+        """
+        Update self._modkey_status based on modifier key press/release.
+
+        This tracks which modifier keys are currently held down using
+        bitwise flags (STATUS_SPACE, STATUS_SHIFT_L, etc.).
+
+        Args:
+            keyval: The key value
+            is_pressed: True if key press, False if key release
+        """
+        # Map IBus keyvals to our STATUS_* constants
+        keyval_to_status = {
+            IBus.KEY_space: STATUS_SPACE,
+            IBus.KEY_Shift_L: STATUS_SHIFT_L,
+            IBus.KEY_Shift_R: STATUS_SHIFT_R,
+            IBus.KEY_Control_L: STATUS_CONTROL_L,
+            IBus.KEY_Control_R: STATUS_CONTROL_R,
+            IBus.KEY_Alt_L: STATUS_ALT_L,
+            IBus.KEY_Alt_R: STATUS_ALT_R,
+            IBus.KEY_Super_L: STATUS_SUPER_L,
+            IBus.KEY_Super_R: STATUS_SUPER_R,
+        }
+
+        status_bit = keyval_to_status.get(keyval)
+        if status_bit is None:
+            return  # Not a tracked modifier key
+
+        if is_pressed:
+            # Set the bit (key is now held)
+            self._modkey_status |= status_bit
+        else:
+            # Clear the bit (key is released)
+            self._modkey_status &= ~status_bit
+
+        logger.debug(f'_update_modkey_status: keyval={keyval}, is_pressed={is_pressed}, '
+                     f'status=0x{self._modkey_status:03x}')
 
     # =========================================================================
     # HELPER METHODS
