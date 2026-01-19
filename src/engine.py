@@ -465,6 +465,72 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'_process_key_event: keyval={keyval}, keycode={keycode}, '
                      f'state={state}, is_pressed={is_pressed}')
 
-        # TODO: Implement modifier handling, special keys, and regular input
-        return False
+        # TODO: Modifier key handling (Shift, Ctrl, etc.)
+
+        # TODO: Special key handling (Enter, Backspace, Escape)
+
+        # =====================================================================
+        # REGULAR CHARACTER INPUT
+        # =====================================================================
+
+        # Only process printable ASCII characters (0x20 space to 0x7e tilde)
+        if keyval < 0x20 or keyval > 0x7e:
+            return False
+
+        # Convert keyval to character
+        input_char = chr(keyval)
+
+        # Get output from simultaneous processor
+        output, pending = self._simul_processor.get_layout_output(
+            self._preedit_string, input_char, is_pressed
+        )
+
+        logger.debug(f'Processor result: output="{output}", pending="{pending}"')
+
+        # Commit output if any
+        if output:
+            self._commit_string(output)
+
+        # Update preedit with pending (or clear if None)
+        self._preedit_string = pending if pending else ''
+        self._update_preedit()
+
+        return True
+
+    # =========================================================================
+    # HELPER METHODS
+    # =========================================================================
+
+    def _commit_string(self, text):
+        """Commit text to the application"""
+        if text:
+            logger.debug(f'Committing: "{text}"')
+            self.commit_text(IBus.Text.new_from_string(text))
+
+    def _update_preedit(self):
+        """Update the preedit display in the application"""
+        if self._preedit_string:
+            # Show preedit with underline
+            preedit_text = IBus.Text.new_from_string(self._preedit_string)
+            preedit_text.set_attributes(IBus.AttrList())
+            # Add underline attribute for the entire preedit
+            attr = IBus.Attribute.new(
+                IBus.AttrType.UNDERLINE,
+                IBus.AttrUnderline.SINGLE,
+                0,
+                len(self._preedit_string)
+            )
+            preedit_text.get_attributes().append(attr)
+            self.update_preedit_text(
+                preedit_text,
+                len(self._preedit_string),  # cursor at end
+                True  # visible
+            )
+        else:
+            # Hide preedit when empty
+            self.update_preedit_text(
+                IBus.Text.new_from_string(''),
+                0,
+                False  # not visible
+            )
 
