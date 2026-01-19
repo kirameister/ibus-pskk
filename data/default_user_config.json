@@ -6,10 +6,10 @@
     "logging_level_": "Level of the runtime logging",
     "logging_level_ja": "ログレベル",
 
-    "enable_hiragana_key": ["Alt_R"],
-    "enable_hiragana_key_": "List of the keys to enable hiragana/Japnaese typing",
-    "disable_hiragana_key": ["Alt_L"],
-    "disable_hiragana_key_": "List of the keys to disablej hiragana/Japnaese typing",
+    "enable_hiragana_key": "Alt_R",
+    "enable_hiragana_key_": "Key to enable hiragana/Japanese typing",
+    "disable_hiragana_key": "Alt_L",
+    "disable_hiragana_key_": "Key to disable hiragana/Japanese typing",
 
     "forced_preedit_trigger_key_": "The key to trigger the forceed preedit mode",
     "forced_preedit_trigger_key": "f",
@@ -49,7 +49,7 @@
         "enabled": true
     },
 
-    "kanchoku_bunsetsu_marker": ["space"],
-    "kanchoku_marker": "List of the keys which are meant to be used for typing in kanchoku (漢直) strokes while being pressed, and the keys used for marking the start of bunsetsu (文節) when being pressed.",
-    "kanchoku_marker_ja": "漢直の入力と文節の始まりをマークするためのキー -- 押下中に漢直入力を行うことができるとともに、押下中にキーを一つ押して離すことで文節の始まりをマークします。"
+    "kanchoku_bunsetsu_marker": "space",
+    "kanchoku_bunsetsu_marker_": "Key used for typing kanchoku (漢直) strokes while held, and marking the start of bunsetsu (文節) when tapped.",
+    "kanchoku_bunsetsu_marker_ja": "漢直の入力と文節の始まりをマークするためのキー -- 押下中に漢直入力を行うことができるとともに、押下中にキーを一つ押して離すことで文節の始まりをマークします。"
 }

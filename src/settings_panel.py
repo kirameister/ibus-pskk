@@ -747,22 +747,12 @@ class SettingsPanel(Gtk.Window):
         self.layout_combo.set_active_id(layout_type)
 
         # Load enable_hiragana_key from config
-        enable_hiragana_key = self.config.get("enable_hiragana_key", ["Alt_R"])
-        if isinstance(enable_hiragana_key, list) and enable_hiragana_key:
-            hiragana_key_str = "+".join(enable_hiragana_key)
-        else:
-            hiragana_key_str = ""
-        self.hiragana_key_value = enable_hiragana_key
-        self.hiragana_key_button.set_label(hiragana_key_str if hiragana_key_str else "Not Set")
+        self.hiragana_key_value = self.config.get("enable_hiragana_key", "Alt_R")
+        self.hiragana_key_button.set_label(self.hiragana_key_value or "Not Set")
 
         # Load disable_hiragana_key from config
-        disable_hiragana_key = self.config.get("disable_hiragana_key", ["Alt_L"])
-        if isinstance(disable_hiragana_key, list) and disable_hiragana_key:
-            direct_key_str = "+".join(disable_hiragana_key)
-        else:
-            direct_key_str = ""
-        self.direct_key_value = disable_hiragana_key
-        self.direct_key_button.set_label(direct_key_str if direct_key_str else "Not Set")
+        self.direct_key_value = self.config.get("disable_hiragana_key", "Alt_L")
+        self.direct_key_button.set_label(self.direct_key_value or "Not Set")
 
         ui = self.config.get("ui") or {}
         if not isinstance(ui, dict):
@@ -865,8 +855,8 @@ class SettingsPanel(Gtk.Window):
         # General tab
         self.config["layout"] = self.layout_combo.get_active_id() or "shingeta.json"
         self.config["kanchoku_layout"] = self.kanchoku_layout_combo.get_active_id() or "aki_code.json"
-        self.config["enable_hiragana_key"] = self.hiragana_key_value if self.hiragana_key_value else []
-        self.config["disable_hiragana_key"] = self.direct_key_value if self.direct_key_value else []
+        self.config["enable_hiragana_key"] = self.hiragana_key_value or ""
+        self.config["disable_hiragana_key"] = self.direct_key_value or ""
 
         self.config["ui"] = {
             "show_annotations": self.show_annotations_check.get_active(),
