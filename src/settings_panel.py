@@ -80,33 +80,32 @@ class SettingsPanel(Gtk.Window):
         result = self.show_key_capture_dialog("Hiragana Mode Key", self.hiragana_key_value)
         if result is not None:
             self.hiragana_key_value = result
-            if result:
-                self.hiragana_key_button.set_label("+".join(result))
-            else:
-                self.hiragana_key_button.set_label("Not Set")
+            # result is now a string (e.g., "Alt_R", "Ctrl+K", or "" for removed)
+            self.hiragana_key_button.set_label(result if result else "Not Set")
 
     def on_direct_key_button_clicked(self, button):
         """Show key capture dialog for direct mode key"""
         result = self.show_key_capture_dialog("Direct Mode Key", self.direct_key_value)
         if result is not None:
             self.direct_key_value = result
-            if result:
-                self.direct_key_button.set_label("+".join(result))
-            else:
-                self.direct_key_button.set_label("Not Set")
+            # result is now a string (e.g., "Alt_L", "Ctrl+K", or "" for removed)
+            self.direct_key_button.set_label(result if result else "Not Set")
 
     def show_key_capture_dialog(self, title, current_value):
         """Show dialog to capture key press
 
+        Args:
+            title: Dialog title
+            current_value: Current key binding as a string (e.g., "Alt_R", "Ctrl+K")
+
         Returns:
-            list: List of keys if saved
-            []: Empty list if removed
-            None: If canceled
+            str: The captured key combination as a "+"-joined string,
+                 empty string "" if removed, or None if cancelled
         """
         dialog = Gtk.Dialog(
             title=title,
             transient_for=self,
-            flags=Gtk.DialogFlags.MODAL
+            modal=True
         )
         dialog.set_default_size(400, 150)
 
@@ -116,7 +115,8 @@ class SettingsPanel(Gtk.Window):
 
         # Instruction label
         instruction = Gtk.Label()
-        current_str = "+".join(current_value) if current_value else "Not Set"
+        # current_value is now a string (e.g., "Alt_R", "Ctrl+K")
+        current_str = current_value if current_value else "Not Set"
         instruction.set_markup(
             f"<b>Press a key or key combination</b>\n\n"
             f"Current: <i>{current_str}</i>"
@@ -132,36 +132,22 @@ class SettingsPanel(Gtk.Window):
         dialog.connect("key-press-event", self.on_key_capture)
         dialog.connect("key-release-event", self.on_key_release)
 
-        # Button box
-        button_box = dialog.get_action_area()
-        button_box.set_layout(Gtk.ButtonBoxStyle.END)
-        button_box.set_spacing(6)
-
-        # Remove button
-        remove_button = Gtk.Button(label="Remove")
-        remove_button.connect("clicked", lambda w: dialog.response(Gtk.ResponseType.REJECT))
-        button_box.pack_start(remove_button, False, False, 0)
-
-        # Cancel button
-        cancel_button = Gtk.Button(label="Cancel")
-        cancel_button.connect("clicked", lambda w: dialog.response(Gtk.ResponseType.CANCEL))
-        button_box.pack_start(cancel_button, False, False, 0)
-
-        # Save button
-        save_button = Gtk.Button(label="Save")
-        save_button.connect("clicked", lambda w: dialog.response(Gtk.ResponseType.OK))
-        button_box.pack_start(save_button, False, False, 0)
+        # Add buttons using the modern API (avoids get_action_area deprecation)
+        dialog.add_button("Remove", Gtk.ResponseType.REJECT)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Save", Gtk.ResponseType.OK)
 
         dialog.show_all()
         response = dialog.run()
         dialog.destroy()
 
         if response == Gtk.ResponseType.OK:
-            return self.captured_keys if self.captured_keys else current_value
+            # Join the captured keys list into a string (e.g., ["Ctrl", "K"] -> "Ctrl+K")
+            return "+".join(self.captured_keys) if self.captured_keys else current_value
         elif response == Gtk.ResponseType.REJECT:
-            return []  # Remove
+            return ""  # Remove - empty string indicates no key binding
         else:
-            return None  # Cancel
+            return None  # Cancel - None means no change
 
     def on_key_capture(self, widget, event):
         """Capture key press"""
