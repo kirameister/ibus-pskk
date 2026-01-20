@@ -17,7 +17,7 @@
 			<author>Akira K.</author>
 			<icon>ibus-pskk</icon>
 			<icon_prop_key>InputMode</icon_prop_key>
-			<layout>jp</layout>
+			<layout>default</layout>
 			<longname>PSKK</longname>
 			<description>PSKK</description>
 			<rank>0</rank>
