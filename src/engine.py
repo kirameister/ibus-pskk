@@ -38,6 +38,68 @@ STATUS_ALTS         = STATUS_ALT_L | STATUS_ALT_R
 STATUS_SUPERS       = STATUS_SUPER_L | STATUS_SUPER_R
 STATUS_MODIFIER     = STATUS_SHIFTS  | STATUS_CONTROLS | STATUS_ALTS | STATUS_SPACE | STATUS_SUPERS
 
+# =============================================================================
+# CHARACTER CONVERSION TABLES
+# =============================================================================
+
+# Hiragana characters (ぁ to ゖ)
+HIRAGANA_CHARS = (
+    'ぁあぃいぅうぇえぉお'
+    'かがきぎくぐけげこご'
+    'さざしじすずせぜそぞ'
+    'ただちぢっつづてでとど'
+    'なにぬねの'
+    'はばぱひびぴふぶぷへべぺほぼぽ'
+    'まみむめも'
+    'ゃやゅゆょよ'
+    'らりるれろ'
+    'ゎわゐゑをん'
+    'ゔゕゖ'
+)
+
+# Katakana characters (ァ to ヶ) - same order as hiragana
+KATAKANA_CHARS = (
+    'ァアィイゥウェエォオ'
+    'カガキギクグケゲコゴ'
+    'サザシジスズセゼソゾ'
+    'タダチヂッツヅテデトド'
+    'ナニヌネノ'
+    'ハバパヒビピフブプヘベペホボポ'
+    'マミムメモ'
+    'ャヤュユョヨ'
+    'ラリルレロ'
+    'ヮワヰヱヲン'
+    'ヴヵヶ'
+)
+
+# Half-width ASCII (printable: space to tilde)
+ASCII_HALFWIDTH = (
+    ' !"#$%&\'()*+,-./'
+    '0123456789'
+    ':;<=>?@'
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    '[\\]^_`'
+    'abcdefghijklmnopqrstuvwxyz'
+    '{|}~'
+)
+
+# Full-width ASCII (Zenkaku) - same order as half-width
+ASCII_FULLWIDTH = (
+    '　！"＃＄％＆＇（）＊＋，－．／'
+    '０１２３４５６７８９'
+    '：；＜＝＞？＠'
+    'ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ'
+    '［＼］＾＿｀'
+    'ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ'
+    '｛｜｝～'
+)
+
+# Translation tables
+HIRAGANA_TO_KATAKANA = str.maketrans(HIRAGANA_CHARS, KATAKANA_CHARS)
+KATAKANA_TO_HIRAGANA = str.maketrans(KATAKANA_CHARS, HIRAGANA_CHARS)
+ASCII_TO_FULLWIDTH = str.maketrans(ASCII_HALFWIDTH, ASCII_FULLWIDTH)
+FULLWIDTH_TO_ASCII = str.maketrans(ASCII_FULLWIDTH, ASCII_HALFWIDTH)
+
 # Japanese typing mode segment
 #MODE_FORCED_PREEDIT_POSSIBLE                   = 0x001
 #MODE_IN_FORCED_PREEDIT                         = 0x002
@@ -88,7 +150,9 @@ class EnginePSKK(IBus.Engine):
         self._sands_key_set = set()
         self._first_kanchoku_stroke = ""
 
-        self._preedit_string = ''
+        self._preedit_string = ''    # Display buffer (can be hiragana, katakana, ascii, or zenkaku)
+        self._preedit_hiragana = ''  # Source of truth: hiragana output from simul_processor
+        self._preedit_ascii = ''     # Source of truth: raw ASCII input characters
         self._previous_text = ''
 
         # This property is for confirming the kanji-kana converted string
@@ -520,16 +584,24 @@ class EnginePSKK(IBus.Engine):
         # Convert keyval to character for simultaneous processor
         input_char = chr(keyval)
 
+        # Accumulate ASCII input on key press (source of truth for to_ascii/to_zenkaku)
+        if is_pressed:
+            self._preedit_ascii += input_char
+
         # Get output from simultaneous processor
+        # Pass current display buffer (hiragana + pending) for lookup
         output, pending = self._simul_processor.get_layout_output(
             self._preedit_string, input_char, is_pressed
         )
 
         logger.debug(f'Processor result: output="{output}", pending="{pending}"')
 
-        # Build new preedit: output (finalized kana) + pending (waiting for more input)
-        # Nothing is committed automatically - user must explicitly commit (Enter, etc.)
-        new_preedit = (output if output else '') + (pending if pending else '')
+        # Update hiragana buffer (source of truth for to_katakana/to_hiragana)
+        # output includes accumulated hiragana via dropped_prefix mechanism
+        self._preedit_hiragana = output if output else ''
+
+        # Build display buffer: hiragana output + pending ASCII
+        new_preedit = self._preedit_hiragana + (pending if pending else '')
         self._preedit_string = new_preedit
         self._update_preedit()
 
@@ -716,14 +788,36 @@ class EnginePSKK(IBus.Engine):
         """
         Perform the actual conversion of preedit string.
 
+        Uses source-of-truth buffers:
+        - _preedit_hiragana: for to_katakana and to_hiragana
+        - _preedit_ascii: for to_ascii and to_zenkaku
+
         Args:
             conversion_type: One of 'to_katakana', 'to_hiragana', 'to_ascii', 'to_zenkaku'
         """
         if not self._preedit_string:
             return
 
-        # TODO: Implement actual conversion logic
-        logger.debug(f'Conversion requested: {conversion_type} for "{self._preedit_string}"')
+        original = self._preedit_string
+
+        if conversion_type == 'to_katakana':
+            # Convert hiragana source to katakana
+            self._preedit_string = self._preedit_hiragana.translate(HIRAGANA_TO_KATAKANA)
+        elif conversion_type == 'to_hiragana':
+            # Use hiragana source directly
+            self._preedit_string = self._preedit_hiragana
+        elif conversion_type == 'to_ascii':
+            # Use ASCII source directly
+            self._preedit_string = self._preedit_ascii
+        elif conversion_type == 'to_zenkaku':
+            # Convert ASCII source to full-width
+            self._preedit_string = self._preedit_ascii.translate(ASCII_TO_FULLWIDTH)
+        else:
+            logger.warning(f'Unknown conversion type: {conversion_type}')
+            return
+
+        logger.debug(f'Conversion {conversion_type}: "{original}" → "{self._preedit_string}"')
+        self._update_preedit()
 
     # =========================================================================
     # SANDS (SPACE AND SHIFT) TRACKING
@@ -759,11 +853,13 @@ class EnginePSKK(IBus.Engine):
     # =========================================================================
 
     def _commit_string(self):
-        """Commit preedit to the application and clear it."""
+        """Commit preedit to the application and clear all buffers."""
         if self._preedit_string:
             logger.debug(f'Committing: "{self._preedit_string}"')
             self.commit_text(IBus.Text.new_from_string(self._preedit_string))
             self._preedit_string = ""
+            self._preedit_hiragana = ""
+            self._preedit_ascii = ""
             self._update_preedit()
 
     def _update_preedit(self):
