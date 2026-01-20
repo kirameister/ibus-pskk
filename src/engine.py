@@ -433,12 +433,18 @@ class EnginePSKK(IBus.Engine):
         Returns:
             True if we handled the key, False to pass through to application
         """
-        # Alphanumeric mode: pass everything through (no modkey tracking needed)
-        if self._mode == 'A':
-            return False
-
         # Determine if this is a key press or release
         is_pressed = not (state & IBus.ModifierType.RELEASE_MASK)
+
+        # Check enable_hiragana_key BEFORE mode check (must work from any mode)
+        key_name = IBus.keyval_name(keyval)
+        logger.debug(f'do_process_key_event: key_name={key_name}, mode={self._mode}, is_pressed={is_pressed}')
+        if key_name and self._check_enable_hiragana_key(key_name, state, is_pressed):
+            return True
+
+        # Alphanumeric mode: pass everything through (except enable_hiragana_key above)
+        if self._mode == 'A':
+            return False
 
         # Process the key event
         result = self._process_key_event(keyval, keycode, state, is_pressed)
@@ -521,12 +527,10 @@ class EnginePSKK(IBus.Engine):
 
         logger.debug(f'Processor result: output="{output}", pending="{pending}"')
 
-        # Commit output if any
-        if output:
-            self._commit_string(output)
-
-        # Update preedit with pending (or clear if None)
-        self._preedit_string = pending if pending else ''
+        # Build new preedit: output (finalized kana) + pending (waiting for more input)
+        # Nothing is committed automatically - user must explicitly commit (Enter, etc.)
+        new_preedit = (output if output else '') + (pending if pending else '')
+        self._preedit_string = new_preedit
         self._update_preedit()
 
         return True
@@ -558,6 +562,7 @@ class EnginePSKK(IBus.Engine):
 
         # Check disable_hiragana_key
         if self._check_disable_hiragana_key(key_name, state, is_pressed):
+            self._commit_string()  # Commit and clear preedit before switching mode
             return True
 
         # Check conversion_keys
@@ -753,11 +758,13 @@ class EnginePSKK(IBus.Engine):
     # HELPER METHODS
     # =========================================================================
 
-    def _commit_string(self, text):
-        """Commit text to the application"""
-        if text:
-            logger.debug(f'Committing: "{text}"')
-            self.commit_text(IBus.Text.new_from_string(text))
+    def _commit_string(self):
+        """Commit preedit to the application and clear it."""
+        if self._preedit_string:
+            logger.debug(f'Committing: "{self._preedit_string}"')
+            self.commit_text(IBus.Text.new_from_string(self._preedit_string))
+            self._preedit_string = ""
+            self._update_preedit()
 
     def _update_preedit(self):
         """Update the preedit display in the application"""
