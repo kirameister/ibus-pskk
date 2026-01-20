@@ -2,13 +2,10 @@ import util
 import settings_panel
 from simultaneous_processor import SimultaneousInputProcessor
 
-import gettext
 import json
 import logging
 import os
 import queue
-import subprocess
-import time
 
 import gi
 gi.require_version('IBus', '1.0')
@@ -87,6 +84,7 @@ class EnginePSKK(IBus.Engine):
         self._modkey_status = 0 # This is supposed to be bitwise status
         self._typing_mode = 0 # This is to indicate which state the stroke is supposed to be
         self._pressed_key_set = set()
+        self._handled_config_keys = set()  # Keys handled by config bindings (to consume releases)
         self._sands_key_set = set()
         self._first_kanchoku_stroke = ""
 
@@ -445,8 +443,8 @@ class EnginePSKK(IBus.Engine):
         # Process the key event
         result = self._process_key_event(keyval, keycode, state, is_pressed)
 
-        # Update modifier key status before returning
-        self._update_modkey_status(keyval, is_pressed)
+        # Update SandS (Space as modifier) tracking
+        self._update_sands_status(keyval, is_pressed)
 
         return result
 
@@ -471,28 +469,50 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'_process_key_event: keyval={keyval}, keycode={keycode}, '
                      f'state={state}, is_pressed={is_pressed}')
 
-        # TODO: Modifier key handling (Shift, Ctrl, etc.)
+        # Get key name for all key types (e.g., "a", "Henkan", "Alt_R", "F1")
+        key_name = IBus.keyval_name(keyval)
+        if not key_name:
+            return False
+
+        # =====================================================================
+        # CONFIG-DRIVEN KEY BINDINGS (checked first, for all key types)
+        # =====================================================================
+
+        # Define modifier key names (already tracked by IBus via 'state' parameter)
+        modifier_key_names = {
+            'Control_L', 'Control_R', 'Shift_L', 'Shift_R',
+            'Alt_L', 'Alt_R', 'Super_L', 'Super_R'
+        }
+
+        # Update pressed key set (non-modifier keys only)
+        # Modifiers are excluded because IBus tracks them via 'state' bitmask.
+        if key_name not in modifier_key_names:
+            if is_pressed:
+                self._pressed_key_set.add(key_name)
+            else:
+                self._pressed_key_set.discard(key_name)
+
+        # Check config-driven key bindings (enable/disable hiragana, conversions)
+        # Called for both press and release to properly consume the entire key sequence
+        if self._check_config_key_bindings(key_name, state, is_pressed):
+            return True
+
+        # =====================================================================
+        # SPECIAL KEY HANDLING
+        # =====================================================================
 
         # TODO: Special key handling (Enter, Backspace, Escape)
 
         # =====================================================================
-        # REGULAR CHARACTER INPUT
+        # REGULAR CHARACTER INPUT (simultaneous typing)
         # =====================================================================
 
         # Only process printable ASCII characters (0x20 space to 0x7e tilde)
         if keyval < 0x20 or keyval > 0x7e:
             return False
 
-        # Convert keyval to character
+        # Convert keyval to character for simultaneous processor
         input_char = chr(keyval)
-
-        # Update pressed key set (non-modifier keys only)
-        # This tracks which main keys are currently held, used for combo-key detection.
-        # Modifiers are tracked separately in _modkey_status.
-        if is_pressed:
-            self._pressed_key_set.add(input_char)
-        else:
-            self._pressed_key_set.discard(input_char)
 
         # Get output from simultaneous processor
         output, pending = self._simul_processor.get_layout_output(
@@ -512,46 +532,222 @@ class EnginePSKK(IBus.Engine):
         return True
 
     # =========================================================================
-    # MODIFIER KEY STATUS TRACKING
+    # CONFIG-DRIVEN KEY BINDINGS
     # =========================================================================
 
-    def _update_modkey_status(self, keyval, is_pressed):
+    def _check_config_key_bindings(self, key_name, state, is_pressed):
         """
-        Update self._modkey_status based on modifier key press/release.
+        Check if the current key event matches any config-driven key binding.
 
-        This tracks which modifier keys are currently held down using
-        bitwise flags (STATUS_SPACE, STATUS_SHIFT_L, etc.).
+        Checks in order:
+        1. enable_hiragana_key - switch to hiragana mode
+        2. disable_hiragana_key - switch to direct/alphanumeric mode
+        3. conversion_keys - convert preedit (to_katakana, to_hiragana, etc.)
+
+        Args:
+            key_name: The key name from IBus.keyval_name() (e.g., "a", "Henkan", "F1")
+            state: Modifier state bitmask from IBus
+            is_pressed: True if key press, False if key release
+
+        Returns:
+            True if key was handled (caller should return), False otherwise
+        """
+        # Check enable_hiragana_key
+        if self._check_enable_hiragana_key(key_name, state, is_pressed):
+            return True
+
+        # Check disable_hiragana_key
+        if self._check_disable_hiragana_key(key_name, state, is_pressed):
+            return True
+
+        # Check conversion_keys
+        if self._check_conversion_keys(key_name, state, is_pressed):
+            return True
+
+        return False
+
+    def _parse_key_binding(self, binding_str):
+        """
+        Parse a key binding string like "Ctrl+K" or "Henkan" into components.
+
+        Args:
+            binding_str: Key binding string (e.g., "k", "Ctrl+K", "Henkan", "Ctrl+Shift+L")
+
+        Returns:
+            tuple: (main_key, required_modifiers_mask) or (None, 0) if invalid
+        """
+        if not binding_str:
+            return None, 0
+
+        parts = binding_str.split('+')
+        main_key = parts[-1]  # Last part is the main key
+
+        modifiers = 0
+        for part in parts[:-1]:
+            part_lower = part.lower()
+            if part_lower in ('ctrl', 'control'):
+                modifiers |= IBus.ModifierType.CONTROL_MASK
+            elif part_lower == 'shift':
+                modifiers |= IBus.ModifierType.SHIFT_MASK
+            elif part_lower == 'alt':
+                modifiers |= IBus.ModifierType.MOD1_MASK
+            elif part_lower == 'super':
+                modifiers |= IBus.ModifierType.SUPER_MASK
+
+        return main_key, modifiers
+
+    def _matches_key_binding(self, key_name, state, binding_str):
+        """
+        Check if key_name + state matches a key binding string.
+
+        Args:
+            key_name: The key name from IBus.keyval_name()
+            state: Modifier state bitmask from IBus
+            binding_str: Key binding string from config (e.g., "Ctrl+K", "Henkan")
+
+        Returns:
+            True if the input matches the binding exactly
+        """
+        main_key, required_mods = self._parse_key_binding(binding_str)
+        if main_key is None:
+            return False
+
+        # Check main key matches (case-insensitive for single letters)
+        if len(main_key) == 1 and len(key_name) == 1:
+            if main_key.lower() != key_name.lower():
+                return False
+        else:
+            # For special keys like "Henkan", exact match required
+            if main_key != key_name:
+                return False
+
+        # Check required modifiers (exact match)
+        mod_mask = (IBus.ModifierType.CONTROL_MASK | IBus.ModifierType.SHIFT_MASK |
+                    IBus.ModifierType.MOD1_MASK | IBus.ModifierType.SUPER_MASK)
+        current_mods = state & mod_mask
+
+        return current_mods == required_mods
+
+    def _check_enable_hiragana_key(self, key_name, state, is_pressed):
+        """
+        Check and handle enable_hiragana_key binding.
+
+        Switches mode to hiragana ('あ') when the configured key is pressed.
+        """
+        binding = self._config.get('enable_hiragana_key', '')
+
+        # On release: consume if this key was handled on press
+        if not is_pressed:
+            if key_name in self._handled_config_keys:
+                self._handled_config_keys.discard(key_name)
+                return True
+            return False
+
+        # On press: check if binding matches
+        if self._matches_key_binding(key_name, state, binding):
+            logger.debug(f'enable_hiragana_key matched: {binding}')
+            self._mode = 'あ'
+            self._handled_config_keys.add(key_name)
+            return True
+
+        return False
+
+    def _check_disable_hiragana_key(self, key_name, state, is_pressed):
+        """
+        Check and handle disable_hiragana_key binding.
+
+        Switches mode to alphanumeric ('A') when the configured key is pressed.
+        """
+        binding = self._config.get('disable_hiragana_key', '')
+
+        # On release: consume if this key was handled on press
+        if not is_pressed:
+            if key_name in self._handled_config_keys:
+                self._handled_config_keys.discard(key_name)
+                return True
+            return False
+
+        # On press: check if binding matches
+        if self._matches_key_binding(key_name, state, binding):
+            logger.debug(f'disable_hiragana_key matched: {binding}')
+            self._mode = 'A'
+            self._handled_config_keys.add(key_name)
+            return True
+
+        return False
+
+    def _check_conversion_keys(self, key_name, state, is_pressed):
+        """
+        Check and handle conversion_keys bindings.
+
+        Converts the preedit string to different character representations:
+        - to_katakana: Convert to katakana
+        - to_hiragana: Convert to hiragana
+        - to_ascii: Convert to ASCII/romaji
+        - to_zenkaku: Convert to full-width characters
+        """
+        conversion_keys = self._config.get('conversion_keys', {})
+        if not isinstance(conversion_keys, dict):
+            return False
+
+        # On release: consume if this key was handled on press
+        if not is_pressed:
+            if key_name in self._handled_config_keys:
+                self._handled_config_keys.discard(key_name)
+                return True
+            return False
+
+        # On press: check each conversion key binding
+        for conversion_type, binding in conversion_keys.items():
+            if self._matches_key_binding(key_name, state, binding):
+                logger.debug(f'conversion_key matched: {conversion_type} = {binding}')
+                self._handle_conversion(conversion_type)
+                self._handled_config_keys.add(key_name)
+                return True
+
+        return False
+
+    def _handle_conversion(self, conversion_type):
+        """
+        Perform the actual conversion of preedit string.
+
+        Args:
+            conversion_type: One of 'to_katakana', 'to_hiragana', 'to_ascii', 'to_zenkaku'
+        """
+        if not self._preedit_string:
+            return
+
+        # TODO: Implement actual conversion logic
+        logger.debug(f'Conversion requested: {conversion_type} for "{self._preedit_string}"')
+
+    # =========================================================================
+    # SANDS (SPACE AND SHIFT) TRACKING
+    # =========================================================================
+
+    def _update_sands_status(self, keyval, is_pressed):
+        """
+        Update self._modkey_status for SandS (Space and Shift) feature.
+
+        SandS allows Space to act as a modifier (Shift) when held and pressed
+        with another key, while still producing a space when tapped alone.
+
+        IBus doesn't track Space as a modifier, so we need custom tracking.
+        Other modifiers (Ctrl, Shift, Alt, Super) are already tracked by IBus
+        via the 'state' parameter.
 
         Args:
             keyval: The key value
             is_pressed: True if key press, False if key release
         """
-        # Map IBus keyvals to our STATUS_* constants
-        keyval_to_status = {
-            IBus.KEY_space: STATUS_SPACE,
-            IBus.KEY_Shift_L: STATUS_SHIFT_L,
-            IBus.KEY_Shift_R: STATUS_SHIFT_R,
-            IBus.KEY_Control_L: STATUS_CONTROL_L,
-            IBus.KEY_Control_R: STATUS_CONTROL_R,
-            IBus.KEY_Alt_L: STATUS_ALT_L,
-            IBus.KEY_Alt_R: STATUS_ALT_R,
-            IBus.KEY_Super_L: STATUS_SUPER_L,
-            IBus.KEY_Super_R: STATUS_SUPER_R,
-        }
-
-        status_bit = keyval_to_status.get(keyval)
-        if status_bit is None:
-            return  # Not a tracked modifier key
+        if keyval != IBus.KEY_space:
+            return
 
         if is_pressed:
-            # Set the bit (key is now held)
-            self._modkey_status |= status_bit
+            self._modkey_status |= STATUS_SPACE
         else:
-            # Clear the bit (key is released)
-            self._modkey_status &= ~status_bit
+            self._modkey_status &= ~STATUS_SPACE
 
-        logger.debug(f'_update_modkey_status: keyval={keyval}, is_pressed={is_pressed}, '
-                     f'status=0x{self._modkey_status:03x}')
+        logger.debug(f'SandS status: space_held={bool(self._modkey_status & STATUS_SPACE)}')
 
     # =========================================================================
     # HELPER METHODS
