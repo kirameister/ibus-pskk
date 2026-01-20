@@ -42,15 +42,15 @@ STATUS_SUPERS       = STATUS_SUPER_L | STATUS_SUPER_R
 STATUS_MODIFIER     = STATUS_SHIFTS  | STATUS_CONTROLS | STATUS_ALTS | STATUS_SPACE | STATUS_SUPERS
 
 # Japanese typing mode segment
-MODE_FORCED_PREEDIT_POSSIBLE                   = 0x001
-MODE_IN_FORCED_PREEDIT                         = 0x002
-MODE_IN_PREEDIT                                = 0x004
-MODE_IN_KANCHOKU                               = 0x008
-MODE_JUST_FINISHED_KANCHOKU                    = 0x010
-MODE_IN_CONVERSION                             = 0x020
-MODE_IN_FORCED_CONVERSION                      = 0x040
-SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT          = 0x080
-SWITCH_FIRST_SHIFT_PRESSED_IN_FORCED_PREEDIT   = 0x100
+#MODE_FORCED_PREEDIT_POSSIBLE                   = 0x001
+#MODE_IN_FORCED_PREEDIT                         = 0x002
+#MODE_IN_PREEDIT                                = 0x004
+#MODE_IN_KANCHOKU                               = 0x008
+#MODE_JUST_FINISHED_KANCHOKU                    = 0x010
+#MODE_IN_CONVERSION                             = 0x020
+#MODE_IN_FORCED_CONVERSION                      = 0x040
+#SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT          = 0x080
+#SWITCH_FIRST_SHIFT_PRESSED_IN_FORCED_PREEDIT   = 0x100
 
 NAME_TO_LOGGING_LEVEL = {
     'DEBUG': logging.DEBUG,
@@ -86,6 +86,7 @@ class EnginePSKK(IBus.Engine):
         # SandS vars
         self._modkey_status = 0 # This is supposed to be bitwise status
         self._typing_mode = 0 # This is to indicate which state the stroke is supposed to be
+        self._pressed_key_set = set()
         self._sands_key_set = set()
         self._first_kanchoku_stroke = ""
 
@@ -484,6 +485,14 @@ class EnginePSKK(IBus.Engine):
 
         # Convert keyval to character
         input_char = chr(keyval)
+
+        # Update pressed key set (non-modifier keys only)
+        # This tracks which main keys are currently held, used for combo-key detection.
+        # Modifiers are tracked separately in _modkey_status.
+        if is_pressed:
+            self._pressed_key_set.add(input_char)
+        else:
+            self._pressed_key_set.discard(input_char)
 
         # Get output from simultaneous processor
         output, pending = self._simul_processor.get_layout_output(
