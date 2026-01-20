@@ -91,6 +91,34 @@ class SettingsPanel(Gtk.Window):
             # result is now a string (e.g., "Alt_L", "Ctrl+K", or "" for removed)
             self.direct_key_button.set_label(result if result else "Not Set")
 
+    def on_to_hiragana_button_clicked(self, button):
+        """Show key capture dialog for to_hiragana conversion key"""
+        result = self.show_key_capture_dialog("To Hiragana Key", self.to_hiragana_value)
+        if result is not None:
+            self.to_hiragana_value = result
+            self.to_hiragana_button.set_label(result if result else "Not Set")
+
+    def on_to_katakana_button_clicked(self, button):
+        """Show key capture dialog for to_katakana conversion key"""
+        result = self.show_key_capture_dialog("To Katakana Key", self.to_katakana_value)
+        if result is not None:
+            self.to_katakana_value = result
+            self.to_katakana_button.set_label(result if result else "Not Set")
+
+    def on_to_ascii_button_clicked(self, button):
+        """Show key capture dialog for to_ascii conversion key"""
+        result = self.show_key_capture_dialog("To ASCII Key", self.to_ascii_value)
+        if result is not None:
+            self.to_ascii_value = result
+            self.to_ascii_button.set_label(result if result else "Not Set")
+
+    def on_to_zenkaku_button_clicked(self, button):
+        """Show key capture dialog for to_zenkaku conversion key"""
+        result = self.show_key_capture_dialog("To Zenkaku Key", self.to_zenkaku_value)
+        if result is not None:
+            self.to_zenkaku_value = result
+            self.to_zenkaku_button.set_label(result if result else "Not Set")
+
     def show_key_capture_dialog(self, title, current_value):
         """Show dialog to capture key press
 
@@ -397,34 +425,37 @@ class SettingsPanel(Gtk.Window):
         keys_box.set_border_width(10)
         keys_frame.add(keys_box)
 
-        # Create size group for labels to ensure equal entry widths
+        # Create size group for labels to ensure equal button widths
         conv_label_size_group = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
-
-        # Katakana
-        kata_box = Gtk.Box(spacing=6)
-        kata_label = Gtk.Label(label="To Katakana:")
-        conv_label_size_group.add_widget(kata_label)
-        kata_box.pack_start(kata_label, False, False, 0)
-        self.to_katakana_entry = Gtk.Entry()
-        kata_box.pack_start(self.to_katakana_entry, True, True, 0)
-        keys_box.pack_start(kata_box, False, False, 0)
 
         # Hiragana
         hira_box = Gtk.Box(spacing=6)
         hira_label = Gtk.Label(label="To Hiragana:")
         conv_label_size_group.add_widget(hira_label)
         hira_box.pack_start(hira_label, False, False, 0)
-        self.to_hiragana_entry = Gtk.Entry()
-        hira_box.pack_start(self.to_hiragana_entry, True, True, 0)
+        self.to_hiragana_button = Gtk.Button(label="Not Set")
+        self.to_hiragana_button.connect("clicked", self.on_to_hiragana_button_clicked)
+        hira_box.pack_start(self.to_hiragana_button, True, True, 0)
         keys_box.pack_start(hira_box, False, False, 0)
+
+        # Katakana
+        kata_box = Gtk.Box(spacing=6)
+        kata_label = Gtk.Label(label="To Katakana:")
+        conv_label_size_group.add_widget(kata_label)
+        kata_box.pack_start(kata_label, False, False, 0)
+        self.to_katakana_button = Gtk.Button(label="Not Set")
+        self.to_katakana_button.connect("clicked", self.on_to_katakana_button_clicked)
+        kata_box.pack_start(self.to_katakana_button, True, True, 0)
+        keys_box.pack_start(kata_box, False, False, 0)
 
         # ASCII
         ascii_box = Gtk.Box(spacing=6)
         ascii_label = Gtk.Label(label="To ASCII:")
         conv_label_size_group.add_widget(ascii_label)
         ascii_box.pack_start(ascii_label, False, False, 0)
-        self.to_ascii_entry = Gtk.Entry()
-        ascii_box.pack_start(self.to_ascii_entry, True, True, 0)
+        self.to_ascii_button = Gtk.Button(label="Not Set")
+        self.to_ascii_button.connect("clicked", self.on_to_ascii_button_clicked)
+        ascii_box.pack_start(self.to_ascii_button, True, True, 0)
         keys_box.pack_start(ascii_box, False, False, 0)
 
         # Zenkaku
@@ -432,12 +463,19 @@ class SettingsPanel(Gtk.Window):
         zen_label = Gtk.Label(label="To Zenkaku:")
         conv_label_size_group.add_widget(zen_label)
         zen_box.pack_start(zen_label, False, False, 0)
-        self.to_zenkaku_entry = Gtk.Entry()
-        zen_box.pack_start(self.to_zenkaku_entry, True, True, 0)
+        self.to_zenkaku_button = Gtk.Button(label="Not Set")
+        self.to_zenkaku_button.connect("clicked", self.on_to_zenkaku_button_clicked)
+        zen_box.pack_start(self.to_zenkaku_button, True, True, 0)
         keys_box.pack_start(zen_box, False, False, 0)
-        
+
+        # Initialize conversion key instance variables
+        self.to_hiragana_value = None
+        self.to_katakana_value = None
+        self.to_ascii_value = None
+        self.to_zenkaku_value = None
+
         box.pack_start(keys_frame, False, False, 0)
-        
+
         return box
 
 
@@ -689,6 +727,9 @@ class SettingsPanel(Gtk.Window):
 
     def load_settings_to_ui(self):
         """Load current settings into UI widgets"""
+        # Load default config to use as fallback for default values
+        default_config = util.get_default_config_data() or {}
+
         # General tab - populate layout combo with available layout files
         self.layout_combo.remove_all()
 
@@ -733,19 +774,22 @@ class SettingsPanel(Gtk.Window):
             self.layout_combo.append(filename, display_label)
 
         # Set the current selection
-        layout = self.config.get("layout", "shingeta.json")
+        default_layout = default_config.get("layout", "shingeta.json")
+        layout = self.config.get("layout", default_layout)
         if isinstance(layout, dict):
-            layout_type = layout.get("type", "shingeta.json")
+            layout_type = layout.get("type", default_layout)
         else:
             layout_type = layout  # layout is a string
         self.layout_combo.set_active_id(layout_type)
 
         # Load enable_hiragana_key from config
-        self.hiragana_key_value = self.config.get("enable_hiragana_key", "Alt_R")
+        default_enable_key = default_config.get("enable_hiragana_key", "Alt_R")
+        self.hiragana_key_value = self.config.get("enable_hiragana_key", default_enable_key)
         self.hiragana_key_button.set_label(self.hiragana_key_value or "Not Set")
 
         # Load disable_hiragana_key from config
-        self.direct_key_value = self.config.get("disable_hiragana_key", "Alt_L")
+        default_disable_key = default_config.get("disable_hiragana_key", "Alt_L")
+        self.direct_key_value = self.config.get("disable_hiragana_key", default_disable_key)
         self.direct_key_button.set_label(self.direct_key_value or "Not Set")
 
         ui = self.config.get("ui") or {}
@@ -780,10 +824,21 @@ class SettingsPanel(Gtk.Window):
         conv_keys = self.config.get("conversion_keys") or {}
         if not isinstance(conv_keys, dict):
             conv_keys = {}
-        self.to_katakana_entry.set_text(conv_keys.get("to_katakana", "Ctrl+K"))
-        self.to_hiragana_entry.set_text(conv_keys.get("to_hiragana", "Ctrl+J"))
-        self.to_ascii_entry.set_text(conv_keys.get("to_ascii", "Ctrl+L"))
-        self.to_zenkaku_entry.set_text(conv_keys.get("to_zenkaku", "Ctrl+Shift+L"))
+        default_conv_keys = default_config.get("conversion_keys") or {}
+        if not isinstance(default_conv_keys, dict):
+            default_conv_keys = {}
+
+        self.to_katakana_value = conv_keys.get("to_katakana", default_conv_keys.get("to_katakana", "Ctrl+K"))
+        self.to_katakana_button.set_label(self.to_katakana_value or "Not Set")
+
+        self.to_hiragana_value = conv_keys.get("to_hiragana", default_conv_keys.get("to_hiragana", "Ctrl+J"))
+        self.to_hiragana_button.set_label(self.to_hiragana_value or "Not Set")
+
+        self.to_ascii_value = conv_keys.get("to_ascii", default_conv_keys.get("to_ascii", "Ctrl+L"))
+        self.to_ascii_button.set_label(self.to_ascii_value or "Not Set")
+
+        self.to_zenkaku_value = conv_keys.get("to_zenkaku", default_conv_keys.get("to_zenkaku", "Ctrl+Shift+L"))
+        self.to_zenkaku_button.set_label(self.to_zenkaku_value or "Not Set")
 
         # Dictionaries tab
         dictionaries = self.config.get("dictionaries") or {}
@@ -837,7 +892,8 @@ class SettingsPanel(Gtk.Window):
             self.kanchoku_layout_combo.append(filename, display_label)
 
         # Set the current selection
-        kanchoku_layout = self.config.get("kanchoku_layout", "aki_code.json")
+        default_kanchoku = default_config.get("kanchoku_layout", "aki_code.json")
+        kanchoku_layout = self.config.get("kanchoku_layout", default_kanchoku)
         self.kanchoku_layout_combo.set_active_id(kanchoku_layout)
 
         # Load mappings
@@ -874,10 +930,10 @@ class SettingsPanel(Gtk.Window):
         }
 
         self.config["conversion_keys"] = {
-            "to_katakana": self.to_katakana_entry.get_text(),
-            "to_hiragana": self.to_hiragana_entry.get_text(),
-            "to_ascii": self.to_ascii_entry.get_text(),
-            "to_zenkaku": self.to_zenkaku_entry.get_text()
+            "to_katakana": self.to_katakana_value or "",
+            "to_hiragana": self.to_hiragana_value or "",
+            "to_ascii": self.to_ascii_value or "",
+            "to_zenkaku": self.to_zenkaku_value or ""
         }
 
         # Dictionaries tab
