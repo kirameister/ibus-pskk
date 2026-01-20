@@ -173,10 +173,18 @@ class SettingsPanel(Gtk.Window):
                            "Alt_L", "Alt_R", "Super_L", "Super_R"]:
             keys.append(keyname)
 
-        # If we have a valid key combination, save it
-        if keys:
+        # Validate: must have at least one non-modifier key
+        # Modifier-only keys (from state mask) that are not allowed alone
+        modifier_only_names = {"Control", "Shift", "Alt", "Super"}
+        has_non_modifier = any(k not in modifier_only_names for k in keys)
+
+        if keys and has_non_modifier:
+            # Valid combination - save it
             self.captured_keys = keys
             self.key_display.set_label("+".join(keys))
+        elif keys:
+            # Only modifiers captured - show warning, don't save
+            self.key_display.set_label("Modifier keys alone not allowed")
 
         return True
 
