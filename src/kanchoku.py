@@ -85,27 +85,29 @@ class KanchokuProcessor:
         if not is_pressed:
             return None, self._first_stroke, False
 
-        # Check if this key is valid for kanchoku input
-        if key_char not in self.layout:
-            # Key not in kanchoku layout
-            if self._first_stroke is not None:
-                # We had a first stroke pending but second stroke is invalid
-                # Return the first stroke as output and don't consume this key
-                first = self._first_stroke
-                self._reset()
-                return first, None, False
-            return None, None, False
-
         if self._first_stroke is None:
-            # This is the first stroke
+            # === FIRST STROKE ===
+            # Check if this key is valid as a first stroke
+            if key_char not in self.layout:
+                # Key not in kanchoku layout as first stroke
+                return None, None, False
+
+            # Store as first stroke
             self._first_stroke = key_char
             logger.debug(f'Kanchoku: first stroke "{key_char}"')
             return None, key_char, True
 
-        # This is the second stroke - look up the kanji
+        # === SECOND STROKE ===
         first = self._first_stroke
         second = key_char
 
+        # Check if this key is valid as a second stroke for the current first stroke
+        if first not in self.layout or second not in self.layout[first]:
+            # Invalid second stroke - return the first stroke and don't consume
+            self._reset()
+            return first, None, False
+
+        # Valid second stroke - look up the kanji
         kanji = self._lookup_kanji(first, second)
         logger.debug(f'Kanchoku: "{first}" + "{second}" -> "{kanji}"')
 
