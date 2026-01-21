@@ -935,13 +935,18 @@ class EnginePSKK(IBus.Engine):
         # Marker released
         logger.debug(f'Marker released in state: {self._marker_state.name}')
 
-        if self._marker_state == MarkerState.FIRST_RELEASED:
+        if self._marker_state == MarkerState.MARKER_HELD:
+            # Marker was just tapped (pressed and released without other keys)
+            # Output a normal space character
+            logger.debug('Marker tapped: outputting space')
+            self.commit_text(IBus.Text.new_from_string(' '))
+        elif self._marker_state == MarkerState.FIRST_RELEASED:
             # Decision point: was this bunsetsu or forced preedit?
             self._handle_marker_release_decision()
         elif self._marker_state == MarkerState.KANCHOKU_SECOND_PRESSED:
             # Kanchoku was completed, just clean up
             pass
-        # else: MARKER_HELD or FIRST_PRESSED - incomplete sequence, just reset
+        # else: FIRST_PRESSED - incomplete sequence (key still held), just reset
 
         self._marker_state = MarkerState.IDLE
         self._marker_first_key = None
