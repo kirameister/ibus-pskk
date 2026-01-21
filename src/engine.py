@@ -1,7 +1,9 @@
 import util
 import settings_panel
 from simultaneous_processor import SimultaneousInputProcessor
+from kanchoku import KanchokuProcessor
 
+from enum import IntEnum
 import json
 import logging
 import os
@@ -119,6 +121,27 @@ NAME_TO_LOGGING_LEVEL = {
     'CRITICAL': logging.CRITICAL,
 }
 
+
+# =============================================================================
+# KANCHOKU / BUNSETSU STATE MACHINE
+# =============================================================================
+
+class MarkerState(IntEnum):
+    """
+    State machine for kanchoku_bunsetsu_marker key sequences.
+
+    The marker key (e.g., Space) enables three different behaviors:
+    - Kanchoku: marker held → key1↓↑ → key2↓↑ → kanji output
+    - Bunsetsu: marker held → key1↓↑ → marker↑ → bunsetsu boundary (if key1 can start bunsetsu)
+    - Forced preedit: marker held → key1↓↑ → marker↑ → enter forced preedit (if key1 is "ん" etc.)
+    """
+    IDLE = 0                    # Marker not held
+    MARKER_HELD = 1             # Marker pressed, waiting for first key
+    FIRST_PRESSED = 2           # First key pressed (not yet released)
+    FIRST_RELEASED = 3          # First key released - decision point:
+                                #   key2↓ → kanchoku, marker↑ → bunsetsu/forced-preedit
+    KANCHOKU_SECOND_PRESSED = 4 # Second key pressed (kanchoku confirmed)
+
 # Only the direct input- and Hiragana-mode are supported (and that's intentional).
 INPUT_MODE_NAMES = ('A', 'あ')
 
@@ -148,7 +171,13 @@ class EnginePSKK(IBus.Engine):
         self._pressed_key_set = set()
         self._handled_config_keys = set()  # Keys handled by config bindings (to consume releases)
         self._sands_key_set = set()
-        self._first_kanchoku_stroke = ""
+
+        # Kanchoku / Bunsetsu state machine variables
+        self._marker_state = MarkerState.IDLE
+        self._marker_first_key = None           # Raw key char for kanchoku lookup
+        self._marker_keys_held = set()          # Track keys currently pressed while marker held
+        self._preedit_before_marker = ''        # Preedit snapshot to restore if kanchoku
+        self._in_forced_preedit = False         # True when in forced preedit mode (Case C)
 
         self._preedit_string = ''    # Display buffer (can be hiragana, katakana, ascii, or zenkaku)
         self._preedit_hiragana = ''  # Source of truth: hiragana output from simul_processor
@@ -171,6 +200,7 @@ class EnginePSKK(IBus.Engine):
         self._layout_data = util.get_layout_data(self._config)
         self._simul_processor = SimultaneousInputProcessor(self._layout_data)
         self._kanchoku_layout = self._load_kanchoku_layout()
+        self._kanchoku_processor = KanchokuProcessor(self._kanchoku_layout)
 
         self.set_mode(self._load_input_mode(self._settings))
         #self.set_mode('あ')
@@ -319,6 +349,7 @@ class EnginePSKK(IBus.Engine):
         self._layout_data = util.get_layout_data(self._config)
         self._simul_processor = SimultaneousInputProcessor(self._layout_data)
         self._kanchoku_layout = self._load_kanchoku_layout()
+        self._kanchoku_processor = KanchokuProcessor(self._kanchoku_layout)
 
     def _load_logging_level(self, config):
         '''
@@ -530,6 +561,14 @@ class EnginePSKK(IBus.Engine):
         key_name = IBus.keyval_name(keyval)
         if not key_name:
             return False
+
+        # =====================================================================
+        # KANCHOKU / BUNSETSU MARKER HANDLING (highest priority)
+        # =====================================================================
+        # Must be checked before other bindings since the marker key (e.g., Space)
+        # triggers a state machine that consumes subsequent key events.
+        if self._handle_kanchoku_bunsetsu_marker(key_name, keyval, state, is_pressed):
+            return True
 
         # =====================================================================
         # CONFIG-DRIVEN KEY BINDINGS (checked first, for all key types)
@@ -834,6 +873,224 @@ class EnginePSKK(IBus.Engine):
             self._modkey_status &= ~STATUS_SPACE
 
         logger.debug(f'SandS status: space_held={bool(self._modkey_status & STATUS_SPACE)}')
+
+    # =========================================================================
+    # KANCHOKU / BUNSETSU MARKER HANDLING
+    # =========================================================================
+
+    def _handle_kanchoku_bunsetsu_marker(self, key_name, keyval, state, is_pressed):
+        """
+        Handle kanchoku_bunsetsu_marker key and related sequences.
+
+        This implements a state machine that distinguishes between:
+        - Kanchoku: marker held → key1↓↑ → key2↓↑ → produces kanji
+        - Bunsetsu: marker held → key1↓↑ → marker↑ → marks boundary (valid bunsetsu start)
+        - Forced preedit: marker held → key1↓↑ → marker↑ → enter mode (if key is forced_preedit_trigger)
+
+        Args:
+            key_name: The key name from IBus.keyval_name()
+            keyval: The key value
+            state: Modifier state bitmask from IBus
+            is_pressed: True if key press, False if key release
+
+        Returns:
+            bool: True if the key was consumed, False otherwise
+        """
+        marker_binding = self._config.get('kanchoku_bunsetsu_marker', '')
+        if not marker_binding:
+            return False
+
+        is_marker_key = self._matches_key_binding(key_name, state, marker_binding)
+
+        # === MARKER KEY HANDLING ===
+        if is_marker_key:
+            return self._handle_marker_key_event(is_pressed)
+
+        # === OTHER KEYS WHILE MARKER HELD ===
+        if self._marker_state != MarkerState.IDLE:
+            return self._handle_key_while_marker_held(key_name, keyval, is_pressed)
+
+        return False
+
+    def _handle_marker_key_event(self, is_pressed):
+        """
+        Handle press/release of the marker key itself.
+
+        On press: Commit existing preedit, enter MARKER_HELD state
+        On release: Determine if this was bunsetsu marking or forced preedit trigger
+
+        Returns:
+            bool: True (marker key is always consumed)
+        """
+        if is_pressed:
+            # Commit any existing preedit before starting marker sequence
+            self._commit_string()
+            self._marker_state = MarkerState.MARKER_HELD
+            self._marker_first_key = None
+            self._marker_keys_held.clear()
+            self._preedit_before_marker = ''
+            logger.debug('Marker pressed: entering MARKER_HELD state')
+            return True
+
+        # Marker released
+        logger.debug(f'Marker released in state: {self._marker_state.name}')
+
+        if self._marker_state == MarkerState.FIRST_RELEASED:
+            # Decision point: was this bunsetsu or forced preedit?
+            self._handle_marker_release_decision()
+        elif self._marker_state == MarkerState.KANCHOKU_SECOND_PRESSED:
+            # Kanchoku was completed, just clean up
+            pass
+        # else: MARKER_HELD or FIRST_PRESSED - incomplete sequence, just reset
+
+        self._marker_state = MarkerState.IDLE
+        self._marker_first_key = None
+        self._marker_keys_held.clear()
+        return True
+
+    def _handle_marker_release_decision(self):
+        """
+        Handle the decision when marker is released after first key was pressed and released.
+
+        Check if first key was the forced_preedit_trigger_key:
+        - If yes: Enter forced preedit mode (Case C)
+        - If no: This was bunsetsu marking (Case B)
+        """
+        forced_preedit_key = self._config.get('forced_preedit_trigger_key', 'f')
+
+        if self._marker_first_key == forced_preedit_key:
+            # Case (C): Forced preedit mode
+            # Clear the tentative output (e.g., "ん") since it's not part of bunsetsu
+            self._preedit_string = self._preedit_before_marker
+            self._update_preedit()
+            self._in_forced_preedit = True
+            logger.debug('Entering forced preedit mode (Case C)')
+        else:
+            # Case (B): Bunsetsu marking
+            # Keep the tentative output (e.g., "い") and mark boundary
+            self._mark_bunsetsu_boundary()
+            logger.debug(f'Bunsetsu marked with first char from key "{self._marker_first_key}" (Case B)')
+
+    def _handle_key_while_marker_held(self, key_name, keyval, is_pressed):
+        """
+        Handle key events while marker is held.
+
+        This processes the state machine transitions for kanchoku/bunsetsu sequences.
+
+        Returns:
+            bool: True if key was consumed, False otherwise
+        """
+        # Only process printable ASCII characters
+        if keyval < 0x20 or keyval > 0x7e:
+            return False
+
+        key_char = chr(keyval).lower()
+
+        if self._marker_state == MarkerState.MARKER_HELD:
+            # Waiting for first key
+            if is_pressed:
+                self._marker_first_key = key_char
+                self._marker_keys_held.add(key_char)
+                self._preedit_before_marker = self._preedit_string
+                # Let simultaneous processor handle this key (tentative output)
+                self._process_simultaneous_input(keyval, is_pressed)
+                self._marker_state = MarkerState.FIRST_PRESSED
+                logger.debug(f'First key pressed: "{key_char}" → FIRST_PRESSED')
+            return True
+
+        elif self._marker_state == MarkerState.FIRST_PRESSED:
+            # First key is pressed, waiting for release
+            if is_pressed:
+                # Another key pressed while first is held (could be simultaneous)
+                self._marker_keys_held.add(key_char)
+                self._process_simultaneous_input(keyval, is_pressed)
+            else:
+                # A key released
+                self._marker_keys_held.discard(key_char)
+                self._process_simultaneous_input(keyval, is_pressed)
+                if len(self._marker_keys_held) == 0:
+                    # All keys released - transition to decision point
+                    self._marker_state = MarkerState.FIRST_RELEASED
+                    logger.debug('All keys released → FIRST_RELEASED (decision point)')
+            return True
+
+        elif self._marker_state == MarkerState.FIRST_RELEASED:
+            # Decision point: waiting for key2 (kanchoku) or marker release (bunsetsu)
+            if is_pressed:
+                # Second key pressed - this is KANCHOKU (Case A)!
+                logger.debug(f'Second key pressed: "{key_char}" → KANCHOKU')
+                # Undo the tentative simultaneous output
+                self._preedit_string = self._preedit_before_marker
+                # Look up and emit kanchoku kanji
+                kanji = self._kanchoku_processor._lookup_kanji(self._marker_first_key, key_char)
+                self._emit_kanchoku_output(kanji)
+                self._marker_keys_held.add(key_char)
+                self._marker_state = MarkerState.KANCHOKU_SECOND_PRESSED
+            return True
+
+        elif self._marker_state == MarkerState.KANCHOKU_SECOND_PRESSED:
+            # Second key pressed, waiting for release (then ready for another kanchoku)
+            if is_pressed:
+                # Another key while second is held - ignore or handle as needed
+                pass
+            else:
+                # Key released
+                self._marker_keys_held.discard(key_char)
+                if len(self._marker_keys_held) == 0:
+                    # Ready for another kanchoku sequence
+                    self._marker_state = MarkerState.MARKER_HELD
+                    self._marker_first_key = None
+                    self._preedit_before_marker = self._preedit_string
+                    logger.debug('Kanchoku complete, ready for next → MARKER_HELD')
+            return True
+
+        return False
+
+    def _process_simultaneous_input(self, keyval, is_pressed):
+        """
+        Process a key through the simultaneous input processor.
+
+        This is used during marker-held sequences to get tentative output
+        that may be kept (bunsetsu) or discarded (kanchoku).
+        """
+        if keyval < 0x20 or keyval > 0x7e:
+            return
+
+        input_char = chr(keyval)
+
+        # Get output from simultaneous processor
+        output, pending = self._simul_processor.get_layout_output(
+            self._preedit_string, input_char, is_pressed
+        )
+
+        logger.debug(f'Simultaneous processor: output="{output}", pending="{pending}"')
+
+        # Update preedit with simultaneous output
+        self._preedit_hiragana = output if output else ''
+        new_preedit = self._preedit_hiragana + (pending if pending else '')
+        self._preedit_string = new_preedit
+        self._update_preedit()
+
+    def _mark_bunsetsu_boundary(self):
+        """
+        Mark a bunsetsu (phrase) boundary in the preedit.
+
+        TODO: Implement actual bunsetsu boundary marking logic.
+        For now, this is a placeholder.
+        """
+        logger.debug(f'Bunsetsu boundary marked. Current preedit: "{self._preedit_string}"')
+        # TODO: Add actual bunsetsu boundary marker (e.g., visual indicator or internal tracking)
+
+    def _emit_kanchoku_output(self, kanji):
+        """
+        Output a kanji from kanchoku input.
+
+        In normal mode: Add to preedit
+        In forced preedit mode: Add to preedit (for later kana-kanji conversion)
+        """
+        logger.debug(f'Kanchoku output: "{kanji}"')
+        self._preedit_string += kanji
+        self._update_preedit()
 
     # =========================================================================
     # HELPER METHODS
