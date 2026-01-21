@@ -272,52 +272,39 @@ class EnginePSKK(IBus.Engine):
     def _load_kanchoku_layout(self):
         """
         Purpose of this function is to load the kanchoku (漢直) layout
-        as form of dict. 
+        as form of dict.
         The term "layout" may not be very accurate, but I haven't found
         a better term for this concept yet (people say "漢直配列").
+
+        Returns:
+            dict: A nested dictionary mapping first-key -> second-key -> kanji character
+                  for all keys in KANCHOKU_KEY_SET
         """
         return_dict = dict()
-        path = ""
-        if('kanchoku_layout' in self._config):
-            if(os.path.exists(os.path.join(util.get_user_configdir(), self._config['kanchoku_layout']))):
-                path = os.path.join(util.get_user_configdir(), self._config['kanchoku_layout'])
-                logger.debug(f"Specified kanchoku layout {self._config['kanchoku_layout']} found in {util.get_user_configdir()}")
-            elif(os.path.exists(os.path.join(util.get_datadir(), 'layouts', self._config['layout']))):
-                path = os.path.join(util.get_datadir(), 'layouts', self._config['kanchoku_layout'])
-                logger.debug(f"Specified layout {self._config['kanchoku_layout']} found in {util.get_datadir()}")
-            else:
-                path = os.path.join(util.get_datadir(), 'layouts', 'aki_code.json')
-            logger.info(f'kanchoku-layout: {path}')
-        default_kanchoku_layout_path = os.path.join(util.get_datadir(), 'layouts', 'aki_code.json')
-        kanchoku_layout_data = dict()
-        try:
-            with open(path) as f:
-                kanchoku_layout_data = json.load(f)
-                logger.info(f'kanchoku-layout JSON file loaded: {path}')
-        except Exception as error:
-            logger.error(f'Error loading the kanchoku data {path} : {error}')
-        if(len(kanchoku_layout_data) == 0):
-            try:
-                with open(default_kanchoku_layout_path) as f:
-                    kanchoku_layout_data = json.load(f)
-                    logger.info(f'default kanchoku layout JSON file loaded: {default_kanchoku_layout_path}')
-            except Exception as error:
-                logger.error(f'Error loading the default kanchoku data {default_kanchoku_layout_path}: {error}')
-        # initialize the layout first..
+
+        # Use utility function to load the kanchoku layout JSON data
+        kanchoku_layout_data = util.get_kanchoku_layout(self._config)
+
+        if kanchoku_layout_data is None:
+            logger.error('Failed to load kanchoku layout data')
+            # Initialize empty structure as fallback
+            for first in KANCHOKU_KEY_SET:
+                return_dict[first] = dict()
+                for second in KANCHOKU_KEY_SET:
+                    return_dict[first][second] = MISSING_KANCHOKU_KANJI
+            return return_dict
+
+        # Initialize and populate the layout for all keys in KANCHOKU_KEY_SET
         for first in KANCHOKU_KEY_SET:
             return_dict[first] = dict()
             for second in KANCHOKU_KEY_SET:
-                return_dict[first][second] = kanchoku_layout_data[first][second]
-        # actually loading the layout..
-        for first in kanchoku_layout_data.keys():
-            if(first not in KANCHOKU_KEY_SET):
-                continue
-            for second in kanchoku_layout_data[first].keys():
-                if(second not in KANCHOKU_KEY_SET):
-                    continue
-                return_dict[first][second] = kanchoku_layout_data[first][second]
-        #logger.debug(f'Loaded kanchoku data: {return_dict}')
-        return(return_dict)
+                # Use the loaded data if available, otherwise use placeholder
+                if first in kanchoku_layout_data and second in kanchoku_layout_data[first]:
+                    return_dict[first][second] = kanchoku_layout_data[first][second]
+                else:
+                    return_dict[first][second] = MISSING_KANCHOKU_KANJI
+
+        return return_dict
 
 
     def _load_configs(self):
