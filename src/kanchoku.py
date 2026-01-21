@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Placeholder character when a key combination has no assigned kanji
-MISSING_KANCHOKU_KANJI = '無'
+MISSING_KANCHOKU_KANJI = "無"
 
 
 class KanchokuProcessor:
@@ -131,7 +131,7 @@ class KanchokuProcessor:
             return MISSING_KANCHOKU_KANJI
 
         kanji = row[second_key]
-        if not kanji or kanji == '':
+        if not kanji or kanji == "":
             return MISSING_KANCHOKU_KANJI
 
         return kanji
