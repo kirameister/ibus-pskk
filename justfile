@@ -55,6 +55,9 @@ install-files:
     cp data/layouts/* {{install_root}}/layouts/
     mkdir -p {{install_root}}/kanchoku_layouts
     cp data/kanchoku_layouts/* {{install_root}}/kanchoku_layouts/
+    # Copy SKK-dictionary files
+    mkdir -p {{install_root}}/skk_dict
+    cp data/skk_dict/* {{install_root}}/skk_dict/
     cp data/pskk.xml {{ibus_component_dir}}/
     chmod 644 {{ibus_component_dir}}/pskk.xml
 
