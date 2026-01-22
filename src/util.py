@@ -235,9 +235,9 @@ def get_user_dictionaries_dir():
 def get_skk_dicts_dir():
     """
     Return the path to the system SKK dictionaries directory.
-    Typically: /opt/ibus-pskk/dictionaries/skk_dicts/
+    Typically: /opt/ibus-pskk/dictionaries/skk_dict/
     """
-    return os.path.join(get_datadir(), 'dictionaries', 'skk_dicts')
+    return os.path.join(get_datadir(), 'dictionaries', 'skk_dict')
 
 
 def parse_skk_dictionary_line(line):
