@@ -227,6 +227,175 @@ def get_kanchoku_layout(config):
     try:
         with open(kanchoku_layout_file_path) as kanchoku_layout_json:
             return json.load(kanchoku_layout_json)
-    except: 
+    except:
         logger.error(f'Error in loading kanchoku_layout file: {kanchoku_layout_file_path}')
     return None
+
+
+def get_user_dictionaries_dir():
+    """
+    Return the path to the user dictionaries directory.
+    Typically: $HOME/.config/ibus-pskk/dictionaries/
+    """
+    return os.path.join(get_user_configdir(), 'dictionaries')
+
+
+def get_skk_dicts_dir():
+    """
+    Return the path to the system SKK dictionaries directory.
+    Typically: /opt/ibus-pskk/skk_dicts/
+    """
+    return os.path.join(get_datadir(), 'skk_dicts')
+
+
+def parse_skk_dictionary_line(line):
+    """
+    Parse a single line from an SKK dictionary file.
+
+    SKK format: reading /candidate1/candidate2/.../
+    Example: あやこ /亜矢子/彩子/
+
+    Args:
+        line: A single line from the SKK dictionary
+
+    Returns:
+        tuple: (reading, candidates_list) or (None, None) if line is invalid/comment
+    """
+    # Skip empty lines and comments
+    line = line.strip()
+    if not line or line.startswith(';'):
+        return None, None
+
+    # Split on first space to separate reading from candidates
+    parts = line.split(' ', 1)
+    if len(parts) != 2:
+        return None, None
+
+    reading = parts[0]
+    candidates_part = parts[1]
+
+    # Parse candidates: /candidate1/candidate2/.../
+    # Remove leading and trailing slashes, then split
+    candidates_part = candidates_part.strip('/')
+    if not candidates_part:
+        return None, None
+
+    # Split by '/' and filter out empty strings
+    # Also handle annotations in SKK format: candidate;annotation
+    candidates = []
+    for candidate in candidates_part.split('/'):
+        if candidate:
+            # Remove annotation if present (e.g., "候補;注釈" -> "候補")
+            candidate_surface = candidate.split(';')[0]
+            if candidate_surface:
+                candidates.append(candidate_surface)
+
+    if not candidates:
+        return None, None
+
+    return reading, candidates
+
+
+def convert_skk_to_json(skk_file_path, json_file_path=None):
+    """
+    Convert an SKK dictionary file to JSON format.
+
+    Args:
+        skk_file_path: Path to the SKK dictionary file
+        json_file_path: Path for the output JSON file.
+                       If None, will be auto-generated in user dictionaries dir.
+
+    Returns:
+        tuple: (success: bool, output_path: str or None, entry_count: int)
+    """
+    if not os.path.exists(skk_file_path):
+        logger.error(f'SKK dictionary file not found: {skk_file_path}')
+        return False, None, 0
+
+    # Determine output path
+    if json_file_path is None:
+        # Create output path in user dictionaries directory
+        dict_dir = get_user_dictionaries_dir()
+        os.makedirs(dict_dir, exist_ok=True)
+
+        # Use same filename but with .json extension
+        base_name = os.path.basename(skk_file_path)
+        # Remove common SKK extensions if present
+        for ext in ['.utf8', '.txt', '.dic', '.SKK']:
+            if base_name.endswith(ext):
+                base_name = base_name[:-len(ext)]
+                break
+        json_file_path = os.path.join(dict_dir, base_name + '.json')
+
+    # Parse SKK dictionary
+    dictionary = {}
+    entry_count = 0
+
+    # Try different encodings (SKK dictionaries are typically EUC-JP or UTF-8)
+    encodings = ['utf-8', 'euc-jp', 'shift-jis']
+    file_content = None
+
+    for encoding in encodings:
+        try:
+            with open(skk_file_path, 'r', encoding=encoding) as f:
+                file_content = f.readlines()
+            logger.debug(f'Successfully read {skk_file_path} with encoding {encoding}')
+            break
+        except UnicodeDecodeError:
+            continue
+
+    if file_content is None:
+        logger.error(f'Failed to read {skk_file_path} with any supported encoding')
+        return False, None, 0
+
+    # Process each line
+    for line in file_content:
+        reading, candidates = parse_skk_dictionary_line(line)
+        if reading and candidates:
+            if reading in dictionary:
+                # Merge candidates, avoiding duplicates while preserving order
+                existing = dictionary[reading]
+                for candidate in candidates:
+                    if candidate not in existing:
+                        existing.append(candidate)
+            else:
+                dictionary[reading] = candidates
+            entry_count += 1
+
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
+
+    # Write JSON file
+    try:
+        with open(json_file_path, 'w', encoding='utf-8') as f:
+            json.dump(dictionary, f, ensure_ascii=False, indent=2)
+        logger.info(f'Converted SKK dictionary to JSON: {json_file_path} ({entry_count} entries)')
+        return True, json_file_path, entry_count
+    except Exception as e:
+        logger.error(f'Failed to write JSON dictionary: {e}')
+        return False, None, 0
+
+
+def convert_all_skk_dictionaries():
+    """
+    Convert all SKK dictionaries from the system directory to JSON format
+    in the user dictionaries directory.
+
+    Returns:
+        list: List of tuples (filename, success, entry_count) for each file processed
+    """
+    skk_dir = get_skk_dicts_dir()
+    results = []
+
+    if not os.path.exists(skk_dir):
+        logger.warning(f'SKK dictionaries directory not found: {skk_dir}')
+        return results
+
+    # Process all files in the SKK dictionaries directory
+    for filename in os.listdir(skk_dir):
+        skk_path = os.path.join(skk_dir, filename)
+        if os.path.isfile(skk_path):
+            success, output_path, entry_count = convert_skk_to_json(skk_path)
+            results.append((filename, success, entry_count))
+
+    return results
