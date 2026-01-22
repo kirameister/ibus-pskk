@@ -8,7 +8,7 @@
    version="1.1"
    id="svg1"
    sodipodi:docname="ibus-pskk.svg"
-   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
@@ -23,17 +23,25 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
-     inkscape:zoom="1.1095399"
-     inkscape:cx="99.140191"
-     inkscape:cy="85.621074"
+     inkscape:zoom="4.4194658"
+     inkscape:cx="83.720526"
+     inkscape:cy="71.954398"
      inkscape:window-width="2252"
      inkscape:window-height="1439"
      inkscape:window-x="0"
      inkscape:window-y="28"
      inkscape:window-maximized="1"
-     inkscape:current-layer="layer1" />
+     inkscape:current-layer="layer1"
+     showgrid="false" />
   <defs
-     id="defs1" />
+     id="defs1">
+    <rect
+       x="147.5206"
+       y="134.3752"
+       width="32.8635"
+       height="18.54962"
+       id="rect1" />
+  </defs>
   <g
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
@@ -90,5 +98,26 @@
        d="m 0.47244113,29.175899 -24.85792613,-43.055187 49.715849,-2e-6 z"
        inkscape:transform-center-y="3.3763681"
        transform="matrix(0.47051724,0,0,0.47051724,84.223364,145.13145)" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0.58926788,0,0,0.78015842,-5.55392,35.559581)"
+       id="text1"
+       style="writing-mode:lr-tb;direction:ltr;white-space:pre;shape-inside:url(#rect1);fill:#ffffff;stroke-width:5.66929"><tspan
+         x="147.52148"
+         y="145.45483"
+         id="tspan4"><tspan
+           style="fill:#1a1a1a"
+           id="tspan3">ん</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:3.175px;writing-mode:lr-tb;direction:ltr;fill:#1a1a1a;stroke-width:1.5"
+       x="99.050209"
+       y="168.65993"
+       id="text2"><tspan
+         sodipodi:role="line"
+         id="tspan2"
+         style="fill:#1a1a1a;stroke-width:1.5"
+         x="99.050209"
+         y="168.65993" /></text>
   </g>
 </svg>
