@@ -490,32 +490,41 @@ class SettingsPanel(Gtk.Window):
         sys_box.set_border_width(10)
         sys_frame.add(sys_box)
 
-        # System dictionary list
+        # Info label
+        sys_info_label = Gtk.Label()
+        sys_info_label.set_markup(
+            "<small>Dictionary files found in /opt/ibus-pskk/dictionaries/\n"
+            "Check the box to enable a dictionary for conversion.</small>"
+        )
+        sys_info_label.set_xalign(0)
+        sys_box.pack_start(sys_info_label, False, False, 0)
+
+        # System dictionary list with checkboxes
         scroll = Gtk.ScrolledWindow()
         scroll.set_min_content_height(150)
-        self.sys_dict_store = Gtk.ListStore(str)  # Dictionary path
+        # Store: (enabled: bool, filename: str, full_path: str)
+        self.sys_dict_store = Gtk.ListStore(bool, str, str)
         self.sys_dict_view = Gtk.TreeView(model=self.sys_dict_store)
-        renderer = Gtk.CellRendererText()
-        column = Gtk.TreeViewColumn("Dictionary Path", renderer, text=0)
-        self.sys_dict_view.append_column(column)
+
+        # Checkbox column
+        toggle_renderer = Gtk.CellRendererToggle()
+        toggle_renderer.connect("toggled", self.on_sys_dict_toggled)
+        toggle_column = Gtk.TreeViewColumn("Enable", toggle_renderer, active=0)
+        toggle_column.set_min_width(60)
+        self.sys_dict_view.append_column(toggle_column)
+
+        # Filename column
+        text_renderer = Gtk.CellRendererText()
+        text_column = Gtk.TreeViewColumn("Dictionary File", text_renderer, text=1)
+        self.sys_dict_view.append_column(text_column)
+
         scroll.add(self.sys_dict_view)
         sys_box.pack_start(scroll, True, True, 0)
 
-        # System dict buttons
-        sys_btn_box = Gtk.Box(spacing=6)
-        add_sys_btn = Gtk.Button(label="Add Dictionary")
-        add_sys_btn.connect("clicked", self.on_add_system_dict)
-        sys_btn_box.pack_start(add_sys_btn, False, False, 0)
-
-        remove_sys_btn = Gtk.Button(label="Remove Selected")
-        remove_sys_btn.connect("clicked", self.on_remove_system_dict)
-        sys_btn_box.pack_start(remove_sys_btn, False, False, 0)
-
-        import_btn = Gtk.Button(label="Import SKK-JISYO...")
-        import_btn.connect("clicked", self.on_import_skk_jisyo)
-        sys_btn_box.pack_start(import_btn, False, False, 0)
-
-        sys_box.pack_start(sys_btn_box, False, False, 0)
+        # Refresh button
+        refresh_btn = Gtk.Button(label="Refresh List")
+        refresh_btn.connect("clicked", self.on_refresh_system_dicts)
+        sys_box.pack_start(refresh_btn, False, False, 0)
 
         box.pack_start(sys_frame, True, True, 0)
 
@@ -844,8 +853,29 @@ class SettingsPanel(Gtk.Window):
         dictionaries = self.config.get("dictionaries") or {}
         if not isinstance(dictionaries, dict):
             dictionaries = {}
-        for path in dictionaries.get("system", []) or []:
-            self.sys_dict_store.append([path])
+
+        # Get the list of currently enabled system dictionaries from config
+        enabled_system_paths = set(dictionaries.get("system", []) or [])
+
+        # Scan the system dictionaries directory recursively
+        sys_dict_dir = os.path.join(util.get_datadir(), 'dictionaries')
+        if os.path.exists(sys_dict_dir) and os.path.isdir(sys_dict_dir):
+            # Collect all dictionary files with their relative paths
+            dict_files = []
+            for root, dirs, files in os.walk(sys_dict_dir):
+                for filename in files:
+                    full_path = os.path.join(root, filename)
+                    # Calculate relative path for display
+                    rel_path = os.path.relpath(full_path, sys_dict_dir)
+                    dict_files.append((rel_path, full_path))
+
+            # Sort by relative path and add to store
+            for rel_path, full_path in sorted(dict_files):
+                # Check if this dictionary is enabled in config
+                enabled = full_path in enabled_system_paths
+                self.sys_dict_store.append([enabled, rel_path, full_path])
+
+        # Load user dictionaries (these remain as path/pattern strings)
         for path in dictionaries.get("user", []) or []:
             self.user_dict_store.append([path])
 
@@ -937,8 +967,10 @@ class SettingsPanel(Gtk.Window):
         }
 
         # Dictionaries tab
+        # For system dictionaries, save only the full paths of enabled entries
+        enabled_system_dicts = [row[2] for row in self.sys_dict_store if row[0]]
         self.config["dictionaries"] = {
-            "system": [row[0] for row in self.sys_dict_store],
+            "system": enabled_system_dicts,
             "user": [row[0] for row in self.user_dict_store]
         }
 
@@ -979,6 +1011,42 @@ class SettingsPanel(Gtk.Window):
 
 
     # Dictionary management methods
+    def on_sys_dict_toggled(self, widget, path):
+        """Handle checkbox toggle for system dictionary"""
+        # Toggle the enabled state in the store
+        self.sys_dict_store[path][0] = not self.sys_dict_store[path][0]
+
+    def on_refresh_system_dicts(self, button):
+        """Refresh the system dictionaries list by scanning the directory recursively"""
+        # Remember currently enabled dictionaries
+        enabled_paths = set()
+        for row in self.sys_dict_store:
+            if row[0]:  # enabled
+                enabled_paths.add(row[2])  # full_path
+
+        # Clear and rescan
+        self.sys_dict_store.clear()
+
+        # Scan the system dictionaries directory recursively
+        sys_dict_dir = os.path.join(util.get_datadir(), 'dictionaries')
+        if os.path.exists(sys_dict_dir) and os.path.isdir(sys_dict_dir):
+            # Collect all dictionary files with their relative paths
+            dict_files = []
+            for root, dirs, files in os.walk(sys_dict_dir):
+                for filename in files:
+                    full_path = os.path.join(root, filename)
+                    # Calculate relative path for display
+                    rel_path = os.path.relpath(full_path, sys_dict_dir)
+                    dict_files.append((rel_path, full_path))
+
+            # Sort by relative path and add to store
+            for rel_path, full_path in sorted(dict_files):
+                # Check if this path was previously enabled
+                enabled = full_path in enabled_paths
+                self.sys_dict_store.append([enabled, rel_path, full_path])
+
+        logger.info(f"Refreshed system dictionaries from {sys_dict_dir}")
+
     def on_add_system_dict(self, button):
         """Add system dictionary"""
         dialog = Gtk.FileChooserDialog(
