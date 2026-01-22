@@ -521,10 +521,17 @@ class SettingsPanel(Gtk.Window):
         scroll.add(self.sys_dict_view)
         sys_box.pack_start(scroll, True, True, 0)
 
-        # Refresh button
+        # System dictionary buttons
+        sys_btn_box = Gtk.Box(spacing=6)
         refresh_btn = Gtk.Button(label="Refresh List")
         refresh_btn.connect("clicked", self.on_refresh_system_dicts)
-        sys_box.pack_start(refresh_btn, False, False, 0)
+        sys_btn_box.pack_start(refresh_btn, False, False, 0)
+
+        convert_btn = Gtk.Button(label="Convert under $HOME")
+        convert_btn.connect("clicked", self.on_convert_system_dicts)
+        sys_btn_box.pack_start(convert_btn, False, False, 0)
+
+        sys_box.pack_start(sys_btn_box, False, False, 0)
 
         box.pack_start(sys_frame, True, True, 0)
 
@@ -1046,6 +1053,61 @@ class SettingsPanel(Gtk.Window):
                 self.sys_dict_store.append([enabled, rel_path, full_path])
 
         logger.info(f"Refreshed system dictionaries from {sys_dict_dir}")
+
+    def on_convert_system_dicts(self, button):
+        """Convert SKK dictionaries to merged system_dictionary.json under $HOME"""
+        # Show a progress message
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=0,
+            message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.NONE,
+            text="Converting dictionaries..."
+        )
+        dialog.format_secondary_text("Please wait while SKK dictionaries are being converted.")
+        dialog.show_all()
+
+        # Process GTK events to show the dialog
+        while Gtk.events_pending():
+            Gtk.main_iteration()
+
+        # Perform the conversion
+        success, output_path, stats = util.generate_system_dictionary()
+
+        # Close progress dialog
+        dialog.destroy()
+
+        # Show result
+        if success:
+            result_dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.INFO,
+                buttons=Gtk.ButtonsType.OK,
+                text="Conversion Complete"
+            )
+            result_dialog.format_secondary_text(
+                f"System dictionary created successfully.\n\n"
+                f"Output: {output_path}\n"
+                f"Files processed: {stats['files_processed']}\n"
+                f"Total readings: {stats['total_readings']:,}\n"
+                f"Total candidates: {stats['total_candidates']:,}"
+            )
+        else:
+            result_dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Conversion Failed"
+            )
+            result_dialog.format_secondary_text(
+                "Failed to convert SKK dictionaries.\n"
+                "Please check that the SKK dictionaries directory exists."
+            )
+
+        result_dialog.run()
+        result_dialog.destroy()
 
     def on_add_system_dict(self, button):
         """Add system dictionary"""
