@@ -47,14 +47,6 @@ def get_default_config_path():
     return os.path.join(get_datadir(), 'config.json')
 
 
-def get_user_datadir():
-    '''
-    Return the path to the data directory under /home/kira.
-    Typically, it would be $HOME/.local/share/pskk
-    '''
-    return os.path.join(GLib.get_user_data_dir(), 'ibus-pskk')
-
-
 def get_libexecdir():
     return '/usr/local/libexec'
 
@@ -402,3 +394,106 @@ def convert_all_skk_dictionaries():
             results.append((filename, success, entry_count))
 
     return results
+
+
+def generate_system_dictionary(output_path=None):
+    """
+    Generate a merged system dictionary from all SKK dictionary files.
+
+    Reads all SKK dictionaries from the system directory and merges them
+    into a single JSON file. The count for each candidate reflects how many
+    source dictionary files contained that candidate.
+
+    Args:
+        output_path: Path for the output JSON file.
+                    If None, defaults to ~/.config/ibus-pskk/dictionaries/system_dictionary.json
+
+    Returns:
+        tuple: (success: bool, output_path: str or None, stats: dict)
+               stats contains 'files_processed', 'total_readings', 'total_candidates'
+    """
+    skk_dir = get_skk_dicts_dir()
+    stats = {'files_processed': 0, 'total_readings': 0, 'total_candidates': 0}
+
+    if not os.path.exists(skk_dir):
+        logger.warning(f'SKK dictionaries directory not found: {skk_dir}')
+        return False, None, stats
+
+    # Determine output path
+    if output_path is None:
+        dict_dir = get_user_dictionaries_dir()
+        os.makedirs(dict_dir, exist_ok=True)
+        output_path = os.path.join(dict_dir, 'system_dictionary.json')
+
+    # Merged dictionary: {reading: {candidate: count}}
+    merged_dictionary = {}
+
+    # Process each SKK dictionary file
+    for filename in os.listdir(skk_dir):
+        skk_path = os.path.join(skk_dir, filename)
+        if not os.path.isfile(skk_path):
+            continue
+
+        # Try different encodings
+        encodings = ['utf-8', 'euc-jp', 'shift-jis']
+        file_content = None
+
+        for encoding in encodings:
+            try:
+                with open(skk_path, 'r', encoding=encoding) as f:
+                    file_content = f.readlines()
+                logger.debug(f'Successfully read {skk_path} with encoding {encoding}')
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if file_content is None:
+            logger.warning(f'Failed to read {skk_path} with any supported encoding, skipping')
+            continue
+
+        # Track candidates seen in this file to avoid double-counting within same file
+        seen_in_this_file = {}  # {reading: set(candidates)}
+
+        # Process each line
+        for line in file_content:
+            reading, candidates = parse_skk_dictionary_line(line)
+            if not reading or not candidates:
+                continue
+
+            # Initialize tracking for this reading if needed
+            if reading not in seen_in_this_file:
+                seen_in_this_file[reading] = set()
+
+            # Initialize merged dictionary entry if needed
+            if reading not in merged_dictionary:
+                merged_dictionary[reading] = {}
+
+            # Add candidates, only incrementing count once per file
+            for candidate in candidates:
+                if candidate not in seen_in_this_file[reading]:
+                    seen_in_this_file[reading].add(candidate)
+                    if candidate in merged_dictionary[reading]:
+                        merged_dictionary[reading][candidate] += 1
+                    else:
+                        merged_dictionary[reading][candidate] = 1
+
+        stats['files_processed'] += 1
+        logger.debug(f'Processed {filename}')
+
+    # Calculate stats
+    stats['total_readings'] = len(merged_dictionary)
+    stats['total_candidates'] = sum(len(candidates) for candidates in merged_dictionary.values())
+
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    # Write JSON file
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(merged_dictionary, f, ensure_ascii=False, indent=2)
+        logger.info(f'Generated system dictionary: {output_path}')
+        logger.info(f'Stats: {stats["files_processed"]} files, {stats["total_readings"]} readings, {stats["total_candidates"]} candidates')
+        return True, output_path, stats
+    except Exception as e:
+        logger.error(f'Failed to write system dictionary: {e}')
+        return False, None, stats
