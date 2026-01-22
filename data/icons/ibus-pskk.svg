@@ -100,9 +100,9 @@
        transform="matrix(0.47051724,0,0,0.47051724,84.223364,145.13145)" />
     <text
        xml:space="preserve"
-       transform="matrix(0.58926788,0,0,0.78015842,-5.55392,35.559581)"
+       transform="matrix(0.5132343,0,0,0.65498695,5.9088756,54.359258)"
        id="text1"
-       style="writing-mode:lr-tb;direction:ltr;white-space:pre;shape-inside:url(#rect1);fill:#ffffff;stroke-width:5.66929"><tspan
+       style="writing-mode:lr-tb;direction:ltr;white-space:pre;shape-inside:url(#rect1);display:inline;fill:#ffffff;stroke-width:5.66929"><tspan
          x="147.52148"
          y="145.45483"
          id="tspan4"><tspan
