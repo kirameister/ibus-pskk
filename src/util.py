@@ -243,9 +243,9 @@ def get_user_dictionaries_dir():
 def get_skk_dicts_dir():
     """
     Return the path to the system SKK dictionaries directory.
-    Typically: /opt/ibus-pskk/skk_dicts/
+    Typically: /opt/ibus-pskk/dictionaries/skk_dicts/
     """
-    return os.path.join(get_datadir(), 'skk_dicts')
+    return os.path.join(get_datadir(), 'dictionaries', 'skk_dicts')
 
 
 def parse_skk_dictionary_line(line):
@@ -353,13 +353,16 @@ def convert_skk_to_json(skk_file_path, json_file_path=None):
         reading, candidates = parse_skk_dictionary_line(line)
         if reading and candidates:
             if reading in dictionary:
-                # Merge candidates, avoiding duplicates while preserving order
+                # Merge candidates, incrementing count for existing ones
                 existing = dictionary[reading]
                 for candidate in candidates:
-                    if candidate not in existing:
-                        existing.append(candidate)
+                    if candidate in existing:
+                        existing[candidate] += 1
+                    else:
+                        existing[candidate] = 1
             else:
-                dictionary[reading] = candidates
+                # Initialize each candidate with count of 1
+                dictionary[reading] = {candidate: 1 for candidate in candidates}
             entry_count += 1
 
     # Ensure output directory exists
