@@ -180,6 +180,12 @@ class EnginePSKK(IBus.Engine):
         self._preedit_before_marker = ''        # Preedit snapshot to restore if kanchoku
         self._in_forced_preedit = False         # True when in forced preedit mode (Case C)
 
+        # Henkan (kana-kanji conversion) state variables
+        self._bunsetsu_active = False           # True when bunsetsu mode is active (yomi input)
+        self._in_conversion = False             # True when showing conversion candidates
+        self._conversion_yomi = ''              # The yomi string being converted
+        self._pending_commit = ''               # Candidate to commit when starting new bunsetsu
+
         self._preedit_string = ''    # Display buffer (can be hiragana, katakana, ascii, or zenkaku)
         self._preedit_hiragana = ''  # Source of truth: hiragana output from simul_processor
         self._preedit_ascii = ''     # Source of truth: raw ASCII input characters
@@ -604,7 +610,59 @@ class EnginePSKK(IBus.Engine):
         # SPECIAL KEY HANDLING
         # =====================================================================
 
-        # TODO: Special key handling (Enter, Backspace, Escape)
+        # Handle special keys only on key press
+        if is_pressed:
+            # Enter key - confirm conversion or commit preedit
+            if keyval == IBus.KEY_Return or keyval == IBus.KEY_KP_Enter:
+                if self._in_conversion:
+                    logger.debug('Enter pressed in CONVERTING: confirming')
+                    self._confirm_conversion()
+                    return True
+                elif self._preedit_string:
+                    logger.debug('Enter pressed with preedit: committing')
+                    self._commit_string()
+                    return True
+                return False  # Pass through if no preedit
+
+            # Arrow keys for candidate cycling (only in CONVERTING state)
+            if self._in_conversion:
+                if keyval == IBus.KEY_Down or keyval == IBus.KEY_KP_Down:
+                    logger.debug('Down arrow in CONVERTING: next candidate')
+                    self._cycle_candidate()
+                    return True
+                elif keyval == IBus.KEY_Up or keyval == IBus.KEY_KP_Up:
+                    logger.debug('Up arrow in CONVERTING: previous candidate')
+                    self._cycle_candidate_backward()
+                    return True
+
+            # Escape - cancel conversion
+            if keyval == IBus.KEY_Escape:
+                if self._in_conversion:
+                    logger.debug('Escape in CONVERTING: cancelling, reverting to yomi')
+                    self._cancel_conversion()
+                    return True
+                elif self._preedit_string:
+                    # Clear preedit
+                    self._reset_henkan_state()
+                    return True
+                return False
+
+            # Backspace - delete character or cancel conversion
+            if keyval == IBus.KEY_BackSpace:
+                if self._in_conversion:
+                    # Cancel conversion and go back to yomi
+                    logger.debug('Backspace in CONVERTING: reverting to yomi')
+                    self._cancel_conversion()
+                    return True
+                elif self._preedit_string:
+                    # Delete last character from preedit
+                    # TODO: Implement proper backspace handling with simul_processor
+                    self._preedit_string = self._preedit_string[:-1]
+                    self._preedit_hiragana = self._preedit_hiragana[:-1] if self._preedit_hiragana else ''
+                    self._preedit_ascii = self._preedit_ascii[:-1] if self._preedit_ascii else ''
+                    self._update_preedit()
+                    return True
+                return False
 
         # =====================================================================
         # REGULAR CHARACTER INPUT (simultaneous typing)
@@ -613,6 +671,22 @@ class EnginePSKK(IBus.Engine):
         # Only process printable ASCII characters (0x20 space to 0x7e tilde)
         if keyval < 0x20 or keyval > 0x7e:
             return False
+
+        # If in CONVERTING state and typing a new character, confirm and continue
+        if is_pressed and self._in_conversion:
+            logger.debug(f'Char input in CONVERTING: confirming and adding "{chr(keyval)}"')
+            # Commit the selected candidate
+            self.commit_text(IBus.Text.new_from_string(self._preedit_string))
+            # Reset state but keep bunsetsu mode if it was active
+            self._in_conversion = False
+            self._conversion_yomi = ''
+            self._lookup_table.clear()
+            self.hide_lookup_table()
+            # Clear preedit for new input
+            self._preedit_string = ''
+            self._preedit_hiragana = ''
+            self._preedit_ascii = ''
+            # Continue to process the new character below
 
         # Convert keyval to character for simultaneous processor
         input_char = chr(keyval)
@@ -930,23 +1004,51 @@ class EnginePSKK(IBus.Engine):
             bool: True (marker key is always consumed)
         """
         if is_pressed:
-            # Commit any existing preedit before starting marker sequence
-            self._commit_string()
+            # Behavior on marker press depends on current henkan state
+            if self._in_conversion:
+                # CONVERTING state: prepare for potential space+key (new bunsetsu)
+                # DON'T change _in_conversion yet - wait for release to know if tap or space+key
+                # DON'T clear preedit - keep candidate visible
+                self._pending_commit = self._preedit_string  # Save selected candidate for potential commit
+                self._preedit_before_marker = self._preedit_string
+                # Note: Keep _in_conversion = True so tap can cycle candidates
+                logger.debug(f'Marker pressed in CONVERTING: saved candidate "{self._pending_commit}"')
+            elif self._bunsetsu_active:
+                # BUNSETSU_ACTIVE: save current yomi for potential implicit conversion
+                self._preedit_before_marker = self._preedit_string
+                logger.debug(f'Marker pressed in BUNSETSU_ACTIVE: saved yomi "{self._preedit_before_marker}"')
+            else:
+                # IDLE state: commit any existing preedit before starting marker sequence
+                self._commit_string()
+                self._preedit_before_marker = ''
+
             self._marker_state = MarkerState.MARKER_HELD
             self._marker_first_key = None
             self._marker_keys_held.clear()
-            self._preedit_before_marker = ''
             logger.debug('Marker pressed: entering MARKER_HELD state')
             return True
 
         # Marker released
-        logger.debug(f'Marker released in state: {self._marker_state.name}')
+        logger.debug(f'Marker released in state: {self._marker_state.name}, '
+                    f'bunsetsu_active={self._bunsetsu_active}, in_conversion={self._in_conversion}')
 
         if self._marker_state == MarkerState.MARKER_HELD:
             # Marker was just tapped (pressed and released without other keys)
-            # Output a normal space character
-            logger.debug('Marker tapped: outputting space')
-            self.commit_text(IBus.Text.new_from_string(' '))
+            # Behavior depends on current henkan state
+            if self._in_conversion:
+                # CONVERTING state: cycle to next candidate
+                logger.debug('Space tap in CONVERTING: cycling candidate')
+                self._pending_commit = ''  # Clear - it was only needed for space+key
+                self._cycle_candidate()
+            elif self._bunsetsu_active:
+                # BUNSETSU_ACTIVE state: trigger conversion
+                logger.debug('Space tap in BUNSETSU_ACTIVE: triggering conversion')
+                self._trigger_conversion()
+            else:
+                # IDLE state: commit preedit + output space
+                logger.debug('Space tap in IDLE: committing preedit + space')
+                self._commit_string()
+                self.commit_text(IBus.Text.new_from_string(' '))
         elif self._marker_state == MarkerState.FIRST_RELEASED:
             # Decision point: was this bunsetsu or forced preedit?
             self._handle_marker_release_decision()
@@ -964,24 +1066,70 @@ class EnginePSKK(IBus.Engine):
         """
         Handle the decision when marker is released after first key was pressed and released.
 
+        If there's a pending commit (from CONVERTING state):
+        - Commit the saved candidate first
+        - Then proceed with the normal bunsetsu/forced-preedit/kanchoku logic
+
+        If in BUNSETSU_ACTIVE state:
+        - Perform implicit conversion and commit first candidate
+        - Then proceed with new bunsetsu
+
         Check if first key was the forced_preedit_trigger_key:
         - If yes: Enter forced preedit mode (Case C)
         - If no: This was bunsetsu marking (Case B)
         """
+        # Save the new bunsetsu content that was typed during space+key
+        new_bunsetsu_preedit = self._preedit_string
+        new_bunsetsu_hiragana = self._preedit_hiragana
+        new_bunsetsu_ascii = self._preedit_ascii
+
+        # Commit pending candidate from CONVERTING state
+        if self._pending_commit:
+            logger.debug(f'Committing pending candidate: "{self._pending_commit}"')
+            self.commit_text(IBus.Text.new_from_string(self._pending_commit))
+            self._pending_commit = ''
+        elif self._bunsetsu_active:
+            # In BUNSETSU_ACTIVE: perform implicit conversion on the saved yomi
+            yomi = self._preedit_before_marker
+            if yomi:
+                candidates = self._henkan_processor.convert(yomi)
+                if candidates:
+                    surface = candidates[0]['surface']
+                    logger.debug(f'Implicit conversion: "{yomi}" → "{surface}"')
+                    self.commit_text(IBus.Text.new_from_string(surface))
+                else:
+                    logger.debug(f'No candidates for implicit conversion, committing yomi: "{yomi}"')
+                    self.commit_text(IBus.Text.new_from_string(yomi))
+
+        # Reset henkan state but preserve the new bunsetsu content
+        self._bunsetsu_active = False
+        self._in_conversion = False
+        self._conversion_yomi = ''
+        self._lookup_table.clear()
+        self.hide_lookup_table()
+
+        # Restore the new bunsetsu content
+        self._preedit_string = new_bunsetsu_preedit
+        self._preedit_hiragana = new_bunsetsu_hiragana
+        self._preedit_ascii = new_bunsetsu_ascii
+
         forced_preedit_key = self._config.get('forced_preedit_trigger_key', 'f')
 
         if self._marker_first_key == forced_preedit_key:
             # Case (C): Forced preedit mode
             # Clear the tentative output (e.g., "ん") since it's not part of bunsetsu
-            self._preedit_string = self._preedit_before_marker
+            self._preedit_string = ''
+            self._preedit_hiragana = ''
+            self._preedit_ascii = ''
             self._update_preedit()
             self._in_forced_preedit = True
             logger.debug('Entering forced preedit mode (Case C)')
         else:
-            # Case (B): Bunsetsu marking
+            # Case (B): Bunsetsu marking - start new bunsetsu
             # Keep the tentative output (e.g., "い") and mark boundary
             self._mark_bunsetsu_boundary()
-            logger.debug(f'Bunsetsu marked with first char from key "{self._marker_first_key}" (Case B)')
+            self._update_preedit()
+            logger.debug(f'Bunsetsu started with "{self._preedit_string}" (Case B)')
 
     def _handle_key_while_marker_held(self, key_name, keyval, is_pressed):
         """
@@ -1003,7 +1151,22 @@ class EnginePSKK(IBus.Engine):
             if is_pressed:
                 self._marker_first_key = key_char
                 self._marker_keys_held.add(key_char)
-                self._preedit_before_marker = self._preedit_string
+
+                # If we have a pending commit (from CONVERTING state), now we know
+                # it's space+key (not a tap), so clear preedit and exit conversion mode
+                if self._pending_commit:
+                    # _preedit_before_marker was already set when space was pressed
+                    self._preedit_string = ''
+                    self._preedit_hiragana = ''
+                    self._preedit_ascii = ''
+                    self._in_conversion = False  # Now exit conversion mode
+                    self._lookup_table.clear()
+                    self.hide_lookup_table()
+                    logger.debug(f'Clearing preedit for new bunsetsu (pending: "{self._pending_commit}")')
+                else:
+                    # Normal case: save current preedit
+                    self._preedit_before_marker = self._preedit_string
+
                 # Let simultaneous processor handle this key (tentative output)
                 self._process_simultaneous_input(keyval, is_pressed)
                 self._marker_state = MarkerState.FIRST_PRESSED
@@ -1085,13 +1248,14 @@ class EnginePSKK(IBus.Engine):
 
     def _mark_bunsetsu_boundary(self):
         """
-        Mark a bunsetsu (phrase) boundary in the preedit.
+        Mark the start of a bunsetsu (phrase) for kana-kanji conversion.
 
-        TODO: Implement actual bunsetsu boundary marking logic.
-        For now, this is a placeholder.
+        This activates bunsetsu mode where the preedit content becomes
+        the yomi (reading) for conversion when space is tapped.
         """
-        logger.debug(f'Bunsetsu boundary marked. Current preedit: "{self._preedit_string}"')
-        # TODO: Add actual bunsetsu boundary marker (e.g., visual indicator or internal tracking)
+        self._bunsetsu_active = True
+        self._conversion_yomi = ''  # Will be populated from preedit when conversion triggers
+        logger.debug(f'Bunsetsu started. Current preedit: "{self._preedit_string}"')
 
     def _emit_kanchoku_output(self, kanji):
         """
@@ -1103,6 +1267,189 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'Kanchoku output: "{kanji}"')
         self._preedit_string += kanji
         self._update_preedit()
+
+    # =========================================================================
+    # HENKAN (KANA-KANJI CONVERSION) METHODS
+    # =========================================================================
+
+    def _trigger_conversion(self):
+        """
+        Trigger kana-kanji conversion on the current preedit (yomi).
+
+        Called when space is tapped in BUNSETSU_ACTIVE state.
+        Uses HenkanProcessor to look up candidates and either:
+        - Single candidate: auto-replace in preedit
+        - Multiple candidates: show lookup table for selection
+        """
+        if not self._preedit_string:
+            logger.debug('_trigger_conversion: empty preedit, nothing to convert')
+            return
+
+        # Use hiragana as yomi for conversion
+        self._conversion_yomi = self._preedit_hiragana if self._preedit_hiragana else self._preedit_string
+        logger.debug(f'_trigger_conversion: yomi="{self._conversion_yomi}"')
+
+        # Get candidates from HenkanProcessor
+        candidates = self._henkan_processor.convert(self._conversion_yomi)
+
+        if not candidates:
+            # No candidates found - keep yomi as-is
+            logger.debug('_trigger_conversion: no candidates found')
+            return
+
+        # Clear and populate lookup table
+        self._lookup_table.clear()
+        for candidate in candidates:
+            self._lookup_table.append_candidate(
+                IBus.Text.new_from_string(candidate['surface'])
+            )
+
+        if len(candidates) == 1:
+            # Single candidate: auto-select and update preedit (but stay in conversion mode)
+            self._preedit_string = candidates[0]['surface']
+            self._update_preedit()
+            self._in_conversion = True
+            self._bunsetsu_active = False
+            # Don't show lookup table for single candidate
+            self.hide_lookup_table()
+            logger.debug(f'_trigger_conversion: single candidate "{candidates[0]["surface"]}"')
+        else:
+            # Multiple candidates: show lookup table
+            self._in_conversion = True
+            self._bunsetsu_active = False
+            self._preedit_string = candidates[0]['surface']  # Show first candidate in preedit
+            self._update_preedit()
+            self.update_lookup_table(self._lookup_table, True)
+            logger.debug(f'_trigger_conversion: {len(candidates)} candidates, showing lookup table')
+
+    def _cycle_candidate(self):
+        """
+        Cycle to the next conversion candidate.
+
+        Called when space is tapped in CONVERTING state.
+        """
+        if not self._in_conversion:
+            return
+
+        # Move to next candidate (wraps around)
+        self._lookup_table.cursor_down()
+
+        # Update preedit with currently selected candidate
+        cursor_pos = self._lookup_table.get_cursor_pos()
+        candidate = self._lookup_table.get_candidate(cursor_pos)
+        if candidate:
+            self._preedit_string = candidate.get_text()
+            self._update_preedit()
+            # Show lookup table if multiple candidates
+            if self._lookup_table.get_number_of_candidates() > 1:
+                self.update_lookup_table(self._lookup_table, True)
+            logger.debug(f'_cycle_candidate: selected "{self._preedit_string}" (index {cursor_pos})')
+
+    def _cycle_candidate_backward(self):
+        """
+        Cycle to the previous conversion candidate.
+
+        Called when Up arrow is pressed in CONVERTING state.
+        """
+        if not self._in_conversion:
+            return
+
+        # Move to previous candidate (wraps around)
+        self._lookup_table.cursor_up()
+
+        # Update preedit with currently selected candidate
+        cursor_pos = self._lookup_table.get_cursor_pos()
+        candidate = self._lookup_table.get_candidate(cursor_pos)
+        if candidate:
+            self._preedit_string = candidate.get_text()
+            self._update_preedit()
+            # Show lookup table if multiple candidates
+            if self._lookup_table.get_number_of_candidates() > 1:
+                self.update_lookup_table(self._lookup_table, True)
+            logger.debug(f'_cycle_candidate_backward: selected "{self._preedit_string}" (index {cursor_pos})')
+
+    def _cancel_conversion(self):
+        """
+        Cancel conversion and revert to the original yomi.
+
+        Called when Escape or Backspace is pressed in CONVERTING state.
+        """
+        if not self._in_conversion:
+            return
+
+        # Restore the original yomi
+        self._preedit_string = self._conversion_yomi
+        self._preedit_hiragana = self._conversion_yomi
+        self._in_conversion = False
+        self._bunsetsu_active = True  # Go back to bunsetsu mode
+        self._lookup_table.clear()
+        self.hide_lookup_table()
+        self._update_preedit()
+        logger.debug(f'_cancel_conversion: reverted to yomi "{self._conversion_yomi}"')
+
+    def _confirm_conversion(self):
+        """
+        Confirm the currently selected conversion candidate.
+
+        Commits the selected candidate and resets henkan state.
+        """
+        if self._in_conversion and self._preedit_string:
+            logger.debug(f'_confirm_conversion: committing "{self._preedit_string}"')
+            self.commit_text(IBus.Text.new_from_string(self._preedit_string))
+
+        # Reset all henkan state
+        self._reset_henkan_state()
+
+    def _commit_with_implicit_conversion(self):
+        """
+        Perform implicit conversion and commit.
+
+        Called when user performs an action that should commit the current state:
+        - In BUNSETSU_ACTIVE: convert and commit first candidate
+        - In CONVERTING: commit the currently selected candidate
+
+        This implements "Option B" behavior where space+key implicitly
+        converts and commits before starting a new action.
+        """
+        if self._in_conversion:
+            # Already in conversion - commit the selected candidate
+            logger.debug(f'_commit_with_implicit_conversion: committing selected "{self._preedit_string}"')
+            self.commit_text(IBus.Text.new_from_string(self._preedit_string))
+        elif self._bunsetsu_active:
+            # In bunsetsu mode - perform conversion and commit first candidate
+            yomi = self._preedit_hiragana if self._preedit_hiragana else self._preedit_string
+            if yomi:
+                candidates = self._henkan_processor.convert(yomi)
+                if candidates:
+                    # Commit first candidate
+                    surface = candidates[0]['surface']
+                    logger.debug(f'_commit_with_implicit_conversion: converting "{yomi}" → "{surface}"')
+                    self.commit_text(IBus.Text.new_from_string(surface))
+                else:
+                    # No candidates - commit yomi as-is
+                    logger.debug(f'_commit_with_implicit_conversion: no candidates, committing yomi "{yomi}"')
+                    self.commit_text(IBus.Text.new_from_string(yomi))
+
+        # Reset henkan state
+        self._reset_henkan_state()
+
+    def _reset_henkan_state(self):
+        """
+        Reset all henkan-related state variables.
+
+        Called after conversion is confirmed or cancelled.
+        """
+        self._bunsetsu_active = False
+        self._in_conversion = False
+        self._conversion_yomi = ''
+        self._pending_commit = ''
+        self._preedit_string = ''
+        self._preedit_hiragana = ''
+        self._preedit_ascii = ''
+        self._lookup_table.clear()
+        self.hide_lookup_table()
+        self._update_preedit()
+        logger.debug('_reset_henkan_state: state cleared')
 
     # =========================================================================
     # HELPER METHODS
