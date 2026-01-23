@@ -230,6 +230,48 @@ class EnginePSKK(IBus.Engine):
         # Request the initial surrounding-text in addition to the "enable" handler.
         self.get_surrounding_text()
 
+    def do_focus_out(self):
+        """
+        Called when input focus leaves the engine.
+
+        Explicitly commit any preedit/candidate before resetting state.
+        This handles both normal preedit and conversion mode with lookup table.
+        """
+        logger.debug(f'do_focus_out: bunsetsu={self._bunsetsu_active}, '
+                    f'converting={self._in_conversion}, preedit="{self._preedit_string}"')
+
+        # Explicitly commit preedit if present
+        # This is needed because IBus may not auto-commit when lookup table is visible
+        if self._preedit_string:
+            logger.debug(f'do_focus_out: committing "{self._preedit_string}"')
+            self.commit_text(IBus.Text.new_from_string(self._preedit_string))
+
+        # Hide lookup table if visible
+        self._lookup_table.clear()
+        self.hide_lookup_table()
+
+        # Clear preedit display
+        self.update_preedit_text_with_mode(
+            IBus.Text.new_from_string(''),
+            0,
+            False,
+            IBus.PreeditFocusMode.CLEAR
+        )
+
+        # Reset henkan state
+        self._bunsetsu_active = False
+        self._in_conversion = False
+        self._conversion_yomi = ''
+        self._pending_commit = ''
+        self._preedit_string = ''
+        self._preedit_hiragana = ''
+        self._preedit_ascii = ''
+
+        # Reset marker state
+        self._marker_state = MarkerState.IDLE
+        self._marker_first_key = None
+        self._marker_keys_held.clear()
+
 
     def _init_props(self):
         '''
@@ -1493,16 +1535,19 @@ class EnginePSKK(IBus.Engine):
                 len(self._preedit_string)
             )
             preedit_text.get_attributes().append(attr)
-            self.update_preedit_text(
+            # Use COMMIT mode so preedit is committed on focus change (e.g., clicking elsewhere)
+            self.update_preedit_text_with_mode(
                 preedit_text,
                 len(self._preedit_string),  # cursor at end
-                True  # visible
+                True,  # visible
+                IBus.PreeditFocusMode.COMMIT
             )
         else:
             # Hide preedit when empty
-            self.update_preedit_text(
+            self.update_preedit_text_with_mode(
                 IBus.Text.new_from_string(''),
                 0,
-                False  # not visible
+                False,  # not visible
+                IBus.PreeditFocusMode.CLEAR
             )
 
