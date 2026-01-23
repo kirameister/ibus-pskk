@@ -192,7 +192,9 @@ class EnginePSKK(IBus.Engine):
         self._previous_text = ''
 
         # This property is for confirming the kanji-kana converted string
-        self._lookup_table = IBus.LookupTable.new(10, 0, True, False)
+        # LookupTable.new(page_size, cursor_pos, cursor_visible, round)
+        # round=True enables wrap-around when cycling candidates
+        self._lookup_table = IBus.LookupTable.new(10, 0, True, True)
         self._lookup_table.set_orientation(IBus.Orientation.VERTICAL)
 
         self._init_props()
@@ -841,6 +843,8 @@ class EnginePSKK(IBus.Engine):
         Check and handle disable_hiragana_key binding.
 
         Switches mode to alphanumeric ('A') when the configured key is pressed.
+        If in CONVERTING state, commits the selected candidate first.
+        If in BUNSETSU_ACTIVE state, commits the preedit as-is.
         """
         binding = self._config.get('disable_hiragana_key', '')
 
@@ -854,6 +858,16 @@ class EnginePSKK(IBus.Engine):
         # On press: check if binding matches
         if self._matches_key_binding(key_name, state, binding):
             logger.debug(f'disable_hiragana_key matched: {binding}')
+
+            # If in CONVERTING state, commit the selected candidate
+            if self._in_conversion:
+                logger.debug('disable_hiragana_key in CONVERTING: committing candidate')
+                self._confirm_conversion()
+            elif self._bunsetsu_active or self._preedit_string:
+                # Commit any preedit as-is (no conversion)
+                logger.debug('disable_hiragana_key with preedit: committing')
+                self._commit_string()
+
             self._mode = 'A'
             self._handled_config_keys.add(key_name)
             return True
