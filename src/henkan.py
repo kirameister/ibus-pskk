@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # henkan.py - Kana to Kanji conversion (変換) processor
 
+import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -16,21 +18,85 @@ class HenkanProcessor:
     The conversion operates on bunsetsu (文節) units - meaningful phrase
     boundaries in Japanese text.
 
-    Future functionality:
-    - Dictionary loading and lookup
-    - Candidate generation and ranking
-    - User dictionary learning
+    Dictionary format (JSON):
+        {
+            "reading": {"candidate1": count1, "candidate2": count2, ...},
+            ...
+        }
+    where count represents the frequency/priority (higher is better).
     """
 
-    def __init__(self):
+    def __init__(self, dictionary_files=None):
         """
         Initialize the HenkanProcessor.
 
-        Dictionary loading will be implemented in a future update.
+        Args:
+            dictionary_files: List of paths to dictionary JSON files.
+                             Files are loaded in order; later files can
+                             add new entries or increase counts for existing ones.
         """
-        self._dictionaries = []  # List of loaded dictionaries
+        # Merged dictionary: {reading: {candidate: count}}
+        self._dictionary = {}
         self._candidates = []    # Current conversion candidates
         self._selected_index = 0 # Currently selected candidate index
+        self._dictionary_count = 0  # Number of successfully loaded dictionaries
+
+        if dictionary_files:
+            self._load_dictionaries(dictionary_files)
+
+    def _load_dictionaries(self, dictionary_files):
+        """
+        Load and merge multiple dictionary files.
+
+        Each dictionary file is a JSON object mapping readings to candidates:
+            {"reading": {"candidate1": count1, "candidate2": count2}}
+
+        When merging, counts are summed for duplicate candidates.
+
+        Args:
+            dictionary_files: List of paths to dictionary JSON files
+        """
+        for file_path in dictionary_files:
+            if not os.path.exists(file_path):
+                logger.warning(f'Dictionary file not found: {file_path}')
+                continue
+
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                if not isinstance(data, dict):
+                    logger.warning(f'Invalid dictionary format (expected dict): {file_path}')
+                    continue
+
+                # Merge into main dictionary
+                entries_added = 0
+                for reading, candidates in data.items():
+                    if not isinstance(candidates, dict):
+                        continue
+
+                    if reading not in self._dictionary:
+                        self._dictionary[reading] = {}
+
+                    for candidate, count in candidates.items():
+                        if not isinstance(count, (int, float)):
+                            count = 1
+                        if candidate in self._dictionary[reading]:
+                            self._dictionary[reading][candidate] += count
+                        else:
+                            self._dictionary[reading][candidate] = count
+                        entries_added += 1
+
+                self._dictionary_count += 1
+                logger.info(f'Loaded dictionary: {file_path} ({entries_added} candidate entries)')
+
+            except json.JSONDecodeError as e:
+                logger.error(f'Failed to parse dictionary JSON: {file_path} - {e}')
+            except Exception as e:
+                logger.error(f'Failed to load dictionary: {file_path} - {e}')
+
+        logger.info(f'HenkanProcessor initialized with {self._dictionary_count} dictionaries, '
+                   f'{len(self._dictionary)} readings')
 
     def convert(self, reading):
         """
@@ -45,12 +111,38 @@ class HenkanProcessor:
                   - 'reading': The original reading (e.g., "へんかん")
                   - 'cost': Conversion cost/priority (lower is better)
 
-                  Returns empty list if no candidates found.
+                  Returns list with original reading if no candidates found.
         """
-        # TODO: Implement dictionary lookup
-        # For now, return the reading as-is (no conversion)
-        logger.debug(f'HenkanProcessor.convert("{reading}") - dictionary lookup not yet implemented')
-        return [{'surface': reading, 'reading': reading, 'cost': 0}]
+        self._candidates = []
+        self._selected_index = 0
+
+        if reading in self._dictionary:
+            candidates_dict = self._dictionary[reading]
+            # Sort by count (descending) - higher count = lower cost = better candidate
+            sorted_candidates = sorted(
+                candidates_dict.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )
+            for surface, count in sorted_candidates:
+                # Cost is inverse of count (higher count = lower cost)
+                cost = 1.0 / (count + 1)
+                self._candidates.append({
+                    'surface': surface,
+                    'reading': reading,
+                    'cost': cost
+                })
+            logger.debug(f'HenkanProcessor.convert("{reading}") → {len(self._candidates)} candidates')
+        else:
+            # No dictionary match - return reading as-is
+            self._candidates.append({
+                'surface': reading,
+                'reading': reading,
+                'cost': 0
+            })
+            logger.debug(f'HenkanProcessor.convert("{reading}") → no match, returning reading')
+
+        return self._candidates
 
     def get_candidates(self):
         """
@@ -118,16 +210,19 @@ class HenkanProcessor:
         self._candidates = []
         self._selected_index = 0
 
-    def load_dictionaries(self, dictionary_paths):
+    def get_dictionary_stats(self):
         """
-        Load dictionaries from the specified paths.
-
-        Args:
-            dictionary_paths: List of paths to dictionary files
+        Get statistics about loaded dictionaries.
 
         Returns:
-            bool: True if at least one dictionary was loaded successfully
+            dict: Dictionary containing:
+                  - 'dictionary_count': Number of loaded dictionary files
+                  - 'reading_count': Total number of unique readings
+                  - 'candidate_count': Total number of candidate entries
         """
-        # TODO: Implement dictionary loading
-        logger.debug(f'HenkanProcessor.load_dictionaries() - not yet implemented')
-        return False
+        candidate_count = sum(len(candidates) for candidates in self._dictionary.values())
+        return {
+            'dictionary_count': self._dictionary_count,
+            'reading_count': len(self._dictionary),
+            'candidate_count': candidate_count
+        }

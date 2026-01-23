@@ -523,5 +523,191 @@ class TestGetKanchokuLayout:
         assert layout is None
 
 
+class TestGetDictionaryFiles:
+    """Test suite for get_dictionary_files() function"""
+
+    @pytest.fixture
+    def temp_dirs(self):
+        """Create temporary directories for testing"""
+        temp_home = tempfile.mkdtemp()
+        temp_data = tempfile.mkdtemp()
+
+        yield {
+            'home': temp_home,
+            'data': temp_data,
+            'config_dir': os.path.join(temp_home, '.config', 'ibus-pskk'),
+            'dict_dir': os.path.join(temp_home, '.config', 'ibus-pskk', 'dictionaries'),
+            'config_file': os.path.join(temp_home, '.config', 'ibus-pskk', 'config.json'),
+            'default_config': os.path.join(temp_data, 'config.json')
+        }
+
+        # Cleanup
+        shutil.rmtree(temp_home, ignore_errors=True)
+        shutil.rmtree(temp_data, ignore_errors=True)
+
+    @pytest.fixture
+    def sample_dictionary(self):
+        """Sample dictionary data"""
+        return {
+            "あい": {"愛": 5, "藍": 2},
+            "かんじ": {"漢字": 10, "感じ": 3}
+        }
+
+    def test_returns_empty_list_when_no_dictionaries(self, temp_dirs):
+        """Test that empty list is returned when no dictionaries exist"""
+        os.makedirs(temp_dirs['config_dir'], exist_ok=True)
+        os.makedirs(temp_dirs['dict_dir'], exist_ok=True)
+
+        config = {"dictionaries": {"system": [], "user": []}}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.get_dictionary_files(config)
+
+        assert result == []
+
+    def test_includes_system_dictionary_when_exists(self, temp_dirs, sample_dictionary):
+        """Test that system_dictionary.json is included when it exists"""
+        os.makedirs(temp_dirs['dict_dir'], exist_ok=True)
+
+        # Create system dictionary
+        system_dict_path = os.path.join(temp_dirs['dict_dir'], 'system_dictionary.json')
+        with open(system_dict_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_dictionary, f)
+
+        config = {"dictionaries": {"system": [], "user": []}}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.get_dictionary_files(config)
+
+        assert len(result) == 1
+        assert result[0] == system_dict_path
+
+    def test_includes_user_dictionaries_from_config(self, temp_dirs, sample_dictionary):
+        """Test that user dictionaries specified in config are included"""
+        os.makedirs(temp_dirs['dict_dir'], exist_ok=True)
+
+        # Create user dictionaries
+        user_dict1_path = os.path.join(temp_dirs['dict_dir'], 'my_dict.json')
+        user_dict2_path = os.path.join(temp_dirs['dict_dir'], 'another_dict.json')
+        with open(user_dict1_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_dictionary, f)
+        with open(user_dict2_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_dictionary, f)
+
+        config = {"dictionaries": {"system": [], "user": ["my_dict.json", "another_dict.json"]}}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.get_dictionary_files(config)
+
+        assert len(result) == 2
+        assert user_dict1_path in result
+        assert user_dict2_path in result
+
+    def test_system_dictionary_comes_first(self, temp_dirs, sample_dictionary):
+        """Test that system dictionary appears before user dictionaries"""
+        os.makedirs(temp_dirs['dict_dir'], exist_ok=True)
+
+        # Create system dictionary
+        system_dict_path = os.path.join(temp_dirs['dict_dir'], 'system_dictionary.json')
+        with open(system_dict_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_dictionary, f)
+
+        # Create user dictionary
+        user_dict_path = os.path.join(temp_dirs['dict_dir'], 'user_dict.json')
+        with open(user_dict_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_dictionary, f)
+
+        config = {"dictionaries": {"system": [], "user": ["user_dict.json"]}}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.get_dictionary_files(config)
+
+        assert len(result) == 2
+        assert result[0] == system_dict_path  # System dictionary first
+        assert result[1] == user_dict_path    # User dictionary second
+
+    def test_skips_nonexistent_user_dictionaries(self, temp_dirs, sample_dictionary):
+        """Test that missing user dictionaries are skipped with a warning"""
+        os.makedirs(temp_dirs['dict_dir'], exist_ok=True)
+
+        # Create only one user dictionary
+        existing_dict_path = os.path.join(temp_dirs['dict_dir'], 'existing.json')
+        with open(existing_dict_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_dictionary, f)
+
+        # Config references both existing and non-existing dictionaries
+        config = {"dictionaries": {"system": [], "user": ["existing.json", "missing.json"]}}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.get_dictionary_files(config)
+
+        # Should only include the existing dictionary
+        assert len(result) == 1
+        assert result[0] == existing_dict_path
+
+    def test_loads_config_automatically_when_not_provided(self, temp_dirs, sample_dictionary):
+        """Test that config is loaded automatically when not provided"""
+        os.makedirs(temp_dirs['dict_dir'], exist_ok=True)
+
+        # Create system dictionary
+        system_dict_path = os.path.join(temp_dirs['dict_dir'], 'system_dictionary.json')
+        with open(system_dict_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_dictionary, f)
+
+        # Create default config
+        default_config = {"dictionaries": {"system": [], "user": []}}
+        os.makedirs(os.path.dirname(temp_dirs['default_config']), exist_ok=True)
+        with open(temp_dirs['default_config'], 'w', encoding='utf-8') as f:
+            json.dump(default_config, f)
+
+        # Create user config
+        with open(temp_dirs['config_file'], 'w', encoding='utf-8') as f:
+            json.dump(default_config, f)
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            with patch('util.get_default_config_path', return_value=temp_dirs['default_config']):
+                # Call without config argument
+                result = util.get_dictionary_files()
+
+        assert len(result) == 1
+        assert result[0] == system_dict_path
+
+    def test_handles_missing_dictionaries_key_in_config(self, temp_dirs, sample_dictionary):
+        """Test graceful handling when dictionaries key is missing from config"""
+        os.makedirs(temp_dirs['dict_dir'], exist_ok=True)
+
+        # Create system dictionary
+        system_dict_path = os.path.join(temp_dirs['dict_dir'], 'system_dictionary.json')
+        with open(system_dict_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_dictionary, f)
+
+        # Config without dictionaries key
+        config = {"layout": "shingeta.json"}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.get_dictionary_files(config)
+
+        # Should still include system dictionary
+        assert len(result) == 1
+        assert result[0] == system_dict_path
+
+    def test_handles_empty_user_list(self, temp_dirs, sample_dictionary):
+        """Test handling of empty user dictionary list"""
+        os.makedirs(temp_dirs['dict_dir'], exist_ok=True)
+
+        # Create system dictionary
+        system_dict_path = os.path.join(temp_dirs['dict_dir'], 'system_dictionary.json')
+        with open(system_dict_path, 'w', encoding='utf-8') as f:
+            json.dump(sample_dictionary, f)
+
+        config = {"dictionaries": {"system": [], "user": []}}
+
+        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            result = util.get_dictionary_files(config)
+
+        assert len(result) == 1
+        assert result[0] == system_dict_path
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -232,6 +232,51 @@ def get_user_dictionaries_dir():
     return os.path.join(get_user_configdir(), 'dictionaries')
 
 
+def get_dictionary_files(config=None):
+    """
+    Obtain the list of JSON dictionary file paths to be used for kana-kanji conversion.
+
+    The returned list contains:
+    1. system_dictionary.json (if it exists in the dictionaries directory)
+    2. User-specified dictionaries from config["dictionaries"]["user"]
+
+    Args:
+        config: Configuration dictionary. If None, will be loaded via get_config_data().
+
+    Returns:
+        list: List of absolute paths to JSON dictionary files that exist.
+              Returns empty list if no dictionaries are found.
+    """
+    dictionary_files = []
+    dict_dir = get_user_dictionaries_dir()
+
+    # Load config if not provided
+    if config is None:
+        config, _ = get_config_data()
+
+    # 1. Check for system_dictionary.json
+    system_dict_path = os.path.join(dict_dir, 'system_dictionary.json')
+    if os.path.exists(system_dict_path):
+        dictionary_files.append(system_dict_path)
+        logger.debug(f'Found system dictionary: {system_dict_path}')
+    else:
+        logger.debug(f'System dictionary not found: {system_dict_path}')
+
+    # 2. Add user-specified dictionaries from config
+    user_dicts = config.get('dictionaries', {}).get('user', [])
+    for user_dict_name in user_dicts:
+        # User dictionary names are relative to the dictionaries directory
+        user_dict_path = os.path.join(dict_dir, user_dict_name)
+        if os.path.exists(user_dict_path):
+            dictionary_files.append(user_dict_path)
+            logger.debug(f'Found user dictionary: {user_dict_path}')
+        else:
+            logger.warning(f'User dictionary specified in config but not found: {user_dict_path}')
+
+    logger.info(f'Dictionary files to use: {len(dictionary_files)} file(s)')
+    return dictionary_files
+
+
 def get_skk_dicts_dir():
     """
     Return the path to the system SKK dictionaries directory.

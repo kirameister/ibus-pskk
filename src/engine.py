@@ -2,6 +2,7 @@ import util
 import settings_panel
 from simultaneous_processor import SimultaneousInputProcessor
 from kanchoku import KanchokuProcessor
+from henkan import HenkanProcessor
 
 from enum import IntEnum
 import json
@@ -201,6 +202,9 @@ class EnginePSKK(IBus.Engine):
         self._simul_processor = SimultaneousInputProcessor(self._layout_data)
         self._kanchoku_layout = self._load_kanchoku_layout()
         self._kanchoku_processor = KanchokuProcessor(self._kanchoku_layout)
+        # Initialize henkan (kana-kanji conversion) processor with dictionaries
+        dictionary_files = util.get_dictionary_files(self._config)
+        self._henkan_processor = HenkanProcessor(dictionary_files)
 
         self.set_mode(self._load_input_mode(self._settings))
         #self.set_mode('あ')
@@ -350,6 +354,9 @@ class EnginePSKK(IBus.Engine):
         self._simul_processor = SimultaneousInputProcessor(self._layout_data)
         self._kanchoku_layout = self._load_kanchoku_layout()
         self._kanchoku_processor = KanchokuProcessor(self._kanchoku_layout)
+        # Reload henkan processor with updated dictionary list
+        dictionary_files = util.get_dictionary_files(self._config)
+        self._henkan_processor = HenkanProcessor(dictionary_files)
 
     def _load_logging_level(self, config):
         '''
