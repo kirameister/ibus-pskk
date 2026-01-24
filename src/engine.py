@@ -103,17 +103,6 @@ KATAKANA_TO_HIRAGANA = str.maketrans(KATAKANA_CHARS, HIRAGANA_CHARS)
 ASCII_TO_FULLWIDTH = str.maketrans(ASCII_HALFWIDTH, ASCII_FULLWIDTH)
 FULLWIDTH_TO_ASCII = str.maketrans(ASCII_FULLWIDTH, ASCII_HALFWIDTH)
 
-# Japanese typing mode segment
-#MODE_FORCED_PREEDIT_POSSIBLE                   = 0x001
-#MODE_IN_FORCED_PREEDIT                         = 0x002
-#MODE_IN_PREEDIT                                = 0x004
-#MODE_IN_KANCHOKU                               = 0x008
-#MODE_JUST_FINISHED_KANCHOKU                    = 0x010
-#MODE_IN_CONVERSION                             = 0x020
-#MODE_IN_FORCED_CONVERSION                      = 0x040
-#SWITCH_FIRST_SHIFT_PRESSED_IN_PREEDIT          = 0x080
-#SWITCH_FIRST_SHIFT_PRESSED_IN_FORCED_PREEDIT   = 0x100
-
 NAME_TO_LOGGING_LEVEL = {
     'DEBUG': logging.DEBUG,
     'INFO': logging.INFO,
@@ -160,7 +149,7 @@ class EnginePSKK(IBus.Engine):
         super().__init__()
         # setting the initial input mode
         self._mode = 'A'  # _mode must be one of _input_mode_names
-        self._mode = 'あ'  # DEBUG I do not like to click extra...
+        #self._mode = 'あ'  # DEBUG I do not like to click extra...
         self._override = True
         # loading the layout
         self._layout_data = None  # raw layout JSON data
