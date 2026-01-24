@@ -135,9 +135,6 @@ class MarkerState(IntEnum):
 # Only the direct input- and Hiragana-mode are supported (and that's intentional).
 INPUT_MODE_NAMES = ('A', 'あ')
 
-CANDIDATE_FOREGROUND_COLOR = 0x000000
-CANDIDATE_BACKGROUND_COLOR = 0xd1eaff
-
 
 class EnginePSKK(IBus.Engine):
     '''
@@ -1509,24 +1506,104 @@ class EnginePSKK(IBus.Engine):
             self._preedit_ascii = ""
             self._update_preedit()
 
+    def _parse_hex_color(self, color_str):
+        """
+        Parse a hex color string to an integer value for IBus attributes.
+
+        Args:
+            color_str: Color string in format "0xRRGGBB" or "RRGGBB"
+
+        Returns:
+            int: Color value as integer, or None if parsing fails
+        """
+        if not color_str:
+            return None
+        try:
+            # Strip "0x" or "0X" prefix if present
+            color_str = color_str.strip()
+            if color_str.lower().startswith('0x'):
+                color_str = color_str[2:]
+            return int(color_str, 16)
+        except (ValueError, AttributeError):
+            logger.warning(f'Failed to parse color value: {color_str}')
+            return None
+
     def _update_preedit(self):
-        """Update the preedit display in the application"""
+        """Update the preedit display in the application with configured colors."""
         if self._preedit_string:
-            # Show preedit with underline
             preedit_text = IBus.Text.new_from_string(self._preedit_string)
             preedit_text.set_attributes(IBus.AttrList())
-            # Add underline attribute for the entire preedit
-            attr = IBus.Attribute.new(
-                IBus.AttrType.UNDERLINE,
-                IBus.AttrUnderline.SINGLE,
-                0,
-                len(self._preedit_string)
-            )
-            preedit_text.get_attributes().append(attr)
+            preedit_len = len(self._preedit_string)
+
+            # Check if we should use IBus HINT colors (theme-based) or explicit colors
+            use_ibus_hint = self._config.get('use_ibus_hint_colors', False)
+
+            if use_ibus_hint:
+                # Use IBus AttrType.HINT for theme-based styling (requires IBus >= 1.5.33)
+                # AttrPreedit.WHOLE (1) indicates the entire preedit text
+                try:
+                    attr = IBus.Attribute.new(
+                        IBus.AttrType.HINT,
+                        1,  # IBus.AttrPreedit.WHOLE
+                        0,
+                        preedit_len
+                    )
+                    preedit_text.get_attributes().append(attr)
+                    logger.debug('Using IBus HINT styling for preedit')
+                except Exception as e:
+                    logger.warning(f'Failed to apply HINT attribute (IBus >= 1.5.33 required): {e}')
+                    # Fall back to underline
+                    attr = IBus.Attribute.new(
+                        IBus.AttrType.UNDERLINE,
+                        IBus.AttrUnderline.SINGLE,
+                        0,
+                        preedit_len
+                    )
+                    preedit_text.get_attributes().append(attr)
+            else:
+                # Use explicit foreground and background colors from config
+                fg_color = self._parse_hex_color(
+                    self._config.get('preedit_foreground_color', '0x000000')
+                )
+                bg_color = self._parse_hex_color(
+                    self._config.get('preedit_background_color', '0xd1eaff')
+                )
+
+                # Add foreground color attribute
+                if fg_color is not None:
+                    fg_attr = IBus.Attribute.new(
+                        IBus.AttrType.FOREGROUND,
+                        fg_color,
+                        0,
+                        preedit_len
+                    )
+                    preedit_text.get_attributes().append(fg_attr)
+
+                # Add background color attribute
+                if bg_color is not None:
+                    bg_attr = IBus.Attribute.new(
+                        IBus.AttrType.BACKGROUND,
+                        bg_color,
+                        0,
+                        preedit_len
+                    )
+                    preedit_text.get_attributes().append(bg_attr)
+
+                # Also add underline for better visibility
+                underline_attr = IBus.Attribute.new(
+                    IBus.AttrType.UNDERLINE,
+                    IBus.AttrUnderline.SINGLE,
+                    0,
+                    preedit_len
+                )
+                preedit_text.get_attributes().append(underline_attr)
+
+                logger.debug(f'Using explicit preedit colors: fg=0x{fg_color:06x}, bg=0x{bg_color:06x}')
+
             # Use COMMIT mode so preedit is committed on focus change (e.g., clicking elsewhere)
             self.update_preedit_text_with_mode(
                 preedit_text,
-                len(self._preedit_string),  # cursor at end
+                preedit_len,  # cursor at end
                 True,  # visible
                 IBus.PreeditFocusMode.COMMIT
             )
