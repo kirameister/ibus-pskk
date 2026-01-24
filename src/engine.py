@@ -27,19 +27,19 @@ MISSING_KANCHOKU_KANJI = '無'
 
 # modifier mask-bit segment
 STATUS_SPACE        = 0x001
-STATUS_SHIFT_L      = 0x002 # this value is currently not meant to be used directly
-STATUS_SHIFT_R      = 0x004 # this value is currently not meant to be used directly
-STATUS_CONTROL_L    = 0x008
-STATUS_CONTROL_R    = 0x010
-STATUS_ALT_L        = 0x020
-STATUS_ALT_R        = 0x040
-STATUS_SUPER_L      = 0x080
-STATUS_SUPER_R      = 0x100
-STATUS_SHIFTS       = STATUS_SHIFT_L | STATUS_SHIFT_R
-STATUS_CONTROLS     = STATUS_CONTROL_L | STATUS_CONTROL_R
-STATUS_ALTS         = STATUS_ALT_L | STATUS_ALT_R
-STATUS_SUPERS       = STATUS_SUPER_L | STATUS_SUPER_R
-STATUS_MODIFIER     = STATUS_SHIFTS  | STATUS_CONTROLS | STATUS_ALTS | STATUS_SPACE | STATUS_SUPERS
+#STATUS_SHIFT_L      = 0x002 # this value is currently not meant to be used directly
+#STATUS_SHIFT_R      = 0x004 # this value is currently not meant to be used directly
+#STATUS_CONTROL_L    = 0x008
+#STATUS_CONTROL_R    = 0x010
+#STATUS_ALT_L        = 0x020
+#STATUS_ALT_R        = 0x040
+#STATUS_SUPER_L      = 0x080
+#STATUS_SUPER_R      = 0x100
+#STATUS_SHIFTS       = STATUS_SHIFT_L | STATUS_SHIFT_R
+#STATUS_CONTROLS     = STATUS_CONTROL_L | STATUS_CONTROL_R
+#STATUS_ALTS         = STATUS_ALT_L | STATUS_ALT_R
+#STATUS_SUPERS       = STATUS_SUPER_L | STATUS_SUPER_R
+#STATUS_MODIFIER     = STATUS_SHIFTS  | STATUS_CONTROLS | STATUS_ALTS | STATUS_SPACE | STATUS_SUPERS
 
 # =============================================================================
 # CHARACTER CONVERSION TABLES
