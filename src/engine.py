@@ -13,7 +13,7 @@ import queue
 import gi
 gi.require_version('IBus', '1.0')
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gio, Gtk, IBus, GLib
+from gi.repository import Gtk, IBus, GLib
 # http://lazka.github.io/pgi-docs/IBus-1.0/index.html?fbclid=IwY2xjawG9hapleHRuA2FlbQIxMAABHXaZwlJVVZEl9rr2SWsvIy2x85xW-XJuu32OZYxQ3gxF-E__9kWOUqGNzA_aem_2zw0hES6WqJcXPds_9CEdA
 # http://lazka.github.io/pgi-docs/Gtk-4.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHVsKSY24bv9C75Mweq54yhLsePdGA25YfLnwMwCx7vEq03oV61qn_qEntg_aem_3k1P3ltIMb17cBH0fdPr4w
 # http://lazka.github.io/pgi-docs/GLib-2.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHXaZwlJVVZEl9rr2SWsvIy2x85xW-XJuu32OZYxQ3gxF-E__9kWOUqGNzA_aem_2zw0hES6WqJcXPds_9CEdA
@@ -186,10 +186,6 @@ class EnginePSKK(IBus.Engine):
         self._init_props()
         #self.register_properties(self._prop_list)
 
-        self._settings = Gio.Settings.new('org.freedesktop.ibus.engine.pskk')
-        self._settings.connect('changed', self._config_value_changed_cb)
-        logger.debug(f'Engine init -- settings: {self._settings}')
-
         # load configs
         self._load_configs()
         self._layout_data = util.get_layout_data(self._config)
@@ -200,8 +196,8 @@ class EnginePSKK(IBus.Engine):
         dictionary_files = util.get_dictionary_files(self._config)
         self._henkan_processor = HenkanProcessor(dictionary_files)
 
-        self.set_mode(self._load_input_mode(self._settings))
-        #self.set_mode('あ')
+        # Input mode defaults to 'A' (set in self._mode above)
+        # For debugging, uncomment: self.set_mode('あ')
 
         self.connect('set-cursor-location', self.set_cursor_location_cb)
 
@@ -409,20 +405,6 @@ class EnginePSKK(IBus.Engine):
         logger.info(f'logging_level: {level}')
         logging.getLogger().setLevel(NAME_TO_LOGGING_LEVEL[level])
         return level
-
-    def _config_value_changed_cb(self, settings, key):
-        logger.debug(f'config_value_changed("{key}")')
-        if key == 'mode':
-            self.set_mode(self._load_input_mode(settings), True)
-
-    def _load_input_mode(self, settings):
-        # FIXME this should be coming from the config file, not settings...
-        mode = settings.get_string('mode')
-        if mode not in INPUT_MODE_NAMES:
-            mode = 'A'
-            settings.reset('mode')
-        logger.debug(f'_load_input_mode(); mode = {mode}')
-        return mode
 
     def set_mode(self, mode, override=False):
         '''
