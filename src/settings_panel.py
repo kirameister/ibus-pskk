@@ -177,6 +177,116 @@ class SettingsPanel(Gtk.Window):
         else:
             return None  # Cancel - None means no change
 
+    def _check_ibus_hint_support(self):
+        """Check if IBus version supports AttrPreedit HINT (>= 1.5.33)"""
+        try:
+            gi.require_version('IBus', '1.0')
+            from gi.repository import IBus
+            version = (IBus.MAJOR_VERSION, IBus.MINOR_VERSION, IBus.MICRO_VERSION)
+            return version >= (1, 5, 33)
+        except Exception:
+            return False
+
+    def on_use_ibus_hint_toggled(self, checkbox):
+        """Handle toggle of 'Use IBus theme colors' checkbox"""
+        use_hint = checkbox.get_active()
+
+        # Enable/disable color entry fields based on checkbox state
+        self.preedit_fg_entry.set_sensitive(not use_hint)
+        self.preedit_bg_entry.set_sensitive(not use_hint)
+
+        # Visual feedback - gray out the labels too
+        if use_hint:
+            self.preedit_fg_entry.set_opacity(0.5)
+            self.preedit_bg_entry.set_opacity(0.5)
+        else:
+            self.preedit_fg_entry.set_opacity(1.0)
+            self.preedit_bg_entry.set_opacity(1.0)
+
+    def on_color_entry_changed(self, entry):
+        """Validate color entry and update preview"""
+        text = entry.get_text().strip().lower()
+        # Remove any leading '0x' or '#' if present
+        if text.startswith('0x'):
+            text = text[2:]
+        if text.startswith('#'):
+            text = text[1:]
+
+        # Validate: must be exactly 6 hex characters
+        is_valid = len(text) == 6 and all(c in '0123456789abcdef' for c in text)
+
+        # Use CSS styling instead of deprecated override_background_color
+        style_context = entry.get_style_context()
+        if is_valid or not text:
+            # Valid color or empty - remove error class
+            style_context.remove_class("error")
+        else:
+            # Invalid but not empty - add error class
+            style_context.add_class("error")
+
+        # Update the color preview
+        if entry == self.preedit_fg_entry:
+            self.preedit_fg_preview.queue_draw()
+        elif entry == self.preedit_bg_entry:
+            self.preedit_bg_preview.queue_draw()
+
+    def on_color_preview_draw(self, widget, cr, color_type):
+        """Draw color preview square"""
+        if color_type == "fg":
+            entry = self.preedit_fg_entry
+        else:
+            entry = self.preedit_bg_entry
+
+        text = entry.get_text().strip().lower()
+        # Remove any leading '0x' or '#' if present
+        if text.startswith('0x'):
+            text = text[2:]
+        if text.startswith('#'):
+            text = text[1:]
+
+        # Parse color
+        try:
+            if len(text) == 6 and all(c in '0123456789abcdef' for c in text):
+                r = int(text[0:2], 16) / 255.0
+                g = int(text[2:4], 16) / 255.0
+                b = int(text[4:6], 16) / 255.0
+            else:
+                # Invalid - show gray
+                r, g, b = 0.5, 0.5, 0.5
+        except ValueError:
+            r, g, b = 0.5, 0.5, 0.5
+
+        # Draw color square with border
+        width = widget.get_allocated_width()
+        height = widget.get_allocated_height()
+
+        # Fill with color
+        cr.set_source_rgb(r, g, b)
+        cr.rectangle(0, 0, width, height)
+        cr.fill()
+
+        # Draw border
+        cr.set_source_rgb(0.3, 0.3, 0.3)
+        cr.set_line_width(1)
+        cr.rectangle(0.5, 0.5, width - 1, height - 1)
+        cr.stroke()
+
+        return False
+
+    def get_validated_color(self, entry, default="000000"):
+        """Get validated hex color from entry, or return default"""
+        text = entry.get_text().strip().lower()
+        # Remove any leading '0x' or '#' if present
+        if text.startswith('0x'):
+            text = text[2:]
+        if text.startswith('#'):
+            text = text[1:]
+
+        # Validate: must be exactly 6 hex characters
+        if len(text) == 6 and all(c in '0123456789abcdef' for c in text):
+            return text
+        return default
+
     def on_key_capture(self, widget, event):
         """Capture key press"""
         # Get key name
@@ -250,6 +360,19 @@ class SettingsPanel(Gtk.Window):
 
     def create_ui(self):
         """Create the user interface"""
+        # Apply CSS for entry validation styling
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+            entry.error {
+                background-color: #ffcccc;
+            }
+        """)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
         # Main container
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.add(main_box)
@@ -336,10 +459,10 @@ class SettingsPanel(Gtk.Window):
         ui_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         ui_box.set_border_width(10)
         ui_frame.add(ui_box)
-        
+
         self.show_annotations_check = Gtk.CheckButton(label="Show candidate annotations (frequency, source)")
         ui_box.pack_start(self.show_annotations_check, False, False, 0)
-        
+
         page_size_box = Gtk.Box(spacing=6)
         page_size_box.pack_start(Gtk.Label(label="Candidates per page:"), False, False, 0)
         self.page_size_spin = Gtk.SpinButton()
@@ -347,7 +470,73 @@ class SettingsPanel(Gtk.Window):
         self.page_size_spin.set_increments(1, 1)
         page_size_box.pack_start(self.page_size_spin, False, False, 0)
         ui_box.pack_start(page_size_box, False, False, 0)
-        
+
+        # Preedit color settings
+        color_label_size_group = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+
+        # Preedit foreground color
+        fg_color_box = Gtk.Box(spacing=6)
+        fg_color_label = Gtk.Label(label="Preedit foreground color:")
+        fg_color_label.set_xalign(0)
+        color_label_size_group.add_widget(fg_color_label)
+        fg_color_box.pack_start(fg_color_label, False, False, 0)
+        self.preedit_fg_entry = Gtk.Entry()
+        self.preedit_fg_entry.set_placeholder_text("e.g., 000000")
+        self.preedit_fg_entry.set_max_length(6)
+        self.preedit_fg_entry.set_width_chars(10)
+        self.preedit_fg_entry.connect("changed", self.on_color_entry_changed)
+        fg_color_box.pack_start(self.preedit_fg_entry, False, False, 0)
+        self.preedit_fg_preview = Gtk.DrawingArea()
+        self.preedit_fg_preview.set_size_request(24, 24)
+        self.preedit_fg_preview.connect("draw", self.on_color_preview_draw, "fg")
+        fg_color_box.pack_start(self.preedit_fg_preview, False, False, 0)
+        ui_box.pack_start(fg_color_box, False, False, 0)
+
+        # Preedit background color
+        bg_color_box = Gtk.Box(spacing=6)
+        bg_color_label = Gtk.Label(label="Preedit background color:")
+        bg_color_label.set_xalign(0)
+        color_label_size_group.add_widget(bg_color_label)
+        bg_color_box.pack_start(bg_color_label, False, False, 0)
+        self.preedit_bg_entry = Gtk.Entry()
+        self.preedit_bg_entry.set_placeholder_text("e.g., d1eaff")
+        self.preedit_bg_entry.set_max_length(6)
+        self.preedit_bg_entry.set_width_chars(10)
+        self.preedit_bg_entry.connect("changed", self.on_color_entry_changed)
+        bg_color_box.pack_start(self.preedit_bg_entry, False, False, 0)
+        self.preedit_bg_preview = Gtk.DrawingArea()
+        self.preedit_bg_preview.set_size_request(24, 24)
+        self.preedit_bg_preview.connect("draw", self.on_color_preview_draw, "bg")
+        bg_color_box.pack_start(self.preedit_bg_preview, False, False, 0)
+        ui_box.pack_start(bg_color_box, False, False, 0)
+
+        # Color format hint
+        color_hint = Gtk.Label()
+        color_hint.set_markup("<small>Format: 6-digit hex (e.g., ff0000 for red, 00ff00 for green)</small>")
+        color_hint.set_xalign(0)
+        ui_box.pack_start(color_hint, False, False, 0)
+
+        # Use IBus HINT colors checkbox
+        self.use_ibus_hint_check = Gtk.CheckButton(
+            label="Use IBus theme colors (let desktop theme decide preedit appearance)"
+        )
+        self.use_ibus_hint_check.connect("toggled", self.on_use_ibus_hint_toggled)
+
+        # Check IBus version for HINT support (requires >= 1.5.33)
+        ibus_supports_hint = self._check_ibus_hint_support()
+        if ibus_supports_hint:
+            self.use_ibus_hint_check.set_tooltip_text(
+                "When enabled, preedit colors are determined by your desktop theme/IBus panel "
+                "instead of the custom colors above."
+            )
+        else:
+            self.use_ibus_hint_check.set_sensitive(False)
+            self.use_ibus_hint_check.set_tooltip_text(
+                "Requires IBus 1.5.33 or newer. Your IBus version does not support this feature."
+            )
+
+        ui_box.pack_start(self.use_ibus_hint_check, False, False, 0)
+
         box.pack_start(ui_frame, False, False, 0)
         
         return box
@@ -814,11 +1003,30 @@ class SettingsPanel(Gtk.Window):
         self.show_annotations_check.set_active(ui.get("show_annotations", True))
         self.page_size_spin.set_value(ui.get("candidate_window_size", 9))
 
+        # Load preedit colors
+        default_fg = default_config.get("preedit_foreground_color", "0x000000")
+        default_bg = default_config.get("preedit_background_color", "0xd1eaff")
+        fg_color = self.config.get("preedit_foreground_color", default_fg)
+        bg_color = self.config.get("preedit_background_color", default_bg)
+
+        # Strip '0x' prefix if present for display
+        if isinstance(fg_color, str) and fg_color.startswith("0x"):
+            fg_color = fg_color[2:]
+        if isinstance(bg_color, str) and bg_color.startswith("0x"):
+            bg_color = bg_color[2:]
+
+        self.preedit_fg_entry.set_text(fg_color)
+        self.preedit_bg_entry.set_text(bg_color)
+
+        # Load use_ibus_hint_colors setting
+        use_hint = self.config.get("use_ibus_hint_colors", False)
+        if self._check_ibus_hint_support():
+            self.use_ibus_hint_check.set_active(use_hint)
+            # Trigger the toggle handler to update field states
+            self.on_use_ibus_hint_toggled(self.use_ibus_hint_check)
+
         # Input tab
-        sands = self.config.get("sands") or {}
-        if not isinstance(sands, dict):
-            sands = {}
-        self.sands_enabled_check.set_active(sands.get("enabled", True))
+        self.sands_enabled_check.set_active(self.config.get("enable_sands", True))
 
         fp = self.config.get("forced_preedit_trigger_entry") or {}
         if not isinstance(fp, dict):
@@ -826,16 +1034,10 @@ class SettingsPanel(Gtk.Window):
         self.forced_preedit_enabled_check.set_active(fp.get("enabled", True))
         self.forced_preedit_trigger_entry.set_text(fp.get("trigger_key", "f"))
 
-        murenso = self.config.get("murenso") or {}
-        if not isinstance(murenso, dict):
-            murenso = {}
-        self.murenso_enabled_check.set_active(murenso.get("enabled", True))
+        self.murenso_enabled_check.set_active(self.config.get("enable_murenso", True))
 
         # Conversion tab
-        learning = self.config.get("learning") or {}
-        if not isinstance(learning, dict):
-            learning = {}
-        self.learning_enabled_check.set_active(learning.get("enabled", True))
+        self.learning_enabled_check.set_active(self.config.get("enable_learning", True))
 
         conv_keys = self.config.get("conversion_keys") or {}
         if not isinstance(conv_keys, dict):
@@ -950,21 +1152,22 @@ class SettingsPanel(Gtk.Window):
             "candidate_window_size": int(self.page_size_spin.get_value())
         }
 
+        # Save preedit colors (with 0x prefix)
+        fg_color = self.get_validated_color(self.preedit_fg_entry, "000000")
+        bg_color = self.get_validated_color(self.preedit_bg_entry, "d1eaff")
+        self.config["preedit_foreground_color"] = f"0x{fg_color}"
+        self.config["preedit_background_color"] = f"0x{bg_color}"
+
+        # Save use_ibus_hint_colors setting
+        self.config["use_ibus_hint_colors"] = self.use_ibus_hint_check.get_active()
+
         # Input tab
-        self.config["sands"] = {
-            "enabled": self.sands_enabled_check.get_active()
-        }
-
+        self.config["enable_sands"] = self.sands_enabled_check.get_active()
         self.config["forced_preedit_trigger_key"] = self.forced_preedit_trigger_entry.get_text()
-
-        self.config["murenso"] = {
-            "enabled": self.murenso_enabled_check.get_active()
-        }
+        self.config["enable_murenso"] = self.murenso_enabled_check.get_active()
 
         # Conversion tab
-        self.config["learning"] = {
-            "enabled": self.learning_enabled_check.get_active()
-        }
+        self.config["enable_learning"] = self.learning_enabled_check.get_active()
 
         self.config["conversion_keys"] = {
             "to_katakana": self.to_katakana_value or "",

@@ -21,6 +21,9 @@
     "kanchoku_layout": "aki_code.json",
     "kanchoku_layout_": "Name of the JSON file containing the kanchoku (stroke) layout. It will be searched under ${config_dir} and then '/opt/ibus-pskk/layout/murensou'. When specified file is not found, aki_code.json under '/opt/ibus-pskk/layout/murensou' will be used as default",
     "kanchoku_layout_ja": "漢直用のレイアウトが記述されている JSON ファイルの名前を指定します。ファイルは ${config_dir}、そして '/opt/ibus-pskk/layout/murensou' 以下に存在するかチェックされ、見つからない場合はデフォルト値として '/opt/ibus-pskk/layout/murensou' 以下にある aki_code.json が使用されます。",
+    "preedit_foreground_color": "0x000000",
+    "preedit_background_color": "0xd1eaff",
+    "use_ibus_hint_colors": false,
 
     "dictionaries": {
         "system": [],
@@ -30,13 +33,9 @@
     "dictionaries_ja": "ユーザー定義された辞書のリスト。辞書ファイルは ${config_dir} 以下に格納され、リスト要素の順序に従って検索が行われます。",
 
     "sands_": "Setting to determine whether or not the SandS is enabled",
-    "sands": {
-        "enabled": true
-    },
+    "enable_sands": true,
     "learning_": "Setting to determine whether or not the conversion order is learned",
-    "learning": {
-        "enabled": true
-    },
+    "enable_learning": true,
     "conversion_keys_": "Each key-combo to convert the preedit string into specified character representation",
     "conversion_keys": {
         "to_katakana": "Ctrl+K",
@@ -45,9 +44,7 @@
         "to_zenkaku": "Ctrl+Shift+L"
     },
     "murenso_": "Setting to determine whether or not the murenso typing is enabled",
-    "murenso": {
-        "enabled": true
-    },
+    "enable_murenso": true,
 
     "kanchoku_bunsetsu_marker": "space",
     "kanchoku_bunsetsu_marker_": "Key used for typing kanchoku (漢直) strokes while held, and marking the start of bunsetsu (文節) when tapped.",

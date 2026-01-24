@@ -276,7 +276,6 @@ class EnginePSKK(IBus.Engine):
             key='InputMode',
             prop_type=IBus.PropType.MENU,
             symbol=IBus.Text.new_from_string(self._mode),
-            #label=IBus.Text.new_from_string("Input mode (" + self._mode + ")"),
             label=IBus.Text.new_from_string(f"Input mode ({self._mode})"),
             icon=None,
             tooltip=None,
