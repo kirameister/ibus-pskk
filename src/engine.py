@@ -650,6 +650,10 @@ class EnginePSKK(IBus.Engine):
                 elif self._preedit_string:
                     logger.debug('Enter pressed with preedit: committing')
                     self._commit_string()
+                    # Exit forced preedit mode if active (Action 2: Enter before lookup table)
+                    if self._in_forced_preedit:
+                        logger.debug('Exiting forced preedit mode')
+                        self._in_forced_preedit = False
                     return True
                 return False  # Pass through if no preedit
 
@@ -706,8 +710,9 @@ class EnginePSKK(IBus.Engine):
             logger.debug(f'Char input in CONVERTING: confirming and adding "{chr(keyval)}"')
             # Commit the selected candidate
             self.commit_text(IBus.Text.new_from_string(self._preedit_string))
-            # Reset state but keep bunsetsu mode if it was active
+            # Reset state - new char confirms conversion and exits forced preedit
             self._in_conversion = False
+            self._in_forced_preedit = False  # Exit forced preedit mode (Action 1)
             self._conversion_yomi = ''
             self._lookup_table.clear()
             self.hide_lookup_table()
@@ -1054,10 +1059,10 @@ class EnginePSKK(IBus.Engine):
                 self._preedit_before_marker = self._preedit_string
                 # Note: Keep _in_conversion = True so tap can cycle candidates
                 logger.debug(f'Marker pressed in CONVERTING: saved candidate "{self._pending_commit}"')
-            elif self._bunsetsu_active:
-                # BUNSETSU_ACTIVE: save current yomi for potential implicit conversion
+            elif self._bunsetsu_active or self._in_forced_preedit:
+                # BUNSETSU_ACTIVE or FORCED_PREEDIT: save current yomi for potential implicit conversion
                 self._preedit_before_marker = self._preedit_string
-                logger.debug(f'Marker pressed in BUNSETSU_ACTIVE: saved yomi "{self._preedit_before_marker}"')
+                logger.debug(f'Marker pressed in BUNSETSU/FORCED_PREEDIT: saved yomi "{self._preedit_before_marker}"')
             else:
                 # IDLE state: commit any existing preedit before starting marker sequence
                 self._commit_string()
@@ -1081,9 +1086,9 @@ class EnginePSKK(IBus.Engine):
                 logger.debug('Space tap in CONVERTING: cycling candidate')
                 self._pending_commit = ''  # Clear - it was only needed for space+key
                 self._cycle_candidate()
-            elif self._bunsetsu_active:
-                # BUNSETSU_ACTIVE state: trigger conversion
-                logger.debug('Space tap in BUNSETSU_ACTIVE: triggering conversion')
+            elif self._bunsetsu_active or self._in_forced_preedit:
+                # BUNSETSU_ACTIVE or FORCED_PREEDIT state: trigger conversion
+                logger.debug('Space tap in BUNSETSU/FORCED_PREEDIT: triggering conversion')
                 self._trigger_conversion()
             else:
                 # IDLE state: commit preedit + output space
@@ -1129,8 +1134,8 @@ class EnginePSKK(IBus.Engine):
             logger.debug(f'Committing pending candidate: "{self._pending_commit}"')
             self.commit_text(IBus.Text.new_from_string(self._pending_commit))
             self._pending_commit = ''
-        elif self._bunsetsu_active:
-            # In BUNSETSU_ACTIVE: perform implicit conversion on the saved yomi
+        elif self._bunsetsu_active or self._in_forced_preedit:
+            # In BUNSETSU_ACTIVE or FORCED_PREEDIT: perform implicit conversion on the saved yomi
             yomi = self._preedit_before_marker
             if yomi:
                 candidates = self._henkan_processor.convert(yomi)
@@ -1145,6 +1150,7 @@ class EnginePSKK(IBus.Engine):
         # Reset henkan state but preserve the new bunsetsu content
         self._bunsetsu_active = False
         self._in_conversion = False
+        self._in_forced_preedit = False  # Exit forced preedit when starting new bunsetsu
         self._conversion_yomi = ''
         self._lookup_table.clear()
         self.hide_lookup_table()
@@ -1422,19 +1428,28 @@ class EnginePSKK(IBus.Engine):
         Cancel conversion and revert to the original yomi.
 
         Called when Escape or Backspace is pressed in CONVERTING state.
+
+        Behavior differs based on mode:
+        - Normal bunsetsu: Revert to yomi and stay in bunsetsu mode for editing
+        - Forced preedit: Exit entirely (Escape cancels forced preedit completely)
         """
         if not self._in_conversion:
             return
 
-        # Restore the original yomi
-        self._preedit_string = self._conversion_yomi
-        self._preedit_hiragana = self._conversion_yomi
-        self._in_conversion = False
-        self._bunsetsu_active = True  # Go back to bunsetsu mode
-        self._lookup_table.clear()
-        self.hide_lookup_table()
-        self._update_preedit()
-        logger.debug(f'_cancel_conversion: reverted to yomi "{self._conversion_yomi}"')
+        if self._in_forced_preedit:
+            # In forced preedit mode: Escape exits entirely (per user spec)
+            logger.debug('_cancel_conversion: exiting forced preedit mode entirely')
+            self._reset_henkan_state()
+        else:
+            # Normal bunsetsu: revert to yomi and stay in bunsetsu mode
+            self._preedit_string = self._conversion_yomi
+            self._preedit_hiragana = self._conversion_yomi
+            self._in_conversion = False
+            self._bunsetsu_active = True  # Go back to bunsetsu mode
+            self._lookup_table.clear()
+            self.hide_lookup_table()
+            self._update_preedit()
+            logger.debug(f'_cancel_conversion: reverted to yomi "{self._conversion_yomi}"')
 
     def _confirm_conversion(self):
         """
@@ -1490,6 +1505,7 @@ class EnginePSKK(IBus.Engine):
         """
         self._bunsetsu_active = False
         self._in_conversion = False
+        self._in_forced_preedit = False
         self._conversion_yomi = ''
         self._pending_commit = ''
         self._preedit_string = ''
