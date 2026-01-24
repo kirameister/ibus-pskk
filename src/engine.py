@@ -1233,6 +1233,14 @@ class EnginePSKK(IBus.Engine):
         elif self._marker_state == MarkerState.FIRST_RELEASED:
             # Decision point: waiting for key2 (kanchoku) or marker release (bunsetsu)
             if is_pressed:
+                # Check if kanchoku is allowed in current state
+                # Kanchoku is BLOCKED in normal bunsetsu mode (but allowed in forced preedit)
+                if self._bunsetsu_active and not self._in_forced_preedit:
+                    # In normal bunsetsu mode - kanchoku is NOT allowed
+                    # Ignore this key press and stay in FIRST_RELEASED state
+                    logger.debug(f'Kanchoku blocked in bunsetsu mode, ignoring key: "{key_char}"')
+                    return True
+
                 # Second key pressed - this is KANCHOKU (Case A)!
                 logger.debug(f'Second key pressed: "{key_char}" → KANCHOKU')
                 # Undo the tentative simultaneous output
