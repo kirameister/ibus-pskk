@@ -132,9 +132,6 @@ class MarkerState(IntEnum):
                                 #   key2↓ → kanchoku, marker↑ → bunsetsu/forced-preedit
     KANCHOKU_SECOND_PRESSED = 4 # Second key pressed (kanchoku confirmed)
 
-# Only the direct input- and Hiragana-mode are supported (and that's intentional).
-INPUT_MODE_NAMES = ('A', 'あ')
-
 
 class EnginePSKK(IBus.Engine):
     '''
