@@ -730,26 +730,36 @@ class SettingsPanel(Gtk.Window):
         user_box.set_border_width(10)
         user_frame.add(user_box)
 
-        # User dictionary list
+        # Info label
+        user_info_label = Gtk.Label()
+        user_info_label.set_markup(
+            "<small>Place SKK-format .txt files in <b>~/.config/ibus-pskk/dictionaries/</b>\n"
+            "Then click 'Convert' to generate user_dictionary.json</small>"
+        )
+        user_info_label.set_xalign(0)
+        user_box.pack_start(user_info_label, False, False, 0)
+
+        # User dictionary list (shows .txt files in dictionaries/)
         user_scroll = Gtk.ScrolledWindow()
         user_scroll.set_min_content_height(100)
         self.user_dict_store = Gtk.ListStore(str)
         self.user_dict_view = Gtk.TreeView(model=self.user_dict_store)
         user_renderer = Gtk.CellRendererText()
-        user_column = Gtk.TreeViewColumn("Dictionary Path/Pattern", user_renderer, text=0)
+        user_column = Gtk.TreeViewColumn("SKK Source Files (.txt)", user_renderer, text=0)
         self.user_dict_view.append_column(user_column)
         user_scroll.add(self.user_dict_view)
         user_box.pack_start(user_scroll, True, True, 0)
 
         # User dict buttons
         user_btn_box = Gtk.Box(spacing=6)
-        add_user_btn = Gtk.Button(label="Add Dictionary/Pattern")
-        add_user_btn.connect("clicked", self.on_add_user_dict)
-        user_btn_box.pack_start(add_user_btn, False, False, 0)
 
-        remove_user_btn = Gtk.Button(label="Remove Selected")
-        remove_user_btn.connect("clicked", self.on_remove_user_dict)
-        user_btn_box.pack_start(remove_user_btn, False, False, 0)
+        refresh_user_btn = Gtk.Button(label="Refresh List")
+        refresh_user_btn.connect("clicked", self.on_refresh_user_dicts)
+        user_btn_box.pack_start(refresh_user_btn, False, False, 0)
+
+        convert_user_btn = Gtk.Button(label="Convert")
+        convert_user_btn.connect("clicked", self.on_convert_user_dicts)
+        user_btn_box.pack_start(convert_user_btn, False, False, 0)
 
         user_box.pack_start(user_btn_box, False, False, 0)
 
@@ -1084,9 +1094,12 @@ class SettingsPanel(Gtk.Window):
                 enabled = full_path in enabled_system_paths
                 self.sys_dict_store.append([enabled, rel_path, full_path])
 
-        # Load user dictionaries (these remain as path/pattern strings)
-        for path in dictionaries.get("user", []) or []:
-            self.user_dict_store.append([path])
+        # Load user dictionaries by scanning the dictionaries/ directory for .txt files
+        user_dict_dir = util.get_user_dictionaries_dir()
+        if os.path.exists(user_dict_dir):
+            for filename in sorted(os.listdir(user_dict_dir)):
+                if filename.endswith('.txt'):
+                    self.user_dict_store.append([filename])
 
         # Murenso tab - populate kanchoku layout combo
         self.kanchoku_layout_combo.remove_all()
@@ -1121,11 +1134,11 @@ class SettingsPanel(Gtk.Window):
 
             # Build display label with location info
             if in_user and in_system:
-                display_label = f"{filename} (User: $HOME/.config/, System: /opt/)"
+                display_label = f"{filename} (User, System)"
             elif in_user:
-                display_label = f"{filename} (User: $HOME/.config/)"
+                display_label = f"{filename} (User)"
             else:
-                display_label = f"{filename} (System: /opt/)"
+                display_label = f"{filename} (System)"
 
             # Use filename as ID for selection
             self.kanchoku_layout_combo.append(filename, display_label)
@@ -1178,10 +1191,11 @@ class SettingsPanel(Gtk.Window):
 
         # Dictionaries tab
         # For system dictionaries, save only the full paths of enabled entries
+        # Note: User dictionaries are no longer saved to config - they're discovered
+        # by scanning ~/.config/ibus-pskk/dictionaries/ for .txt files
         enabled_system_dicts = [row[2] for row in self.sys_dict_store if row[0]]
         self.config["dictionaries"] = {
-            "system": enabled_system_dicts,
-            "user": [row[0] for row in self.user_dict_store]
+            "system": enabled_system_dicts
         }
 
         # Save config to JSON file
@@ -1345,46 +1359,87 @@ class SettingsPanel(Gtk.Window):
             model.remove(treeiter)
 
 
-    def on_add_user_dict(self, button):
-        """Add user dictionary or pattern"""
-        dialog = Gtk.Dialog(
-            title="Add User Dictionary",
-            parent=self,
-            flags=0
+    def on_refresh_user_dicts(self, button):
+        """Refresh the list of user dictionary source files (.txt)"""
+        self.user_dict_store.clear()
+        user_dict_dir = util.get_user_dictionaries_dir()
+
+        if not os.path.exists(user_dict_dir):
+            logger.info(f"User dictionaries directory not found: {user_dict_dir}")
+            return
+
+        # List all .txt files in the user dictionaries directory
+        for filename in sorted(os.listdir(user_dict_dir)):
+            if filename.endswith('.txt'):
+                self.user_dict_store.append([filename])
+
+        logger.info(f"Refreshed user dictionaries from {user_dict_dir}")
+
+    def on_convert_user_dicts(self, button):
+        """Convert user SKK dictionary files to merged user_dictionary.json"""
+        # Show a progress message
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=0,
+            message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.NONE,
+            text="Converting user dictionaries..."
         )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK
-        )
-
-        content = dialog.get_content_area()
-        content.set_spacing(10)
-        content.set_border_width(10)
-
-        label = Gtk.Label(label="Enter dictionary path or glob pattern:")
-        content.pack_start(label, False, False, 0)
-
-        entry = Gtk.Entry()
-        entry.set_text("~/.config/ibus-pskk/dictionary/*.json")
-        content.pack_start(entry, False, False, 0)
-
+        dialog.format_secondary_text("Please wait while SKK files are being converted.")
         dialog.show_all()
-        response = dialog.run()
 
-        if response == Gtk.ResponseType.OK:
-            path = entry.get_text()
-            if path:
-                self.user_dict_store.append([path])
+        # Process GTK events to show the dialog
+        while Gtk.events_pending():
+            Gtk.main_iteration()
 
+        # Perform the conversion
+        success, output_path, stats = util.generate_user_dictionary()
+
+        # Close progress dialog
         dialog.destroy()
 
+        # Show result
+        if success:
+            if output_path:
+                result_dialog = Gtk.MessageDialog(
+                    transient_for=self,
+                    flags=0,
+                    message_type=Gtk.MessageType.INFO,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Conversion Complete"
+                )
+                result_dialog.format_secondary_text(
+                    f"User dictionary created successfully.\n\n"
+                    f"Output: {output_path}\n"
+                    f"Files processed: {stats['files_processed']}\n"
+                    f"Total readings: {stats['total_readings']}\n"
+                    f"Total candidates: {stats['total_candidates']}"
+                )
+            else:
+                result_dialog = Gtk.MessageDialog(
+                    transient_for=self,
+                    flags=0,
+                    message_type=Gtk.MessageType.INFO,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="No Files to Convert"
+                )
+                result_dialog.format_secondary_text(
+                    "No .txt files found in the user dictionaries directory.\n\n"
+                    f"Place SKK-format .txt files in:\n"
+                    f"{util.get_user_dictionaries_dir()}"
+                )
+        else:
+            result_dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Conversion Failed"
+            )
+            result_dialog.format_secondary_text("Failed to convert user dictionaries. Check logs for details.")
 
-    def on_remove_user_dict(self, button):
-        """Remove selected user dictionary"""
-        selection = self.user_dict_view.get_selection()
-        model, treeiter = selection.get_selected()
-        if treeiter:
-            model.remove(treeiter)
+        result_dialog.run()
+        result_dialog.destroy()
 
 
     def on_import_skk_jisyo(self, button):

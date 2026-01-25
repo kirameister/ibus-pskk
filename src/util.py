@@ -237,41 +237,35 @@ def get_dictionary_files(config=None):
     Obtain the list of JSON dictionary file paths to be used for kana-kanji conversion.
 
     The returned list contains:
-    1. system_dictionary.json (if it exists in the dictionaries directory)
-    2. User-specified dictionaries from config["dictionaries"]["user"]
+    1. system_dictionary.json (generated from system SKK dictionaries)
+    2. user_dictionary.json (generated from user SKK files in dictionaries/)
 
     Args:
         config: Configuration dictionary. If None, will be loaded via get_config_data().
+                (Currently unused, kept for API compatibility)
 
     Returns:
         list: List of absolute paths to JSON dictionary files that exist.
               Returns empty list if no dictionaries are found.
     """
     dictionary_files = []
-    dict_dir = get_user_dictionaries_dir()
-
-    # Load config if not provided
-    if config is None:
-        config, _ = get_config_data()
+    config_dir = get_user_config_dir()
 
     # 1. Check for system_dictionary.json
-    system_dict_path = os.path.join(dict_dir, 'system_dictionary.json')
+    system_dict_path = os.path.join(config_dir, 'system_dictionary.json')
     if os.path.exists(system_dict_path):
         dictionary_files.append(system_dict_path)
         logger.debug(f'Found system dictionary: {system_dict_path}')
     else:
         logger.debug(f'System dictionary not found: {system_dict_path}')
 
-    # 2. Add user-specified dictionaries from config
-    user_dicts = config.get('dictionaries', {}).get('user', [])
-    for user_dict_name in user_dicts:
-        # User dictionary names are relative to the dictionaries directory
-        user_dict_path = os.path.join(dict_dir, user_dict_name)
-        if os.path.exists(user_dict_path):
-            dictionary_files.append(user_dict_path)
-            logger.debug(f'Found user dictionary: {user_dict_path}')
-        else:
-            logger.warning(f'User dictionary specified in config but not found: {user_dict_path}')
+    # 2. Check for user_dictionary.json
+    user_dict_path = os.path.join(config_dir, 'user_dictionary.json')
+    if os.path.exists(user_dict_path):
+        dictionary_files.append(user_dict_path)
+        logger.debug(f'Found user dictionary: {user_dict_path}')
+    else:
+        logger.debug(f'User dictionary not found: {user_dict_path}')
 
     logger.info(f'Dictionary files to use: {len(dictionary_files)} file(s)')
     return dictionary_files
@@ -451,7 +445,7 @@ def generate_system_dictionary(output_path=None):
 
     Args:
         output_path: Path for the output JSON file.
-                    If None, defaults to ~/.config/ibus-pskk/dictionaries/system_dictionary.json
+                    If None, defaults to ~/.config/ibus-pskk/system_dictionary.json
 
     Returns:
         tuple: (success: bool, output_path: str or None, stats: dict)
@@ -464,11 +458,11 @@ def generate_system_dictionary(output_path=None):
         logger.warning(f'SKK dictionaries directory not found: {skk_dir}')
         return False, None, stats
 
-    # Determine output path
+    # Determine output path (system_dictionary.json goes in config dir, not dictionaries subdir)
     if output_path is None:
-        dict_dir = get_user_dictionaries_dir()
-        os.makedirs(dict_dir, exist_ok=True)
-        output_path = os.path.join(dict_dir, 'system_dictionary.json')
+        config_dir = get_user_config_dir()
+        os.makedirs(config_dir, exist_ok=True)
+        output_path = os.path.join(config_dir, 'system_dictionary.json')
 
     # Merged dictionary: {reading: {candidate: count}}
     merged_dictionary = {}
@@ -541,4 +535,120 @@ def generate_system_dictionary(output_path=None):
         return True, output_path, stats
     except Exception as e:
         logger.error(f'Failed to write system dictionary: {e}')
+        return False, None, stats
+
+
+def generate_user_dictionary(output_path=None):
+    """
+    Generate a merged user dictionary from SKK-format files in the user dictionaries directory.
+
+    Reads all SKK-format text files from ~/.config/ibus-pskk/dictionaries/ and merges them
+    into a single JSON file. The count for each candidate reflects how many
+    source dictionary files contained that candidate.
+
+    Args:
+        output_path: Path for the output JSON file.
+                    If None, defaults to ~/.config/ibus-pskk/user_dictionary.json
+
+    Returns:
+        tuple: (success: bool, output_path: str or None, stats: dict)
+               stats contains 'files_processed', 'total_readings', 'total_candidates'
+    """
+    user_dict_dir = get_user_dictionaries_dir()
+    stats = {'files_processed': 0, 'total_readings': 0, 'total_candidates': 0}
+
+    if not os.path.exists(user_dict_dir):
+        logger.info(f'User dictionaries directory not found: {user_dict_dir}')
+        # Create the directory for user convenience
+        os.makedirs(user_dict_dir, exist_ok=True)
+        logger.info(f'Created user dictionaries directory: {user_dict_dir}')
+        return True, None, stats  # Success but no files to process
+
+    # Determine output path (user_dictionary.json goes in config dir)
+    if output_path is None:
+        config_dir = get_user_config_dir()
+        os.makedirs(config_dir, exist_ok=True)
+        output_path = os.path.join(config_dir, 'user_dictionary.json')
+
+    # Merged dictionary: {reading: {candidate: count}}
+    merged_dictionary = {}
+
+    # Process each file in the user dictionaries directory
+    for filename in os.listdir(user_dict_dir):
+        file_path = os.path.join(user_dict_dir, filename)
+        if not os.path.isfile(file_path):
+            continue
+
+        # Skip non-text files (e.g., if someone puts a .json there by mistake)
+        if not filename.endswith('.txt'):
+            logger.debug(f'Skipping non-.txt file: {filename}')
+            continue
+
+        # Try different encodings (SKK files may use various encodings)
+        encodings = ['utf-8', 'euc-jp', 'shift-jis']
+        file_content = None
+
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    file_content = f.readlines()
+                logger.debug(f'Successfully read {file_path} with encoding {encoding}')
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if file_content is None:
+            logger.warning(f'Failed to read {file_path} with any supported encoding, skipping')
+            continue
+
+        # Track candidates seen in this file to avoid double-counting within same file
+        seen_in_this_file = {}  # {reading: set(candidates)}
+
+        # Process each line
+        for line in file_content:
+            reading, candidates = parse_skk_dictionary_line(line)
+            if not reading or not candidates:
+                continue
+
+            # Initialize tracking for this reading if needed
+            if reading not in seen_in_this_file:
+                seen_in_this_file[reading] = set()
+
+            # Initialize merged dictionary entry if needed
+            if reading not in merged_dictionary:
+                merged_dictionary[reading] = {}
+
+            # Add candidates, only incrementing count once per file
+            for candidate in candidates:
+                if candidate not in seen_in_this_file[reading]:
+                    seen_in_this_file[reading].add(candidate)
+                    if candidate in merged_dictionary[reading]:
+                        merged_dictionary[reading][candidate] += 1
+                    else:
+                        merged_dictionary[reading][candidate] = 1
+
+        stats['files_processed'] += 1
+        logger.debug(f'Processed user dictionary: {filename}')
+
+    # Calculate stats
+    stats['total_readings'] = len(merged_dictionary)
+    stats['total_candidates'] = sum(len(candidates) for candidates in merged_dictionary.values())
+
+    # Only write if there are entries (don't create empty file)
+    if not merged_dictionary:
+        logger.info('No user dictionary entries found, skipping JSON generation')
+        return True, None, stats
+
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    # Write JSON file
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(merged_dictionary, f, ensure_ascii=False, indent=2)
+        logger.info(f'Generated user dictionary: {output_path}')
+        logger.info(f'Stats: {stats["files_processed"]} files, {stats["total_readings"]} readings, {stats["total_candidates"]} candidates')
+        return True, output_path, stats
+    except Exception as e:
+        logger.error(f'Failed to write user dictionary: {e}')
         return False, None, stats
