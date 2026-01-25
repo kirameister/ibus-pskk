@@ -626,15 +626,24 @@ class EnginePSKK(IBus.Engine):
                     logger.debug('Enter pressed in CONVERTING: confirming')
                     self._confirm_conversion()
                     return True
-                elif self._preedit_string:
-                    logger.debug('Enter pressed with preedit: committing')
+                elif self._in_forced_preedit and self._preedit_string:
+                    # Forced preedit: commit and consume Enter (Action 2)
+                    logger.debug('Enter pressed in FORCED_PREEDIT: committing')
                     self._commit_string()
-                    # Exit forced preedit mode if active (Action 2: Enter before lookup table)
-                    if self._in_forced_preedit:
-                        logger.debug('Exiting forced preedit mode')
-                        self._in_forced_preedit = False
+                    self._in_forced_preedit = False
                     return True
-                return False  # Pass through if no preedit
+                elif self._bunsetsu_active and self._preedit_string:
+                    # Bunsetsu mode: commit and consume Enter
+                    logger.debug('Enter pressed in BUNSETSU: committing')
+                    self._commit_string()
+                    self._bunsetsu_active = False
+                    return True
+                elif self._preedit_string:
+                    # IDLE mode with preedit: commit and pass Enter through
+                    logger.debug('Enter pressed in IDLE with preedit: committing and passing through')
+                    self._commit_string()
+                    return False  # Pass Enter to application
+                return False  # No preedit, pass through
 
             # Arrow keys for candidate cycling (only in CONVERTING state)
             if self._in_conversion:
