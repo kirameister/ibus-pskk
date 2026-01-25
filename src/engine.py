@@ -677,10 +677,13 @@ class EnginePSKK(IBus.Engine):
                     return True
                 elif self._preedit_string:
                     # Delete last character from preedit
-                    # TODO: Implement proper backspace handling with simul_processor
+                    # Note: We sync _preedit_hiragana with _preedit_string (1:1 mapping).
+                    # We clear _preedit_ascii because we can't track the many-to-one
+                    # mapping from keystrokes to hiragana. After backspace,
+                    # to_katakana/to_hiragana still work, but to_ascii/to_zenkaku are disabled.
                     self._preedit_string = self._preedit_string[:-1]
-                    self._preedit_hiragana = self._preedit_hiragana[:-1] if self._preedit_hiragana else ''
-                    self._preedit_ascii = self._preedit_ascii[:-1] if self._preedit_ascii else ''
+                    self._preedit_hiragana = self._preedit_string  # Keep in sync
+                    self._preedit_ascii = ''  # Can't reconstruct
                     self._update_preedit()
                     return True
                 return False
@@ -933,6 +936,10 @@ class EnginePSKK(IBus.Engine):
         - _preedit_hiragana: for to_katakana and to_hiragana
         - _preedit_ascii: for to_ascii and to_zenkaku
 
+        Note: After backspace, _preedit_ascii is cleared (can't track many-to-one mapping),
+        so to_ascii/to_zenkaku are disabled. to_katakana/to_hiragana still work because
+        _preedit_hiragana is kept in sync with _preedit_string.
+
         Args:
             conversion_type: One of 'to_katakana', 'to_hiragana', 'to_ascii', 'to_zenkaku'
         """
@@ -942,15 +949,27 @@ class EnginePSKK(IBus.Engine):
         original = self._preedit_string
 
         if conversion_type == 'to_katakana':
+            if not self._preedit_hiragana:
+                logger.debug('to_katakana skipped: hiragana buffer empty')
+                return
             # Convert hiragana source to katakana
             self._preedit_string = self._preedit_hiragana.translate(HIRAGANA_TO_KATAKANA)
         elif conversion_type == 'to_hiragana':
+            if not self._preedit_hiragana:
+                logger.debug('to_hiragana skipped: hiragana buffer empty')
+                return
             # Use hiragana source directly
             self._preedit_string = self._preedit_hiragana
         elif conversion_type == 'to_ascii':
+            if not self._preedit_ascii:
+                logger.debug('to_ascii skipped: ascii buffer empty (backspace was used?)')
+                return
             # Use ASCII source directly
             self._preedit_string = self._preedit_ascii
         elif conversion_type == 'to_zenkaku':
+            if not self._preedit_ascii:
+                logger.debug('to_zenkaku skipped: ascii buffer empty (backspace was used?)')
+                return
             # Convert ASCII source to full-width
             self._preedit_string = self._preedit_ascii.translate(ASCII_TO_FULLWIDTH)
         else:
