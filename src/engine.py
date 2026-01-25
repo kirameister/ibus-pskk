@@ -172,6 +172,7 @@ class EnginePSKK(IBus.Engine):
         self._preedit_string = ''    # Display buffer (can be hiragana, katakana, ascii, or zenkaku)
         self._preedit_hiragana = ''  # Source of truth: hiragana output from simul_processor
         self._preedit_ascii = ''     # Source of truth: raw ASCII input characters
+        self._conversion_disabled = False  # Set True after backspace; disables Ctrl+K/J/L conversions
         self._previous_text = ''
 
         # This property is for confirming the kanji-kana converted string
@@ -677,13 +678,11 @@ class EnginePSKK(IBus.Engine):
                     return True
                 elif self._preedit_string:
                     # Delete last character from preedit
-                    # Note: We sync _preedit_hiragana with _preedit_string (1:1 mapping).
-                    # We clear _preedit_ascii because we can't track the many-to-one
-                    # mapping from keystrokes to hiragana. After backspace,
-                    # to_katakana/to_hiragana still work, but to_ascii/to_zenkaku are disabled.
+                    # Disable all conversions (Ctrl+K/J/L) after backspace because we can't
+                    # reliably track the many-to-one mapping from keystrokes to hiragana.
+                    # User must ESC and retype, or commit and start fresh.
                     self._preedit_string = self._preedit_string[:-1]
-                    self._preedit_hiragana = self._preedit_string  # Keep in sync
-                    self._preedit_ascii = ''  # Can't reconstruct
+                    self._conversion_disabled = True
                     self._update_preedit()
                     return True
                 return False
@@ -936,9 +935,9 @@ class EnginePSKK(IBus.Engine):
         - _preedit_hiragana: for to_katakana and to_hiragana
         - _preedit_ascii: for to_ascii and to_zenkaku
 
-        Note: After backspace, _preedit_ascii is cleared (can't track many-to-one mapping),
-        so to_ascii/to_zenkaku are disabled. to_katakana/to_hiragana still work because
-        _preedit_hiragana is kept in sync with _preedit_string.
+        Note: All conversions are disabled after backspace is used, because we can't
+        reliably track the many-to-one mapping from keystrokes to hiragana.
+        User must ESC and retype, or commit and start fresh to re-enable.
 
         Args:
             conversion_type: One of 'to_katakana', 'to_hiragana', 'to_ascii', 'to_zenkaku'
@@ -946,30 +945,23 @@ class EnginePSKK(IBus.Engine):
         if not self._preedit_string:
             return
 
+        # All conversions disabled after backspace
+        if self._conversion_disabled:
+            logger.debug(f'Conversion {conversion_type} skipped: disabled after backspace')
+            return
+
         original = self._preedit_string
 
         if conversion_type == 'to_katakana':
-            if not self._preedit_hiragana:
-                logger.debug('to_katakana skipped: hiragana buffer empty')
-                return
             # Convert hiragana source to katakana
             self._preedit_string = self._preedit_hiragana.translate(HIRAGANA_TO_KATAKANA)
         elif conversion_type == 'to_hiragana':
-            if not self._preedit_hiragana:
-                logger.debug('to_hiragana skipped: hiragana buffer empty')
-                return
             # Use hiragana source directly
             self._preedit_string = self._preedit_hiragana
         elif conversion_type == 'to_ascii':
-            if not self._preedit_ascii:
-                logger.debug('to_ascii skipped: ascii buffer empty (backspace was used?)')
-                return
             # Use ASCII source directly
             self._preedit_string = self._preedit_ascii
         elif conversion_type == 'to_zenkaku':
-            if not self._preedit_ascii:
-                logger.debug('to_zenkaku skipped: ascii buffer empty (backspace was used?)')
-                return
             # Convert ASCII source to full-width
             self._preedit_string = self._preedit_ascii.translate(ASCII_TO_FULLWIDTH)
         else:
@@ -1513,6 +1505,7 @@ class EnginePSKK(IBus.Engine):
         self._bunsetsu_active = False
         self._in_conversion = False
         self._in_forced_preedit = False
+        self._conversion_disabled = False  # Re-enable Ctrl+K/J/L conversions
         self._conversion_yomi = ''
         self._pending_commit = ''
         self._preedit_string = ''
@@ -1535,6 +1528,7 @@ class EnginePSKK(IBus.Engine):
             self._preedit_string = ""
             self._preedit_hiragana = ""
             self._preedit_ascii = ""
+            self._conversion_disabled = False  # Re-enable Ctrl+K/J/L for next input
             self._update_preedit()
 
     def _parse_hex_color(self, color_str):
