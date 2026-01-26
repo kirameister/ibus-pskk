@@ -971,7 +971,7 @@ class SettingsPanel(Gtk.Window):
         self.layout_combo.remove_all()
 
         # Search for layout JSON files in both user and system directories
-        user_layouts_dir = os.path.join(util.get_user_configdir(), 'layouts')
+        user_layouts_dir = os.path.join(util.get_user_config_dir(), 'layouts')
         system_layouts_dir = os.path.join(util.get_datadir(), 'layouts')
 
         # Track files and their locations
@@ -1144,7 +1144,7 @@ class SettingsPanel(Gtk.Window):
         self.kanchoku_layout_combo.remove_all()
 
         # Search for kanchoku layout JSON files in both user and system directories
-        user_kanchoku_dir = os.path.join(util.get_user_configdir(), 'kanchoku_layouts')
+        user_kanchoku_dir = os.path.join(util.get_user_config_dir(), 'kanchoku_layouts')
         system_kanchoku_dir = os.path.join(util.get_datadir(), 'kanchoku_layouts')
 
         # Track files and their locations
@@ -1239,9 +1239,9 @@ class SettingsPanel(Gtk.Window):
         }
 
         # Save config to JSON file
-        config_path = os.path.join(util.get_user_configdir(), 'config.json')
+        config_path = os.path.join(util.get_user_config_dir(), 'config.json')
         try:
-            os.makedirs(util.get_user_configdir(), exist_ok=True)
+            os.makedirs(util.get_user_config_dir(), exist_ok=True)
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, ensure_ascii=False, indent=2)
             logger.info(f"Configuration saved to {config_path}")
@@ -1676,7 +1676,7 @@ class SettingsPanel(Gtk.Window):
             # Save to user's config directory with the same filename as kanchoku_layout
             # This allows user edits to override the system layout
             kanchoku_filename = self.config.get('kanchoku_layout', 'aki_code.json')
-            user_config_dir = util.get_user_configdir()
+            user_config_dir = util.get_user_config_dir()
             path = os.path.join(user_config_dir, kanchoku_filename)
 
         # Convert flat list to nested dict
@@ -1735,7 +1735,7 @@ class SettingsPanel(Gtk.Window):
         )
 
         # Set default directory to kanchoku_layouts subdirectory
-        kanchoku_dir = os.path.join(util.get_user_configdir(), 'kanchoku_layouts')
+        kanchoku_dir = os.path.join(util.get_user_config_dir(), 'kanchoku_layouts')
         if os.path.exists(kanchoku_dir):
             dialog.set_current_folder(kanchoku_dir)
         else:
@@ -1791,7 +1791,7 @@ class SettingsPanel(Gtk.Window):
         )
 
         # Set default directory to kanchoku_layouts subdirectory
-        kanchoku_dir = os.path.join(util.get_user_configdir(), 'kanchoku_layouts')
+        kanchoku_dir = os.path.join(util.get_user_config_dir(), 'kanchoku_layouts')
         if os.path.exists(kanchoku_dir):
             dialog.set_current_folder(kanchoku_dir)
         else:

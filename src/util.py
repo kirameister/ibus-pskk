@@ -55,7 +55,7 @@ def get_localedir():
     return '/usr/local/share/locale'
 
 
-def get_user_configdir():
+def get_user_config_dir():
     '''
     Return the path to the config directory under $HOME.
     Typically, it would be $HOME/.config/ibus-pskk
@@ -70,8 +70,8 @@ def get_homedir():
     return GLib.get_home_dir()
 
 
-def get_user_configdir_relative_to_home():
-    return get_user_configdir().replace(get_homedir(), '$' + '{HOME}')
+def get_user_config_dir_relative_to_home():
+    return get_user_config_dir().replace(get_homedir(), '$' + '{HOME}')
 
 
 def get_config_data():
@@ -83,13 +83,13 @@ def get_config_data():
     Returns:
         tuple: (config_data, warnings_string) where warnings_string is empty if no warnings
     '''
-    configfile_path = os.path.join(get_user_configdir(), 'config.json')
+    configfile_path = os.path.join(get_user_config_dir(), 'config.json')
     default_config_path = get_default_config_path()
     default_config = json.load(codecs.open(default_config_path))
     warnings = ""
 
     if(not os.path.exists(configfile_path)):
-        warning_msg = f'config.json is not found under {get_user_configdir()} . Copying the default config.json from {default_config_path} ..'
+        warning_msg = f'config.json is not found under {get_user_config_dir()} . Copying the default config.json from {default_config_path} ..'
         logger.warning(warning_msg)
         warnings = warning_msg
         with open(configfile_path, 'w', encoding='utf-8') as f:
@@ -98,19 +98,19 @@ def get_config_data():
     try:
         config_data = json.load(codecs.open(configfile_path))
     except json.decoder.JSONDecodeError as e:
-        logger.error(f'Error loading the config.json under {get_user_configdir()}')
+        logger.error(f'Error loading the config.json under {get_user_config_dir()}')
         logger.error(e)
         logger.error(f'Using (but not copying) the default config.json from {default_config_path} ..')
         return get_default_config_data(), warnings
 
     for k in default_config:
         if k not in config_data:
-            warning_msg = f'The key "{k}" was not found in the config.json under {get_user_configdir()} . Copying the default key-value'
+            warning_msg = f'The key "{k}" was not found in the config.json under {get_user_config_dir()} . Copying the default key-value'
             logger.warning(warning_msg)
             warnings += ("\n" if warnings else "") + warning_msg
             config_data[k] = default_config[k]
         if type(config_data[k]) != type(default_config[k]):
-            warning_msg = f'Type mismatch found for the key "{k}" between config.json under {get_user_configdir()} and default config.json. Replacing the value of this key with the value in default config.json'
+            warning_msg = f'Type mismatch found for the key "{k}" between config.json under {get_user_config_dir()} and default config.json. Replacing the value of this key with the value in default config.json'
             logger.warning(warning_msg)
             warnings += ("\n" if warnings else "") + warning_msg
             config_data[k] = default_config[k]
@@ -161,11 +161,11 @@ def save_config_data(config_data):
     Returns:
         bool: True if save was successful, False otherwise
     '''
-    configfile_path = os.path.join(get_user_configdir(), 'config.json')
+    configfile_path = os.path.join(get_user_config_dir(), 'config.json')
 
     try:
         # Ensure the config directory exists
-        os.makedirs(get_user_configdir(), exist_ok=True)
+        os.makedirs(get_user_config_dir(), exist_ok=True)
 
         # Write the config file with proper formatting
         with open(configfile_path, 'w', encoding='utf-8') as f:
@@ -191,8 +191,8 @@ def get_default_config_data():
 def get_layout_data(config):
     layout_file_name = config['layout']
     layout_file_path = ''
-    if os.path.exists(os.path.join(get_user_configdir(), 'layouts', layout_file_name)):
-        layout_file_path = os.path.join(get_user_configdir(), 'layouts', layout_file_name)
+    if os.path.exists(os.path.join(get_user_config_dir(), 'layouts', layout_file_name)):
+        layout_file_path = os.path.join(get_user_config_dir(), 'layouts', layout_file_name)
     elif os.path.exists(os.path.join(get_datadir(), 'layouts', layout_file_name)):
         layout_file_path = os.path.join(get_datadir(), 'layouts', layout_file_name)
     else:
@@ -208,10 +208,10 @@ def get_layout_data(config):
 def get_kanchoku_layout(config):
     kanchoku_layout_file_name = config['kanchoku_layout']
     kanchoku_layout_file_path = ''
-    if os.path.exists(os.path.join(get_user_configdir(), 'kanchoku_layouts', kanchoku_layout_file_name)):
-        kanchoku_layout_file_path = os.path.join(get_user_configdir(), 'kanchoku_layouts', kanchoku_layout_file_name)
-    elif os.path.exists(os.path.join(get_user_configdir(), kanchoku_layout_file_name)):
-        kanchoku_layout_file_path = os.path.join(get_user_configdir(), kanchoku_layout_file_name)
+    if os.path.exists(os.path.join(get_user_config_dir(), 'kanchoku_layouts', kanchoku_layout_file_name)):
+        kanchoku_layout_file_path = os.path.join(get_user_config_dir(), 'kanchoku_layouts', kanchoku_layout_file_name)
+    elif os.path.exists(os.path.join(get_user_config_dir(), kanchoku_layout_file_name)):
+        kanchoku_layout_file_path = os.path.join(get_user_config_dir(), kanchoku_layout_file_name)
     elif os.path.exists(os.path.join(get_datadir(), 'kanchoku_layouts', kanchoku_layout_file_name)):
         kanchoku_layout_file_path = os.path.join(get_datadir(), 'kanchoku_layouts', kanchoku_layout_file_name)
     else:
@@ -229,7 +229,7 @@ def get_user_dictionaries_dir():
     Return the path to the user dictionaries directory.
     Typically: $HOME/.config/ibus-pskk/dictionaries/
     """
-    return os.path.join(get_user_configdir(), 'dictionaries')
+    return os.path.join(get_user_config_dir(), 'dictionaries')
 
 
 def get_dictionary_files(config=None):

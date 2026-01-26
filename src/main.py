@@ -118,7 +118,7 @@ def main():
     os.umask(0o077)
 
     # Create user specific data directory
-    user_configdir = util.get_user_configdir()
+    user_configdir = util.get_user_config_dir()
     os.makedirs(user_configdir, 0o700, True)
     os.chmod(user_configdir, 0o700)   # For logfile created by v0.2.0 or earlier
 

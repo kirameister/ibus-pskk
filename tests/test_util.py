@@ -72,7 +72,7 @@ class TestGetConfigData:
             json.dump(default_config_data, f)
 
         # Mock the directory functions
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_default_config_path', return_value=temp_dirs['default_config']):
                 config, warnings = util.get_config_data()
 
@@ -90,7 +90,7 @@ class TestGetConfigData:
             json.dump(default_config_data, f)
 
         # Mock the directory functions
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_default_config_path', return_value=temp_dirs['default_config']):
                 config, warnings = util.get_config_data()
 
@@ -117,7 +117,7 @@ class TestGetConfigData:
             json.dump(user_config, f)
 
         # Mock the directory functions
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_default_config_path', return_value=temp_dirs['default_config']):
                 config, warnings = util.get_config_data()
 
@@ -145,7 +145,7 @@ class TestGetConfigData:
             json.dump(user_config, f)
 
         # Mock the directory functions
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_default_config_path', return_value=temp_dirs['default_config']):
                 config, warnings = util.get_config_data()
 
@@ -170,7 +170,7 @@ class TestGetConfigData:
             json.dump(user_config, f)
 
         # Mock the directory functions
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_default_config_path', return_value=temp_dirs['default_config']):
                 config, warnings = util.get_config_data()
 
@@ -197,7 +197,7 @@ class TestGetConfigData:
             f.write("{ invalid json }")
 
         # Mock the directory functions
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_default_config_path', return_value=temp_dirs['default_config']):
                 config, warnings = util.get_config_data()
 
@@ -216,7 +216,7 @@ class TestGetConfigData:
             json.dump(default_config_data, f)
 
         # Mock the directory functions
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_default_config_path', return_value=temp_dirs['default_config']):
                 config, warnings = util.get_config_data()
 
@@ -268,7 +268,7 @@ class TestSaveConfigData:
         # Directory doesn't exist yet
         assert not os.path.exists(temp_dirs['config_dir'])
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.save_config_data(sample_config)
 
         assert result is True
@@ -277,7 +277,7 @@ class TestSaveConfigData:
 
     def test_save_config_writes_correct_data(self, temp_dirs, sample_config):
         """Test that save_config_data writes the correct data"""
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.save_config_data(sample_config)
 
         assert result is True
@@ -300,7 +300,7 @@ class TestSaveConfigData:
             json.dump(initial_config, f)
 
         # Save new config
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.save_config_data(sample_config)
 
         assert result is True
@@ -323,7 +323,7 @@ class TestSaveConfigData:
             }
         }
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.save_config_data(unicode_config)
 
         assert result is True
@@ -337,7 +337,7 @@ class TestSaveConfigData:
 
     def test_save_config_formats_with_indent(self, temp_dirs, sample_config):
         """Test that save_config_data formats JSON with proper indentation"""
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.save_config_data(sample_config)
 
         assert result is True
@@ -357,7 +357,7 @@ class TestSaveConfigData:
         os.chmod(temp_dirs['config_dir'], 0o444)
 
         try:
-            with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+            with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
                 result = util.save_config_data(sample_config)
 
             assert result is False
@@ -412,7 +412,7 @@ class TestGetKanchokuLayout:
 
         config = {'kanchoku_layout': 'test_layout.json'}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_datadir', return_value=temp_dirs['data']):
                 layout = util.get_kanchoku_layout(config)
 
@@ -439,7 +439,7 @@ class TestGetKanchokuLayout:
 
         config = {'kanchoku_layout': 'my_layout.json'}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_datadir', return_value=temp_dirs['data']):
                 layout = util.get_kanchoku_layout(config)
 
@@ -459,7 +459,7 @@ class TestGetKanchokuLayout:
         # Request non-existent layout
         config = {'kanchoku_layout': 'nonexistent.json'}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_datadir', return_value=temp_dirs['data']):
                 layout = util.get_kanchoku_layout(config)
 
@@ -484,7 +484,7 @@ class TestGetKanchokuLayout:
 
         config = {'kanchoku_layout': 'unicode.json'}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_datadir', return_value=temp_dirs['data']):
                 layout = util.get_kanchoku_layout(config)
 
@@ -503,7 +503,7 @@ class TestGetKanchokuLayout:
 
         config = {'kanchoku_layout': 'invalid.json'}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_datadir', return_value=temp_dirs['data']):
                 layout = util.get_kanchoku_layout(config)
 
@@ -515,7 +515,7 @@ class TestGetKanchokuLayout:
         # Don't create any layout files
         config = {'kanchoku_layout': 'missing.json'}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_datadir', return_value=temp_dirs['data']):
                 layout = util.get_kanchoku_layout(config)
 
@@ -560,7 +560,7 @@ class TestGetDictionaryFiles:
 
         config = {"dictionaries": {"system": [], "user": []}}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files(config)
 
         assert result == []
@@ -576,7 +576,7 @@ class TestGetDictionaryFiles:
 
         config = {"dictionaries": {"system": [], "user": []}}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files(config)
 
         assert len(result) == 1
@@ -596,7 +596,7 @@ class TestGetDictionaryFiles:
 
         config = {"dictionaries": {"system": [], "user": ["my_dict.json", "another_dict.json"]}}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files(config)
 
         assert len(result) == 2
@@ -619,7 +619,7 @@ class TestGetDictionaryFiles:
 
         config = {"dictionaries": {"system": [], "user": ["user_dict.json"]}}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files(config)
 
         assert len(result) == 2
@@ -638,7 +638,7 @@ class TestGetDictionaryFiles:
         # Config references both existing and non-existing dictionaries
         config = {"dictionaries": {"system": [], "user": ["existing.json", "missing.json"]}}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files(config)
 
         # Should only include the existing dictionary
@@ -664,7 +664,7 @@ class TestGetDictionaryFiles:
         with open(temp_dirs['config_file'], 'w', encoding='utf-8') as f:
             json.dump(default_config, f)
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             with patch('util.get_default_config_path', return_value=temp_dirs['default_config']):
                 # Call without config argument
                 result = util.get_dictionary_files()
@@ -684,7 +684,7 @@ class TestGetDictionaryFiles:
         # Config without dictionaries key
         config = {"layout": "shingeta.json"}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files(config)
 
         # Should still include system dictionary
@@ -702,7 +702,7 @@ class TestGetDictionaryFiles:
 
         config = {"dictionaries": {"system": [], "user": []}}
 
-        with patch('util.get_user_configdir', return_value=temp_dirs['config_dir']):
+        with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files(config)
 
         assert len(result) == 1
