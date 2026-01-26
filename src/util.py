@@ -435,17 +435,18 @@ def convert_all_skk_dictionaries():
     return results
 
 
-def generate_system_dictionary(output_path=None):
+def generate_system_dictionary(output_path=None, source_weights=None):
     """
-    Generate a merged system dictionary from all SKK dictionary files.
+    Generate a merged system dictionary from SKK dictionary files.
 
-    Reads all SKK dictionaries from the system directory and merges them
-    into a single JSON file. The count for each candidate reflects how many
-    source dictionary files contained that candidate.
+    Reads SKK dictionaries and merges them into a single JSON file.
+    The count for each candidate is weighted by the source dictionary's weight.
 
     Args:
         output_path: Path for the output JSON file.
                     If None, defaults to ~/.config/ibus-pskk/system_dictionary.json
+        source_weights: Dict mapping full file paths to integer weights.
+                       If None, all files in skk_dicts directory are used with weight 1.
 
     Returns:
         tuple: (success: bool, output_path: str or None, stats: dict)
@@ -454,23 +455,34 @@ def generate_system_dictionary(output_path=None):
     skk_dir = get_skk_dicts_dir()
     stats = {'files_processed': 0, 'total_readings': 0, 'total_candidates': 0}
 
-    if not os.path.exists(skk_dir):
-        logger.warning(f'SKK dictionaries directory not found: {skk_dir}')
-        return False, None, stats
-
     # Determine output path (system_dictionary.json goes in config dir, not dictionaries subdir)
     if output_path is None:
         config_dir = get_user_config_dir()
         os.makedirs(config_dir, exist_ok=True)
         output_path = os.path.join(config_dir, 'system_dictionary.json')
 
+    # If no weights specified, scan all files in skk_dicts with weight 1
+    if source_weights is None:
+        if not os.path.exists(skk_dir):
+            logger.warning(f'SKK dictionaries directory not found: {skk_dir}')
+            return False, None, stats
+        source_weights = {}
+        for filename in os.listdir(skk_dir):
+            skk_path = os.path.join(skk_dir, filename)
+            if os.path.isfile(skk_path):
+                source_weights[skk_path] = 1
+
+    if not source_weights:
+        logger.warning('No dictionaries specified for conversion')
+        return False, None, stats
+
     # Merged dictionary: {reading: {candidate: count}}
     merged_dictionary = {}
 
     # Process each SKK dictionary file
-    for filename in os.listdir(skk_dir):
-        skk_path = os.path.join(skk_dir, filename)
+    for skk_path, weight in source_weights.items():
         if not os.path.isfile(skk_path):
+            logger.warning(f'Dictionary file not found: {skk_path}')
             continue
 
         # Try different encodings
@@ -507,17 +519,17 @@ def generate_system_dictionary(output_path=None):
             if reading not in merged_dictionary:
                 merged_dictionary[reading] = {}
 
-            # Add candidates, only incrementing count once per file
+            # Add candidates, incrementing by weight (only once per file)
             for candidate in candidates:
                 if candidate not in seen_in_this_file[reading]:
                     seen_in_this_file[reading].add(candidate)
                     if candidate in merged_dictionary[reading]:
-                        merged_dictionary[reading][candidate] += 1
+                        merged_dictionary[reading][candidate] += weight
                     else:
-                        merged_dictionary[reading][candidate] = 1
+                        merged_dictionary[reading][candidate] = weight
 
         stats['files_processed'] += 1
-        logger.debug(f'Processed {filename}')
+        logger.debug(f'Processed {os.path.basename(skk_path)} with weight {weight}')
 
     # Calculate stats
     stats['total_readings'] = len(merged_dictionary)
@@ -538,17 +550,18 @@ def generate_system_dictionary(output_path=None):
         return False, None, stats
 
 
-def generate_user_dictionary(output_path=None):
+def generate_user_dictionary(output_path=None, source_weights=None):
     """
     Generate a merged user dictionary from SKK-format files in the user dictionaries directory.
 
-    Reads all SKK-format text files from ~/.config/ibus-pskk/dictionaries/ and merges them
-    into a single JSON file. The count for each candidate reflects how many
-    source dictionary files contained that candidate.
+    Reads SKK-format text files from ~/.config/ibus-pskk/dictionaries/ and merges them
+    into a single JSON file. The count for each candidate is weighted by the source file's weight.
 
     Args:
         output_path: Path for the output JSON file.
                     If None, defaults to ~/.config/ibus-pskk/user_dictionary.json
+        source_weights: Dict mapping filenames to integer weights.
+                       If None, all .txt files in dictionaries/ are used with weight 1.
 
     Returns:
         tuple: (success: bool, output_path: str or None, stats: dict)
@@ -570,18 +583,21 @@ def generate_user_dictionary(output_path=None):
         os.makedirs(config_dir, exist_ok=True)
         output_path = os.path.join(config_dir, 'user_dictionary.json')
 
+    # If no weights specified, scan all .txt files with weight 1
+    if source_weights is None:
+        source_weights = {}
+        for filename in os.listdir(user_dict_dir):
+            if filename.endswith('.txt'):
+                source_weights[filename] = 1
+
     # Merged dictionary: {reading: {candidate: count}}
     merged_dictionary = {}
 
     # Process each file in the user dictionaries directory
-    for filename in os.listdir(user_dict_dir):
+    for filename, weight in source_weights.items():
         file_path = os.path.join(user_dict_dir, filename)
         if not os.path.isfile(file_path):
-            continue
-
-        # Skip non-text files (e.g., if someone puts a .json there by mistake)
-        if not filename.endswith('.txt'):
-            logger.debug(f'Skipping non-.txt file: {filename}')
+            logger.warning(f'User dictionary file not found: {file_path}')
             continue
 
         # Try different encodings (SKK files may use various encodings)
@@ -618,17 +634,17 @@ def generate_user_dictionary(output_path=None):
             if reading not in merged_dictionary:
                 merged_dictionary[reading] = {}
 
-            # Add candidates, only incrementing count once per file
+            # Add candidates, incrementing by weight (only once per file)
             for candidate in candidates:
                 if candidate not in seen_in_this_file[reading]:
                     seen_in_this_file[reading].add(candidate)
                     if candidate in merged_dictionary[reading]:
-                        merged_dictionary[reading][candidate] += 1
+                        merged_dictionary[reading][candidate] += weight
                     else:
-                        merged_dictionary[reading][candidate] = 1
+                        merged_dictionary[reading][candidate] = weight
 
         stats['files_processed'] += 1
-        logger.debug(f'Processed user dictionary: {filename}')
+        logger.debug(f'Processed user dictionary: {filename} with weight {weight}')
 
     # Calculate stats
     stats['total_readings'] = len(merged_dictionary)

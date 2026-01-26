@@ -691,8 +691,8 @@ class SettingsPanel(Gtk.Window):
         # System dictionary list with checkboxes
         scroll = Gtk.ScrolledWindow()
         scroll.set_min_content_height(150)
-        # Store: (enabled: bool, filename: str, full_path: str)
-        self.sys_dict_store = Gtk.ListStore(bool, str, str)
+        # Store: (enabled: bool, filename: str, full_path: str, weight: int)
+        self.sys_dict_store = Gtk.ListStore(bool, str, str, int)
         self.sys_dict_view = Gtk.TreeView(model=self.sys_dict_store)
 
         # Checkbox column
@@ -705,7 +705,16 @@ class SettingsPanel(Gtk.Window):
         # Filename column
         text_renderer = Gtk.CellRendererText()
         text_column = Gtk.TreeViewColumn("Dictionary File", text_renderer, text=1)
+        text_column.set_expand(True)
         self.sys_dict_view.append_column(text_column)
+
+        # Weight column (editable)
+        weight_renderer = Gtk.CellRendererText()
+        weight_renderer.set_property("editable", True)
+        weight_renderer.connect("edited", self.on_sys_dict_weight_edited)
+        weight_column = Gtk.TreeViewColumn("Weight", weight_renderer, text=3)
+        weight_column.set_min_width(60)
+        self.sys_dict_view.append_column(weight_column)
 
         scroll.add(self.sys_dict_view)
         sys_box.pack_start(scroll, True, True, 0)
@@ -742,11 +751,24 @@ class SettingsPanel(Gtk.Window):
         # User dictionary list (shows .txt files in dictionaries/)
         user_scroll = Gtk.ScrolledWindow()
         user_scroll.set_min_content_height(100)
-        self.user_dict_store = Gtk.ListStore(str)
+        # Store: (filename: str, weight: int)
+        self.user_dict_store = Gtk.ListStore(str, int)
         self.user_dict_view = Gtk.TreeView(model=self.user_dict_store)
+
+        # Filename column
         user_renderer = Gtk.CellRendererText()
         user_column = Gtk.TreeViewColumn("SKK Source Files (.txt)", user_renderer, text=0)
+        user_column.set_expand(True)
         self.user_dict_view.append_column(user_column)
+
+        # Weight column (editable)
+        user_weight_renderer = Gtk.CellRendererText()
+        user_weight_renderer.set_property("editable", True)
+        user_weight_renderer.connect("edited", self.on_user_dict_weight_edited)
+        user_weight_column = Gtk.TreeViewColumn("Weight", user_weight_renderer, text=1)
+        user_weight_column.set_min_width(60)
+        self.user_dict_view.append_column(user_weight_column)
+
         user_scroll.add(self.user_dict_view)
         user_box.pack_start(user_scroll, True, True, 0)
 
@@ -1073,8 +1095,22 @@ class SettingsPanel(Gtk.Window):
         if not isinstance(dictionaries, dict):
             dictionaries = {}
 
-        # Get the list of currently enabled system dictionaries from config
-        enabled_system_paths = set(dictionaries.get("system", []) or [])
+        # Get system dictionary weights from config
+        # Support both old format (list) and new format (dict with weights)
+        system_dict_config = dictionaries.get("system", {}) or {}
+        if isinstance(system_dict_config, list):
+            # Convert old array format to dict with default weight 1
+            system_dict_weights = {path: 1 for path in system_dict_config}
+        else:
+            system_dict_weights = system_dict_config
+
+        # Get user dictionary weights from config
+        user_dict_config = dictionaries.get("user", {}) or {}
+        if isinstance(user_dict_config, list):
+            # Convert old array format to dict with default weight 1
+            user_dict_weights = {path: 1 for path in user_dict_config}
+        else:
+            user_dict_weights = user_dict_config
 
         # Scan the system dictionaries directory recursively
         sys_dict_dir = os.path.join(util.get_datadir(), 'dictionaries')
@@ -1090,16 +1126,19 @@ class SettingsPanel(Gtk.Window):
 
             # Sort by relative path and add to store
             for rel_path, full_path in sorted(dict_files):
-                # Check if this dictionary is enabled in config
-                enabled = full_path in enabled_system_paths
-                self.sys_dict_store.append([enabled, rel_path, full_path])
+                # Check if this dictionary is enabled in config (has a weight entry)
+                enabled = full_path in system_dict_weights
+                weight = system_dict_weights.get(full_path, 1)
+                self.sys_dict_store.append([enabled, rel_path, full_path, weight])
 
         # Load user dictionaries by scanning the dictionaries/ directory for .txt files
         user_dict_dir = util.get_user_dictionaries_dir()
         if os.path.exists(user_dict_dir):
             for filename in sorted(os.listdir(user_dict_dir)):
                 if filename.endswith('.txt'):
-                    self.user_dict_store.append([filename])
+                    # Get weight from config, default to 1
+                    weight = user_dict_weights.get(filename, 1)
+                    self.user_dict_store.append([filename, weight])
 
         # Murenso tab - populate kanchoku layout combo
         self.kanchoku_layout_combo.remove_all()
@@ -1190,12 +1229,13 @@ class SettingsPanel(Gtk.Window):
         }
 
         # Dictionaries tab
-        # For system dictionaries, save only the full paths of enabled entries
-        # Note: User dictionaries are no longer saved to config - they're discovered
-        # by scanning ~/.config/ibus-pskk/dictionaries/ for .txt files
-        enabled_system_dicts = [row[2] for row in self.sys_dict_store if row[0]]
+        # For system dictionaries, save as {full_path: weight} for enabled entries
+        # For user dictionaries, save as {filename: weight} so weights persist
+        enabled_system_dicts = {row[2]: row[3] for row in self.sys_dict_store if row[0]}
+        user_dict_weights = {row[0]: row[1] for row in self.user_dict_store}
         self.config["dictionaries"] = {
-            "system": enabled_system_dicts
+            "system": enabled_system_dicts,
+            "user": user_dict_weights
         }
 
         # Save config to JSON file
@@ -1240,13 +1280,61 @@ class SettingsPanel(Gtk.Window):
         # Toggle the enabled state in the store
         self.sys_dict_store[path][0] = not self.sys_dict_store[path][0]
 
+    def on_sys_dict_weight_edited(self, widget, path, new_text):
+        """Handle weight value edit for system dictionary"""
+        try:
+            weight = int(new_text)
+            if weight < 1:
+                raise ValueError("Weight must be at least 1")
+            self.sys_dict_store[path][3] = weight
+        except ValueError:
+            # Show error dialog for invalid weight
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Invalid Weight"
+            )
+            dialog.format_secondary_text(
+                f"Weight must be a positive integer (1 or greater).\n"
+                f"Invalid value: '{new_text}'"
+            )
+            dialog.run()
+            dialog.destroy()
+            # Disable the entry if weight is invalid
+            self.sys_dict_store[path][0] = False
+
+    def on_user_dict_weight_edited(self, widget, path, new_text):
+        """Handle weight value edit for user dictionary"""
+        try:
+            weight = int(new_text)
+            if weight < 1:
+                raise ValueError("Weight must be at least 1")
+            self.user_dict_store[path][1] = weight
+        except ValueError:
+            # Show error dialog for invalid weight
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Invalid Weight"
+            )
+            dialog.format_secondary_text(
+                f"Weight must be a positive integer (1 or greater).\n"
+                f"Invalid value: '{new_text}'"
+            )
+            dialog.run()
+            dialog.destroy()
+
     def on_refresh_system_dicts(self, button):
         """Refresh the system dictionaries list by scanning the directory recursively"""
-        # Remember currently enabled dictionaries
-        enabled_paths = set()
+        # Remember currently enabled dictionaries and their weights
+        enabled_dict_weights = {}
         for row in self.sys_dict_store:
             if row[0]:  # enabled
-                enabled_paths.add(row[2])  # full_path
+                enabled_dict_weights[row[2]] = row[3]  # full_path: weight
 
         # Clear and rescan
         self.sys_dict_store.clear()
@@ -1265,14 +1353,33 @@ class SettingsPanel(Gtk.Window):
 
             # Sort by relative path and add to store
             for rel_path, full_path in sorted(dict_files):
-                # Check if this path was previously enabled
-                enabled = full_path in enabled_paths
-                self.sys_dict_store.append([enabled, rel_path, full_path])
+                # Check if this path was previously enabled, preserve weight
+                enabled = full_path in enabled_dict_weights
+                weight = enabled_dict_weights.get(full_path, 1)
+                self.sys_dict_store.append([enabled, rel_path, full_path, weight])
 
         logger.info(f"Refreshed system dictionaries from {sys_dict_dir}")
 
     def on_convert_system_dicts(self, button):
         """Convert SKK dictionaries to merged system_dictionary.json under $HOME"""
+        # Collect enabled dictionaries with their weights
+        source_weights = {row[2]: row[3] for row in self.sys_dict_store if row[0]}
+
+        if not source_weights:
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.OK,
+                text="No Dictionaries Selected"
+            )
+            dialog.format_secondary_text(
+                "Please enable at least one dictionary to convert."
+            )
+            dialog.run()
+            dialog.destroy()
+            return
+
         # Show a progress message
         dialog = Gtk.MessageDialog(
             transient_for=self,
@@ -1288,8 +1395,8 @@ class SettingsPanel(Gtk.Window):
         while Gtk.events_pending():
             Gtk.main_iteration()
 
-        # Perform the conversion
-        success, output_path, stats = util.generate_system_dictionary()
+        # Perform the conversion with weights
+        success, output_path, stats = util.generate_system_dictionary(source_weights=source_weights)
 
         # Close progress dialog
         dialog.destroy()
@@ -1361,6 +1468,9 @@ class SettingsPanel(Gtk.Window):
 
     def on_refresh_user_dicts(self, button):
         """Refresh the list of user dictionary source files (.txt)"""
+        # Remember current weights
+        current_weights = {row[0]: row[1] for row in self.user_dict_store}
+
         self.user_dict_store.clear()
         user_dict_dir = util.get_user_dictionaries_dir()
 
@@ -1371,12 +1481,33 @@ class SettingsPanel(Gtk.Window):
         # List all .txt files in the user dictionaries directory
         for filename in sorted(os.listdir(user_dict_dir)):
             if filename.endswith('.txt'):
-                self.user_dict_store.append([filename])
+                # Preserve weight if it was set, default to 1
+                weight = current_weights.get(filename, 1)
+                self.user_dict_store.append([filename, weight])
 
         logger.info(f"Refreshed user dictionaries from {user_dict_dir}")
 
     def on_convert_user_dicts(self, button):
         """Convert user SKK dictionary files to merged user_dictionary.json"""
+        # Collect user dictionaries with their weights
+        source_weights = {row[0]: row[1] for row in self.user_dict_store}
+
+        if not source_weights:
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.OK,
+                text="No Dictionaries Found"
+            )
+            dialog.format_secondary_text(
+                "No .txt files found in the dictionaries directory.\n"
+                "Click 'Refresh List' after adding files."
+            )
+            dialog.run()
+            dialog.destroy()
+            return
+
         # Show a progress message
         dialog = Gtk.MessageDialog(
             transient_for=self,
@@ -1392,8 +1523,8 @@ class SettingsPanel(Gtk.Window):
         while Gtk.events_pending():
             Gtk.main_iteration()
 
-        # Perform the conversion
-        success, output_path, stats = util.generate_user_dictionary()
+        # Perform the conversion with weights
+        success, output_path, stats = util.generate_user_dictionary(source_weights=source_weights)
 
         # Close progress dialog
         dialog.destroy()

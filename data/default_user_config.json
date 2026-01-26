@@ -26,10 +26,11 @@
     "use_ibus_hint_colors": false,
 
     "dictionaries": {
-        "system": []
+        "system": {},
+        "user": {}
     },
-    "dictionaries_": "List of enabled system dictionaries. User dictionaries are discovered automatically from SKK-format .txt files in ${config_dir}/dictionaries/ and converted to user_dictionary.json.",
-    "dictionaries_ja": "有効化されているシステム辞書のリスト。ユーザー辞書は ${config_dir}/dictionaries/ 内の SKK 形式の .txt ファイルから自動的に検出され、user_dictionary.json に変換されます。",
+    "dictionaries_": "Dictionary configuration with weights. Format: {path: weight}. Higher weight = higher priority during merge. System dictionaries use full paths, user dictionaries use filenames from ${config_dir}/dictionaries/.",
+    "dictionaries_ja": "辞書の設定（重みつき）。形式: {パス: 重み}。重みが高いほど、マージ時の優先度が高くなります。システム辞書はフルパス、ユーザー辞書は ${config_dir}/dictionaries/ 内のファイル名を使用します。",
 
     "sands_": "Setting to determine whether or not the SandS is enabled",
     "enable_sands": true,
