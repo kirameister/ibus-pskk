@@ -118,35 +118,35 @@ def get_config_data():
     # Deep validation for nested structures like "dictionaries"
     if "dictionaries" in config_data and isinstance(config_data["dictionaries"], dict):
         dictionaries = config_data["dictionaries"]
-        default_dictionaries = default_config.get("dictionaries", {"system": [], "user": []})
+        default_dictionaries = default_config.get("dictionaries", {"system": {}, "user": {}})
         needs_fix = False
 
-        # Ensure "system" key exists and is a list
+        # Ensure "system" key exists and is a dict (or list for backwards compatibility)
         if "system" not in dictionaries:
             needs_fix = True
-        elif not isinstance(dictionaries["system"], list):
-            warning_msg = f'The "dictionaries.system" key has invalid type (expected list). Resetting to default.'
+        elif not isinstance(dictionaries["system"], (dict, list)):
+            warning_msg = f'The "dictionaries.system" key has invalid type (expected dict or list). Resetting to default.'
             logger.warning(warning_msg)
             warnings += ("\n" if warnings else "") + warning_msg
-            dictionaries["system"] = default_dictionaries.get("system", [])
+            dictionaries["system"] = default_dictionaries.get("system", {})
 
-        # Ensure "user" key exists and is a list
+        # Ensure "user" key exists and is a dict (or list for backwards compatibility)
         if "user" not in dictionaries:
             needs_fix = True
-        elif not isinstance(dictionaries["user"], list):
-            warning_msg = f'The "dictionaries.user" key has invalid type (expected list). Resetting to default.'
+        elif not isinstance(dictionaries["user"], (dict, list)):
+            warning_msg = f'The "dictionaries.user" key has invalid type (expected dict or list). Resetting to default.'
             logger.warning(warning_msg)
             warnings += ("\n" if warnings else "") + warning_msg
-            dictionaries["user"] = default_dictionaries.get("user", [])
+            dictionaries["user"] = default_dictionaries.get("user", {})
 
         if needs_fix:
             warning_msg = f'The "dictionaries" key is missing required sub-keys (system/user). Adding defaults.'
             logger.warning(warning_msg)
             warnings += ("\n" if warnings else "") + warning_msg
             if "system" not in dictionaries:
-                dictionaries["system"] = default_dictionaries.get("system", [])
+                dictionaries["system"] = default_dictionaries.get("system", {})
             if "user" not in dictionaries:
-                dictionaries["user"] = default_dictionaries.get("user", [])
+                dictionaries["user"] = default_dictionaries.get("user", {})
 
     return config_data, warnings
 
@@ -472,10 +472,6 @@ def generate_system_dictionary(output_path=None, source_weights=None):
             if os.path.isfile(skk_path):
                 source_weights[skk_path] = 1
 
-    if not source_weights:
-        logger.warning('No dictionaries specified for conversion')
-        return False, None, stats
-
     # Merged dictionary: {reading: {candidate: count}}
     merged_dictionary = {}
 
@@ -650,10 +646,6 @@ def generate_user_dictionary(output_path=None, source_weights=None):
     stats['total_readings'] = len(merged_dictionary)
     stats['total_candidates'] = sum(len(candidates) for candidates in merged_dictionary.values())
 
-    # Only write if there are entries (don't create empty file)
-    if not merged_dictionary:
-        logger.info('No user dictionary entries found, skipping JSON generation')
-        return True, None, stats
 
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
