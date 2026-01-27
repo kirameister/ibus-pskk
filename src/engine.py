@@ -678,10 +678,13 @@ class EnginePSKK(IBus.Engine):
                     return True
                 elif self._preedit_string:
                     # Delete last character from preedit
-                    # Disable all conversions (Ctrl+K/J/L) after backspace because we can't
-                    # reliably track the many-to-one mapping from keystrokes to hiragana.
-                    # User must ESC and retype, or commit and start fresh.
+                    # _preedit_hiragana is in 1:1 correspondence with _preedit_string,
+                    # so trim both to keep conversion yomi in sync.
+                    # Disable Ctrl+K/J/L conversions after backspace because we can't
+                    # reliably track the many-to-one mapping from keystrokes to hiragana
+                    # in _preedit_ascii. User must ESC and retype, or commit and start fresh.
                     self._preedit_string = self._preedit_string[:-1]
+                    self._preedit_hiragana = self._preedit_hiragana[:-1]
                     self._conversion_disabled = True
                     self._update_preedit()
                     return True
