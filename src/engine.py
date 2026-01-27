@@ -160,6 +160,7 @@ class EnginePSKK(IBus.Engine):
         self._marker_state = MarkerState.IDLE
         self._marker_first_key = None           # Raw key char for kanchoku lookup
         self._marker_keys_held = set()          # Track keys currently pressed while marker held
+        self._marker_had_input = False          # True if any key was pressed during this marker hold
         self._preedit_before_marker = ''        # Preedit snapshot to restore if kanchoku
         self._in_forced_preedit = False         # True when in forced preedit mode (Case C)
 
@@ -249,6 +250,7 @@ class EnginePSKK(IBus.Engine):
         self._marker_state = MarkerState.IDLE
         self._marker_first_key = None
         self._marker_keys_held.clear()
+        self._marker_had_input = False
 
 
     def _init_props(self):
@@ -1068,6 +1070,7 @@ class EnginePSKK(IBus.Engine):
             self._marker_state = MarkerState.MARKER_HELD
             self._marker_first_key = None
             self._marker_keys_held.clear()
+            self._marker_had_input = False
             logger.debug('Marker pressed: entering MARKER_HELD state')
             return True
 
@@ -1076,9 +1079,11 @@ class EnginePSKK(IBus.Engine):
                     f'bunsetsu_active={self._bunsetsu_active}, in_conversion={self._in_conversion}')
 
         if self._marker_state == MarkerState.MARKER_HELD:
-            # Marker was just tapped (pressed and released without other keys)
-            # Behavior depends on current henkan state
-            if self._in_conversion:
+            if self._marker_had_input:
+                # Keys were pressed during this space hold (e.g. kanchoku completed
+                # and returned to MARKER_HELD). This is NOT a tap — just release cleanly.
+                logger.debug('Space released after input (not a tap), no action')
+            elif self._in_conversion:
                 # CONVERTING state: cycle to next candidate
                 logger.debug('Space tap in CONVERTING: cycling candidate')
                 self._cycle_candidate()
@@ -1190,6 +1195,7 @@ class EnginePSKK(IBus.Engine):
             if is_pressed:
                 self._marker_first_key = key_char
                 self._marker_keys_held.add(key_char)
+                self._marker_had_input = True
 
                 # If in CONVERTING state, now we know it's space+key (not a tap),
                 # so commit the current candidate directly and exit conversion mode
