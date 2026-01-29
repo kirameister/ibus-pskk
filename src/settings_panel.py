@@ -386,6 +386,7 @@ class SettingsPanel(Gtk.Window):
         notebook.append_page(self.create_input_tab(), Gtk.Label(label="Input"))
         notebook.append_page(self.create_conversion_tab(), Gtk.Label(label="Conversion"))
         notebook.append_page(self.create_dictionaries_tab(), Gtk.Label(label="Dictionaries"))
+        notebook.append_page(self.create_ext_dictionary_tab(), Gtk.Label(label="Ext-Dictionary"))
         notebook.append_page(self.create_murenso_tab(), Gtk.Label(label="無連想配列"))
         
         # Button box
@@ -965,6 +966,20 @@ class SettingsPanel(Gtk.Window):
         btn_box.pack_start(save_btn, False, False, 0)
 
         box.pack_start(btn_box, False, False, 0)
+
+        return box
+
+
+    def create_ext_dictionary_tab(self):
+        """Create Ext-Dictionary tab"""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_border_width(10)
+
+        # Placeholder
+        placeholder = Gtk.Label()
+        placeholder.set_markup("<i>Ext-Dictionary settings will be configured here.</i>")
+        placeholder.set_xalign(0)
+        box.pack_start(placeholder, False, False, 0)
 
         return box
 
