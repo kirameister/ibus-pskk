@@ -826,9 +826,11 @@ def generate_extended_dictionary(config=None, source_paths=None):
             for pos in positions:
                 for kanji in kanji_set:
                     # Only create an entry if the kanji actually appears
-                    # in at least one candidate of the original entry
+                    # in at least one candidate of the original entry.
+                    # Skip single-character candidates — those are already
+                    # directly produceable via kanchoku and would be noise.
                     matching_candidates = {
-                        c: w for c, w in candidates.items() if kanji in c
+                        c: w for c, w in candidates.items() if kanji in c and len(c) > 1
                     }
                     if not matching_candidates:
                         continue
