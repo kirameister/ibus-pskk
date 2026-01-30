@@ -615,6 +615,15 @@ class EnginePSKK(IBus.Engine):
         if self._check_config_key_bindings(key_name, state, is_pressed):
             return True
 
+        # Pass through unrecognized combo-keys (e.g. Ctrl+0, Ctrl+C, Alt+F4)
+        # so the application can handle them.  Shift is excluded since it is
+        # part of normal typing (Shift+a → 'A').
+        combo_mask = (IBus.ModifierType.CONTROL_MASK |
+                      IBus.ModifierType.MOD1_MASK |
+                      IBus.ModifierType.SUPER_MASK)
+        if state & combo_mask:
+            return False
+
         # =====================================================================
         # SPECIAL KEY HANDLING
         # =====================================================================
