@@ -6,9 +6,9 @@
     "logging_level_": "Level of the runtime logging",
     "logging_level_ja": "ログレベル",
 
-    "enable_hiragana_key": "Alt_R",
+    "enable_hiragana_key": "Henkan",
     "enable_hiragana_key_": "Key to enable hiragana/Japanese typing",
-    "disable_hiragana_key": "Alt_L",
+    "disable_hiragana_key": "Muhenkan",
     "disable_hiragana_key_": "Key to disable hiragana/Japanese typing",
 
     "forced_preedit_trigger_key_": "The key to trigger the forceed preedit mode",
