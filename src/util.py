@@ -267,6 +267,14 @@ def get_dictionary_files(config=None):
     else:
         logger.debug(f'User dictionary not found: {user_dict_path}')
 
+    # 3. Check for extended_dictionary.json
+    ext_dict_path = os.path.join(config_dir, 'extended_dictionary.json')
+    if os.path.exists(ext_dict_path):
+        dictionary_files.append(ext_dict_path)
+        logger.debug(f'Found extended dictionary: {ext_dict_path}')
+    else:
+        logger.debug(f'Extended dictionary not found: {ext_dict_path}')
+
     logger.info(f'Dictionary files to use: {len(dictionary_files)} file(s)')
     return dictionary_files
 
@@ -659,4 +667,193 @@ def generate_user_dictionary(output_path=None, source_weights=None):
         return True, output_path, stats
     except Exception as e:
         logger.error(f'Failed to write user dictionary: {e}')
+        return False, None, stats
+
+
+def generate_extended_dictionary(config=None, source_paths=None):
+    """
+    Generate an extended dictionary by bridging kanchoku kanji with dictionary-based
+    conversion via substring matching.
+
+    Algorithm:
+      1. Read the kanchoku layout → set of kanji produceable by kanchoku.
+      2. Read the specified source dictionaries (SKK-format) → build
+         yomi→single-kanji mappings, keeping only kanji that are in the kanchoku set.
+      3. Load the already-generated system_dictionary.json and user_dictionary.json.
+      4. For each entry in the combined dictionaries, check whether the reading
+         contains a yomi from step 2 as a substring.  When a match is found AND
+         the corresponding kanji appears in at least one candidate, create a new
+         entry whose key has the matched yomi replaced by the kanji.
+         NOTE: When a substring appears more than once in a reading (e.g. "いち"
+         in "いちいち"), entries are generated for ALL occurrence positions.
+         This behavior may change in the future.
+
+    Args:
+        config: Configuration dictionary (needed for kanchoku_layout).
+                If None, will be loaded via get_config_data().
+        source_paths: List of full file paths to SKK-format source dictionaries.
+                     If None, no source files are processed (empty output).
+
+    Returns:
+        tuple: (success: bool, output_path: str or None, stats: dict)
+               stats contains 'files_processed', 'yomi_kanji_mappings',
+               'kanchoku_kanji_count', 'source_entries_scanned',
+               'total_readings', 'total_candidates'
+    """
+    stats = {
+        'files_processed': 0,
+        'yomi_kanji_mappings': 0,
+        'kanchoku_kanji_count': 0,
+        'source_entries_scanned': 0,
+        'total_readings': 0,
+        'total_candidates': 0,
+    }
+
+    # Load config if not provided
+    if config is None:
+        config, _ = get_config_data()
+
+    # Output path is hardcoded alongside system/user dictionaries
+    config_dir = get_user_config_dir()
+    os.makedirs(config_dir, exist_ok=True)
+    output_path = os.path.join(config_dir, 'extended_dictionary.json')
+
+    # ── Step 1: Read kanchoku layout → set of produceable kanji ──
+    kanchoku_layout = get_kanchoku_layout(config)
+    if not kanchoku_layout:
+        logger.error('Cannot generate extended dictionary: no kanchoku layout loaded')
+        return False, None, stats
+
+    kanchoku_kanji = set()
+    for first_key, second_dict in kanchoku_layout.items():
+        if isinstance(second_dict, dict):
+            for second_key, kanji in second_dict.items():
+                kanchoku_kanji.add(kanji)
+
+    stats['kanchoku_kanji_count'] = len(kanchoku_kanji)
+    logger.info(f'Extended dict generation: {len(kanchoku_kanji)} unique kanji from kanchoku layout')
+
+    # ── Step 2: Read source dictionaries → yomi→single-kanji mappings ──
+    # Only keep candidates that are a single character AND present in kanchoku_kanji.
+    yomi_to_kanji = {}  # {yomi: set(kanji_chars)}
+
+    if source_paths is None:
+        source_paths = []
+
+    for file_path in source_paths:
+        if not os.path.isfile(file_path):
+            logger.warning(f'Ext-dictionary source file not found: {file_path}')
+            continue
+
+        # Try different encodings
+        encodings = ['utf-8', 'euc-jp', 'shift-jis']
+        file_content = None
+
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    file_content = f.readlines()
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if file_content is None:
+            logger.warning(f'Failed to read {file_path} with any supported encoding, skipping')
+            continue
+
+        for line in file_content:
+            reading, candidates = parse_skk_dictionary_line(line)
+            if not reading or not candidates:
+                continue
+            for candidate in candidates:
+                if len(candidate) == 1 and candidate in kanchoku_kanji:
+                    if reading not in yomi_to_kanji:
+                        yomi_to_kanji[reading] = set()
+                    yomi_to_kanji[reading].add(candidate)
+
+        stats['files_processed'] += 1
+
+    stats['yomi_kanji_mappings'] = sum(len(v) for v in yomi_to_kanji.values())
+    logger.info(f'Extended dict generation: {stats["yomi_kanji_mappings"]} yomi→kanji mappings from {stats["files_processed"]} source files')
+
+    # ── Step 3: Load system_dictionary.json and user_dictionary.json ──
+    combined_dict = {}  # {reading: {candidate: weight}}
+
+    for dict_filename in ['system_dictionary.json', 'user_dictionary.json']:
+        dict_path = os.path.join(config_dir, dict_filename)
+        if not os.path.exists(dict_path):
+            logger.debug(f'Dictionary not found for ext-dict generation: {dict_path}')
+            continue
+        try:
+            with open(dict_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            for reading, candidates in data.items():
+                if not isinstance(candidates, dict):
+                    continue
+                if reading not in combined_dict:
+                    combined_dict[reading] = {}
+                for candidate, count in candidates.items():
+                    # Keep the higher weight when merging
+                    if candidate not in combined_dict[reading] or count > combined_dict[reading][candidate]:
+                        combined_dict[reading][candidate] = count
+        except Exception as e:
+            logger.warning(f'Failed to load {dict_path} for ext-dict generation: {e}')
+
+    stats['source_entries_scanned'] = len(combined_dict)
+    logger.info(f'Extended dict generation: {len(combined_dict)} entries from system/user dictionaries')
+
+    # ── Step 4: Substring matching and replacement ──
+    extended_dict = {}  # {new_reading: {candidate: weight}}
+
+    for reading, candidates in combined_dict.items():
+        for yomi, kanji_set in yomi_to_kanji.items():
+            # Find ALL occurrence positions of yomi in reading.
+            # NOTE: This generates entries for every occurrence, including when
+            # a substring appears multiple times.  This behavior may change
+            # in the future.
+            positions = []
+            start = 0
+            while True:
+                pos = reading.find(yomi, start)
+                if pos == -1:
+                    break
+                positions.append(pos)
+                start = pos + 1  # Allow overlapping matches
+
+            if not positions:
+                continue
+
+            for pos in positions:
+                for kanji in kanji_set:
+                    # Only create an entry if the kanji actually appears
+                    # in at least one candidate of the original entry
+                    matching_candidates = {
+                        c: w for c, w in candidates.items() if kanji in c
+                    }
+                    if not matching_candidates:
+                        continue
+
+                    # Build new reading: replace the matched yomi with kanji
+                    new_reading = reading[:pos] + kanji + reading[pos + len(yomi):]
+
+                    # Merge into extended dictionary
+                    if new_reading not in extended_dict:
+                        extended_dict[new_reading] = {}
+                    for candidate, weight in matching_candidates.items():
+                        if candidate not in extended_dict[new_reading] or weight > extended_dict[new_reading][candidate]:
+                            extended_dict[new_reading][candidate] = weight
+
+    # Calculate output stats
+    stats['total_readings'] = len(extended_dict)
+    stats['total_candidates'] = sum(len(c) for c in extended_dict.values())
+    logger.info(f'Extended dict generation: {stats["total_readings"]} readings, {stats["total_candidates"]} candidates')
+
+    # Write output
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(extended_dict, f, ensure_ascii=False, indent=2)
+        logger.info(f'Generated extended dictionary: {output_path}')
+        return True, output_path, stats
+    except Exception as e:
+        logger.error(f'Failed to write extended dictionary: {e}')
         return False, None, stats

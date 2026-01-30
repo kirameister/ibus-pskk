@@ -971,15 +971,97 @@ class SettingsPanel(Gtk.Window):
 
 
     def create_ext_dictionary_tab(self):
-        """Create Ext-Dictionary tab"""
+        """Create Ext-Dictionary tab.
+
+        This tab lets the user select system and user dictionaries as sources
+        for generating extended_dictionary.json.  The generation algorithm:
+          1. Reads the kanchoku layout to find all produceable kanji.
+          2. Reads the selected source dictionaries (SKK-format) to extract
+             yomi→single-kanji mappings (only kanji in the kanchoku set).
+          3. Substring-matches those yomi against system/user dictionary readings.
+          4. Creates hybrid keys with matched yomi replaced by the kanji.
+        """
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
 
-        # Placeholder
-        placeholder = Gtk.Label()
-        placeholder.set_markup("<i>Ext-Dictionary settings will be configured here.</i>")
-        placeholder.set_xalign(0)
-        box.pack_start(placeholder, False, False, 0)
+        # Info label
+        ext_info_label = Gtk.Label()
+        ext_info_label.set_markup(
+            "<small>Select source dictionaries whose yomi→single-kanji mappings will be used\n"
+            "to generate <b>extended_dictionary.json</b> (bridging kanchoku with conversion).\n"
+            "Requires system/user dictionaries to have been converted first.</small>"
+        )
+        ext_info_label.set_xalign(0)
+        box.pack_start(ext_info_label, False, False, 0)
+
+        # ── System Dictionaries ──
+        ext_sys_frame = Gtk.Frame(label="System Dictionaries")
+        ext_sys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        ext_sys_box.set_border_width(10)
+        ext_sys_frame.add(ext_sys_box)
+
+        ext_sys_scroll = Gtk.ScrolledWindow()
+        ext_sys_scroll.set_min_content_height(120)
+        # Store: (enabled: bool, display_name: str, full_path: str)
+        self.ext_sys_dict_store = Gtk.ListStore(bool, str, str)
+        self.ext_sys_dict_view = Gtk.TreeView(model=self.ext_sys_dict_store)
+
+        toggle_r = Gtk.CellRendererToggle()
+        toggle_r.connect("toggled", self.on_ext_sys_dict_toggled)
+        col = Gtk.TreeViewColumn("Enable", toggle_r, active=0)
+        col.set_min_width(60)
+        self.ext_sys_dict_view.append_column(col)
+
+        text_r = Gtk.CellRendererText()
+        col = Gtk.TreeViewColumn("Dictionary File", text_r, text=1)
+        col.set_expand(True)
+        self.ext_sys_dict_view.append_column(col)
+
+        ext_sys_scroll.add(self.ext_sys_dict_view)
+        ext_sys_box.pack_start(ext_sys_scroll, True, True, 0)
+
+        box.pack_start(ext_sys_frame, True, True, 0)
+
+        # ── User Dictionaries ──
+        ext_user_frame = Gtk.Frame(label="User Dictionaries")
+        ext_user_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        ext_user_box.set_border_width(10)
+        ext_user_frame.add(ext_user_box)
+
+        ext_user_scroll = Gtk.ScrolledWindow()
+        ext_user_scroll.set_min_content_height(100)
+        # Store: (enabled: bool, display_name: str, full_path: str)
+        self.ext_user_dict_store = Gtk.ListStore(bool, str, str)
+        self.ext_user_dict_view = Gtk.TreeView(model=self.ext_user_dict_store)
+
+        toggle_r2 = Gtk.CellRendererToggle()
+        toggle_r2.connect("toggled", self.on_ext_user_dict_toggled)
+        col = Gtk.TreeViewColumn("Enable", toggle_r2, active=0)
+        col.set_min_width(60)
+        self.ext_user_dict_view.append_column(col)
+
+        text_r2 = Gtk.CellRendererText()
+        col = Gtk.TreeViewColumn("SKK Source Files (.txt)", text_r2, text=1)
+        col.set_expand(True)
+        self.ext_user_dict_view.append_column(col)
+
+        ext_user_scroll.add(self.ext_user_dict_view)
+        ext_user_box.pack_start(ext_user_scroll, True, True, 0)
+
+        box.pack_start(ext_user_frame, True, True, 0)
+
+        # ── Buttons ──
+        ext_btn_box = Gtk.Box(spacing=6)
+
+        refresh_ext_btn = Gtk.Button(label="Refresh List")
+        refresh_ext_btn.connect("clicked", self.on_refresh_ext_dicts)
+        ext_btn_box.pack_start(refresh_ext_btn, False, False, 0)
+
+        convert_ext_btn = Gtk.Button(label="Convert")
+        convert_ext_btn.connect("clicked", self.on_convert_ext_dicts)
+        ext_btn_box.pack_start(convert_ext_btn, False, False, 0)
+
+        box.pack_start(ext_btn_box, False, False, 0)
 
         return box
 
@@ -1162,6 +1244,27 @@ class SettingsPanel(Gtk.Window):
                     enabled = filename in user_dict_weights
                     weight = user_dict_weights.get(filename, 1)
                     self.user_dict_store.append([enabled, filename, weight])
+
+        # Ext-Dictionary tab - populate system and user source lists
+        # System dictionaries (same directory as the Dictionaries tab)
+        sys_dict_dir = os.path.join(util.get_datadir(), 'dictionaries')
+        if os.path.exists(sys_dict_dir) and os.path.isdir(sys_dict_dir):
+            dict_files = []
+            for root, dirs, files in os.walk(sys_dict_dir):
+                for filename in files:
+                    full_path = os.path.join(root, filename)
+                    rel_path = os.path.relpath(full_path, sys_dict_dir)
+                    dict_files.append((rel_path, full_path))
+            for rel_path, full_path in sorted(dict_files):
+                self.ext_sys_dict_store.append([False, rel_path, full_path])
+
+        # User dictionaries (same directory as the Dictionaries tab)
+        user_dict_dir = util.get_user_dictionaries_dir()
+        if os.path.exists(user_dict_dir):
+            for filename in sorted(os.listdir(user_dict_dir)):
+                if filename.endswith('.txt'):
+                    full_path = os.path.join(user_dict_dir, filename)
+                    self.ext_user_dict_store.append([False, filename, full_path])
 
         # Murenso tab - populate kanchoku layout combo
         self.kanchoku_layout_combo.remove_all()
@@ -1568,6 +1671,119 @@ class SettingsPanel(Gtk.Window):
                 text="Conversion Failed"
             )
             result_dialog.format_secondary_text("Failed to convert user dictionaries. Check logs for details.")
+
+        result_dialog.run()
+        result_dialog.destroy()
+
+
+    # Ext-dictionary management methods
+    def on_ext_sys_dict_toggled(self, widget, path):
+        """Handle checkbox toggle for ext-dictionary system source"""
+        self.ext_sys_dict_store[path][0] = not self.ext_sys_dict_store[path][0]
+
+    def on_ext_user_dict_toggled(self, widget, path):
+        """Handle checkbox toggle for ext-dictionary user source"""
+        self.ext_user_dict_store[path][0] = not self.ext_user_dict_store[path][0]
+
+    def on_refresh_ext_dicts(self, button):
+        """Refresh both system and user source lists for ext-dictionary generation"""
+        # ── System dictionaries ──
+        sys_prev = {row[2]: row[0] for row in self.ext_sys_dict_store}
+        self.ext_sys_dict_store.clear()
+
+        sys_dict_dir = os.path.join(util.get_datadir(), 'dictionaries')
+        if os.path.exists(sys_dict_dir) and os.path.isdir(sys_dict_dir):
+            dict_files = []
+            for root, dirs, files in os.walk(sys_dict_dir):
+                for filename in files:
+                    full_path = os.path.join(root, filename)
+                    rel_path = os.path.relpath(full_path, sys_dict_dir)
+                    dict_files.append((rel_path, full_path))
+            for rel_path, full_path in sorted(dict_files):
+                enabled = sys_prev.get(full_path, False)
+                self.ext_sys_dict_store.append([enabled, rel_path, full_path])
+
+        # ── User dictionaries ──
+        user_prev = {row[2]: row[0] for row in self.ext_user_dict_store}
+        self.ext_user_dict_store.clear()
+
+        user_dict_dir = util.get_user_dictionaries_dir()
+        if os.path.exists(user_dict_dir):
+            for filename in sorted(os.listdir(user_dict_dir)):
+                if filename.endswith('.txt'):
+                    full_path = os.path.join(user_dict_dir, filename)
+                    enabled = user_prev.get(full_path, False)
+                    self.ext_user_dict_store.append([enabled, filename, full_path])
+
+        logger.info("Refreshed ext-dictionary source lists")
+
+    def on_convert_ext_dicts(self, button):
+        """Generate extended_dictionary.json from selected ext-dictionary sources"""
+        # Combine enabled entries from both system and user stores
+        source_paths = []
+        for row in self.ext_sys_dict_store:
+            if row[0]:
+                source_paths.append(row[2])
+        for row in self.ext_user_dict_store:
+            if row[0]:
+                source_paths.append(row[2])
+
+        # Show a progress message
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=0,
+            message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.NONE,
+            text="Generating extended dictionary..."
+        )
+        dialog.format_secondary_text(
+            "Please wait while the extended dictionary is being generated.\n"
+            "This reads kanchoku layout, ext-dictionary sources, and system/user dictionaries."
+        )
+        dialog.show_all()
+
+        while Gtk.events_pending():
+            Gtk.main_iteration()
+
+        # Perform the generation
+        success, output_path, stats = util.generate_extended_dictionary(
+            config=self.config,
+            source_paths=source_paths
+        )
+
+        dialog.destroy()
+
+        # Show result
+        if success:
+            result_dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.INFO,
+                buttons=Gtk.ButtonsType.OK,
+                text="Generation Complete"
+            )
+            result_dialog.format_secondary_text(
+                f"Extended dictionary generated successfully.\n\n"
+                f"Output: {output_path}\n"
+                f"Kanchoku kanji: {stats['kanchoku_kanji_count']:,}\n"
+                f"Source files processed: {stats['files_processed']}\n"
+                f"Yomi→kanji mappings: {stats['yomi_kanji_mappings']:,}\n"
+                f"Dictionary entries scanned: {stats['source_entries_scanned']:,}\n"
+                f"Extended readings: {stats['total_readings']:,}\n"
+                f"Extended candidates: {stats['total_candidates']:,}"
+            )
+        else:
+            result_dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Generation Failed"
+            )
+            result_dialog.format_secondary_text(
+                "Failed to generate extended dictionary.\n"
+                "Check that kanchoku layout is configured and system/user dictionaries exist."
+            )
 
         result_dialog.run()
         result_dialog.destroy()
