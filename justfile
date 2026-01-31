@@ -156,6 +156,7 @@ setup-user-config:
 ### │   ├── engine.py                 # Main engine implementation
 ### │   ├── util.py                   # Utility functions (config, paths)
 ### │   ├── settings_panel.py         # GTK settings UI
+### │   ├── conversion_model.py      # Conversion model panel (Test/Train)
 ### │   └── paths.py                  # Auto-generated installation paths
 ### ├── models/                       # ML models (future use)
 ### ├── data/                         # Installation data
