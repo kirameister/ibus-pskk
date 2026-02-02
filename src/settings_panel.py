@@ -119,6 +119,13 @@ class SettingsPanel(Gtk.Window):
             self.to_zenkaku_value = result
             self.to_zenkaku_button.set_label(result if result else "Not Set")
 
+    def on_kanchoku_marker_button_clicked(self, button):
+        """Show key capture dialog for kanchoku bunsetsu marker key"""
+        result = self.show_key_capture_dialog("Kanchoku Bunsetsu Marker", self.kanchoku_marker_value)
+        if result is not None:
+            self.kanchoku_marker_value = result
+            self.kanchoku_marker_button.set_label(result if result else "Not Set")
+
     def show_key_capture_dialog(self, title, current_value):
         """Show dialog to capture key press
 
@@ -556,7 +563,16 @@ class SettingsPanel(Gtk.Window):
         
         self.sands_enabled_check = Gtk.CheckButton(label="Enable SandS (Space acts as Shift when held)")
         sands_box.pack_start(self.sands_enabled_check, False, False, 0)
-        
+
+        marker_row = Gtk.Box(spacing=6)
+        marker_row.pack_start(Gtk.Label(label="Kanchoku Bunsetsu Marker:"), False, False, 0)
+        self.kanchoku_marker_button = Gtk.Button(label="Not Set")
+        self.kanchoku_marker_button.connect("clicked", self.on_kanchoku_marker_button_clicked)
+        marker_row.pack_start(self.kanchoku_marker_button, True, True, 0)
+        sands_box.pack_start(marker_row, False, False, 0)
+
+        self.kanchoku_marker_value = None
+
         box.pack_start(sands_frame, False, False, 0)
         
         # Forced Preedit settings
@@ -588,7 +604,7 @@ class SettingsPanel(Gtk.Window):
         murenso_box.pack_start(self.murenso_enabled_check, False, False, 0)
         
         box.pack_start(murenso_frame, False, False, 0)
-        
+
         return box
 
 
@@ -1172,6 +1188,11 @@ class SettingsPanel(Gtk.Window):
 
         self.murenso_enabled_check.set_active(self.config.get("enable_murenso", True))
 
+        # Load kanchoku_bunsetsu_marker
+        default_marker = default_config.get("kanchoku_bunsetsu_marker", "space")
+        self.kanchoku_marker_value = self.config.get("kanchoku_bunsetsu_marker", default_marker)
+        self.kanchoku_marker_button.set_label(self.kanchoku_marker_value or "Not Set")
+
         # Conversion tab
         self.learning_enabled_check.set_active(self.config.get("enable_learning", True))
 
@@ -1343,6 +1364,7 @@ class SettingsPanel(Gtk.Window):
         self.config["enable_sands"] = self.sands_enabled_check.get_active()
         self.config["forced_preedit_trigger_key"] = self.forced_preedit_trigger_entry.get_text()
         self.config["enable_murenso"] = self.murenso_enabled_check.get_active()
+        self.config["kanchoku_bunsetsu_marker"] = self.kanchoku_marker_value or ""
 
         # Conversion tab
         self.config["enable_learning"] = self.learning_enabled_check.get_active()
