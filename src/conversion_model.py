@@ -426,9 +426,6 @@ class ConversionModelPanel(Gtk.Window):
             'feature.possible_transitions': True,
         })
 
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(model_path), exist_ok=True)
-
         trainer.train(model_path)
 
         self._log("Training complete.")
