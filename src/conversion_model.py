@@ -182,6 +182,11 @@ def load_dictionary_readings():
     return readings
 
 
+def get_model_path():
+    """Return the canonical path to the bunsetsu CRF model file."""
+    return os.path.join(util.get_user_config_dir(), 'bunsetsu.crfsuite')
+
+
 # ─── GTK Panel ────────────────────────────────────────────────────────
 
 class ConversionModelPanel(Gtk.Window):
@@ -249,28 +254,6 @@ class ConversionModelPanel(Gtk.Window):
 
         box.pack_start(corpus_frame, False, False, 0)
 
-        # ── Model Output ──
-        model_frame = Gtk.Frame(label="Model Output")
-        model_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        model_box.set_border_width(10)
-        model_frame.add(model_box)
-
-        model_row = Gtk.Box(spacing=6)
-        self.model_path_entry = Gtk.Entry()
-        default_model_dir = os.path.join(util.get_user_config_dir(), 'models')
-        self.model_path_entry.set_text(
-            os.path.join(default_model_dir, 'bunsetsu.crfsuite')
-        )
-        model_row.pack_start(self.model_path_entry, True, True, 0)
-
-        browse_model_btn = Gtk.Button(label="Browse")
-        browse_model_btn.connect("clicked", self.on_browse_model)
-        model_row.pack_start(browse_model_btn, False, False, 0)
-
-        model_box.pack_start(model_row, False, False, 0)
-
-        box.pack_start(model_frame, False, False, 0)
-
         # ── Train Button ──
         train_btn = Gtk.Button(label="Train")
         train_btn.connect("clicked", self.on_train)
@@ -335,27 +318,6 @@ class ConversionModelPanel(Gtk.Window):
             self._preview_corpus(path)
         dialog.destroy()
 
-    def on_browse_model(self, button):
-        """Open file chooser for model output path"""
-        dialog = Gtk.FileChooserDialog(
-            title="Save Model As",
-            parent=self,
-            action=Gtk.FileChooserAction.SAVE,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_SAVE, Gtk.ResponseType.OK,
-        )
-        dialog.set_current_name("bunsetsu.crfsuite")
-        crf_filter = Gtk.FileFilter()
-        crf_filter.set_name("CRFsuite models")
-        crf_filter.add_pattern("*.crfsuite")
-        dialog.add_filter(crf_filter)
-
-        if dialog.run() == Gtk.ResponseType.OK:
-            self.model_path_entry.set_text(dialog.get_filename())
-        dialog.destroy()
-
     def _preview_corpus(self, path):
         """Load corpus and show stats."""
         try:
@@ -400,13 +362,10 @@ class ConversionModelPanel(Gtk.Window):
             return
 
         corpus_path = self.corpus_path_entry.get_text().strip()
-        model_path = self.model_path_entry.get_text().strip()
+        model_path = get_model_path()
 
         if not corpus_path or not os.path.exists(corpus_path):
             self._log("ERROR: No valid corpus file selected.")
-            return
-        if not model_path:
-            self._log("ERROR: No model output path specified.")
             return
 
         self.log_buffer.set_text('')  # Clear log
