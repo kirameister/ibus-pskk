@@ -439,6 +439,9 @@ class ConversionModelPanel(Gtk.Window):
         self._sentences = []      # Parsed (chars, tags) tuples (set by Feature Extract)
         self._features = []       # Extracted features per sentence (set by Feature Extract)
 
+        # State for Test tab
+        self._tagger = None       # CRF tagger (lazy loaded)
+
         # Create UI
         notebook = Gtk.Notebook()
         notebook.append_page(self.create_test_tab(), Gtk.Label(label="Test"))
@@ -455,10 +458,128 @@ class ConversionModelPanel(Gtk.Window):
             return True
         return False
 
+    def _load_tagger(self):
+        """Lazy load the CRF tagger. Returns True if successful."""
+        if self._tagger is not None:
+            return True
+
+        if not HAS_CRFSUITE:
+            return False
+
+        model_path = get_model_path()
+        if not os.path.exists(model_path):
+            return False
+
+        try:
+            self._tagger = pycrfsuite.Tagger()
+            self._tagger.open(model_path)
+            logger.info(f'Loaded CRF model from: {model_path}')
+            return True
+        except Exception as e:
+            logger.error(f'Failed to load CRF model: {e}')
+            self._tagger = None
+            return False
+
+    def on_test_prediction(self, button):
+        """Run bunsetsu-split prediction on input text."""
+        # Load model if not already loaded
+        if not self._load_tagger():
+            dialog = Gtk.MessageDialog(
+                transient_for=self, flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Failed to load model",
+            )
+            dialog.format_secondary_text(
+                "Could not load the CRF model. Make sure you have trained a model first."
+            )
+            dialog.run()
+            dialog.destroy()
+            return
+
+        # Get input text
+        input_text = self.test_input_entry.get_text().strip()
+        if not input_text:
+            return
+
+        # Clear previous results
+        for child in self.results_notebook.get_children():
+            self.results_notebook.remove(child)
+
+        # Hide placeholder, show notebook
+        self.no_results_label.hide()
+        self.results_notebook.show()
+
+        # Extract features for input
+        features = add_features_per_line(input_text)
+        tokens = tokenize_line(input_text)
+
+        # TODO: Run N-Best prediction and populate tabs
+        # For now, just show a placeholder tab
+        n_best_count = 5  # Hardcoded for now, will be configurable later
+
+        # Placeholder: create dummy tabs
+        for i in range(n_best_count):
+            tab_label = Gtk.Label(label=f"#{i+1} (0.000)")
+            tab_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+            tab_content.set_border_width(10)
+
+            placeholder = Gtk.Label(label=f"Prediction result #{i+1}\n\n(Content to be implemented)")
+            tab_content.pack_start(placeholder, True, True, 0)
+
+            self.results_notebook.append_page(tab_content, tab_label)
+
+        self.results_notebook.show_all()
+
     def create_test_tab(self):
         """Create Test tab"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
+
+        # ── Input Section ──
+        input_frame = Gtk.Frame(label="Input Sentence")
+        input_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        input_box.set_border_width(10)
+        input_frame.add(input_box)
+
+        input_info = Gtk.Label()
+        input_info.set_markup(
+            "<small>Enter a sentence in hiragana to test bunsetsu segmentation prediction.</small>"
+        )
+        input_info.set_xalign(0)
+        input_box.pack_start(input_info, False, False, 0)
+
+        self.test_input_entry = Gtk.Entry()
+        self.test_input_entry.set_placeholder_text("e.g., きょうはてんきがよい")
+        input_box.pack_start(self.test_input_entry, False, False, 0)
+
+        box.pack_start(input_frame, False, False, 0)
+
+        # ── Test Button ──
+        self.test_predict_btn = Gtk.Button(label="Test Bunsetsu-split prediction")
+        self.test_predict_btn.connect("clicked", self.on_test_prediction)
+        # Disable if no model exists
+        if not os.path.exists(get_model_path()):
+            self.test_predict_btn.set_sensitive(False)
+            self.test_predict_btn.set_tooltip_text("No trained model found. Train a model first.")
+        box.pack_start(self.test_predict_btn, False, False, 0)
+
+        # ── N-Best Results (nested notebook) ──
+        results_frame = Gtk.Frame(label="N-Best Prediction Results")
+        results_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        results_box.set_border_width(10)
+        results_frame.add(results_box)
+
+        self.results_notebook = Gtk.Notebook()
+        self.results_notebook.set_scrollable(True)
+        results_box.pack_start(self.results_notebook, True, True, 0)
+
+        # Placeholder label when no results yet
+        self.no_results_label = Gtk.Label(label="Click 'Test Bunsetsu-split prediction' to see results.")
+        results_box.pack_start(self.no_results_label, True, True, 0)
+
+        box.pack_start(results_frame, True, True, 0)
+
         return box
 
     def create_train_tab(self):
@@ -749,7 +870,7 @@ class ConversionModelPanel(Gtk.Window):
 
         model_size = os.path.getsize(model_path)
         self._log(f"  Model file size: {model_size:,} bytes")
-        self._log(f"  Sentences:       {len(sentences):,}")
+        self._log(f"  Sentences:       {len(self._sentences):,}")
         self._log(f"  Tokens:          {total_tokens:,}")
         self._log("")
         self._log("Done.")
