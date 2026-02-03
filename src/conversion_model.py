@@ -1,5 +1,31 @@
 #!/usr/bin/env python3
 # ui/conversion_model.py - Conversion Model Panel for IBus-PSKK
+"""
+CRF-based bunsetsu (文節) segmentation model trainer and tester.
+
+This module trains a Conditional Random Field model to predict bunsetsu
+boundaries in Japanese text. The model uses character-level features
+including character identity, character type, surrounding context,
+particle/auxiliary verb detection, and dictionary lookups.
+
+IMPORTANT: Training Data Format
+-------------------------------
+Training data must be in HIRAGANA (yomi/reading), not kanji-kana mixture.
+This is because at inference time, the model receives the user's typed
+hiragana input (before kana-to-kanji conversion), so training on kanji
+would create a domain mismatch.
+
+Correct format (hiragana with space-delimited bunsetsu):
+    きょうは てんきが よい
+    わたしは がっこうに いきます
+
+Incorrect format (kanji - do NOT use):
+    今日は 天気が 良い
+    私は 学校に 行きます
+
+If you have a kanji-annotated corpus, convert it to readings first
+using the dictionary or a morphological analyzer like MeCab.
+"""
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -68,9 +94,15 @@ def char_type(c):
 def parse_training_line(line):
     """Parse a space-delimited line into characters and BI tags.
 
-    Example: "今日は 天気が 良い"
-      → chars: ['今', '日', 'は', '天', '気', 'が', '良', 'い']
-      → tags:  ['B',  'I',  'I',  'B',  'I',  'I',  'B',  'I']
+    IMPORTANT: Training data must be in hiragana (yomi/reading), not kanji,
+    because the model will be applied to hiragana input at inference time.
+
+    Example: "きょうは てんきが よい"
+      → chars: ['き', 'ょ', 'う', 'は', 'て', 'ん', 'き', 'が', 'よ', 'い']
+      → tags:  ['B',  'I',  'I',  'I',  'B',  'I',  'I',  'I',  'B',  'I']
+
+    Each space marks a bunsetsu boundary. The first character of each
+    bunsetsu is tagged 'B' (begin), all others are tagged 'I' (inside).
     """
     line = line.strip()
     if not line:
@@ -231,8 +263,9 @@ class ConversionModelPanel(Gtk.Window):
 
         corpus_info = Gtk.Label()
         corpus_info.set_markup(
-            "<small>Space-delimited bunsetsu format, one sentence per line "
-            "(e.g., \"今日は 天気が 良い\")</small>"
+            "<small>Space-delimited bunsetsu in <b>hiragana</b>, one sentence per line.\n"
+            "Example: \"きょうは てんきが よい\"\n"
+            "(Use hiragana because the model predicts boundaries on yomi input.)</small>"
         )
         corpus_info.set_xalign(0)
         corpus_box.pack_start(corpus_info, False, False, 0)
