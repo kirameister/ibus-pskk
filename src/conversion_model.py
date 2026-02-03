@@ -502,34 +502,141 @@ class ConversionModelPanel(Gtk.Window):
         if not input_text:
             return
 
-        # Clear previous results
-        for child in self.results_notebook.get_children():
-            self.results_notebook.remove(child)
-
-        # Hide placeholder, show notebook
-        self.no_results_label.hide()
-        self.results_notebook.show()
-
-        # Extract features for input
-        features = add_features_per_line(input_text)
+        # Tokenize and extract features
         tokens = tokenize_line(input_text)
+        if not tokens:
+            return
 
-        # TODO: Run N-Best prediction and populate tabs
-        # For now, just show a placeholder tab
-        n_best_count = 5  # Hardcoded for now, will be configurable later
+        features = add_features_per_line(input_text)
 
-        # Placeholder: create dummy tabs
-        for i in range(n_best_count):
-            tab_label = Gtk.Label(label=f"#{i+1} (0.000)")
-            tab_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-            tab_content.set_border_width(10)
+        # Run 1-best Viterbi prediction
+        self._tagger.set(features)
+        predicted_tags = self._tagger.tag()
+        probability = self._tagger.probability(predicted_tags)
 
-            placeholder = Gtk.Label(label=f"Prediction result #{i+1}\n\n(Content to be implemented)")
-            tab_content.pack_start(placeholder, True, True, 0)
+        # Segment tokens into bunsetsu based on predicted tags
+        bunsetsu_list = self._segment_by_tags(tokens, predicted_tags)
 
-            self.results_notebook.append_page(tab_content, tab_label)
+        # Update first tab with 1-best result
+        tab_label = self._result_tab_labels[0]
+        tab_content = self._result_tab_contents[0]
+        tab_label.set_text(f"#1 ({probability:.3f})")
+
+        # Clear existing content
+        for child in tab_content.get_children():
+            tab_content.remove(child)
+
+        # Build result display
+        result_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+
+        # Input display
+        input_label = Gtk.Label()
+        input_label.set_markup(f"<b>Input:</b> {GLib.markup_escape_text(input_text)}")
+        input_label.set_xalign(0)
+        result_box.pack_start(input_label, False, False, 0)
+
+        # Segmented result with visual bunsetsu markers
+        segmented_text = ' | '.join(bunsetsu_list)
+        segment_label = Gtk.Label()
+        segment_label.set_markup(f"<b>Segmented:</b> {GLib.markup_escape_text(segmented_text)}")
+        segment_label.set_xalign(0)
+        result_box.pack_start(segment_label, False, False, 0)
+
+        # Probability
+        prob_label = Gtk.Label()
+        prob_label.set_markup(f"<b>Probability:</b> {probability:.6f}")
+        prob_label.set_xalign(0)
+        result_box.pack_start(prob_label, False, False, 0)
+
+        # Detailed token-tag view
+        detail_frame = Gtk.Frame(label="Token Details")
+        detail_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        detail_box.set_border_width(6)
+
+        # Header
+        header = Gtk.Label()
+        header.set_markup("<tt><b>Token\tTag\tType</b></tt>")
+        header.set_xalign(0)
+        detail_box.pack_start(header, False, False, 0)
+
+        # Token rows
+        for token, tag in zip(tokens, predicted_tags):
+            ctype = 'hira' if (len(token) == 1 and char_type(token) == 'hiragana') else 'non-hira'
+            row = Gtk.Label()
+            row.set_markup(f"<tt>{GLib.markup_escape_text(token)}\t{tag}\t{ctype}</tt>")
+            row.set_xalign(0)
+            detail_box.pack_start(row, False, False, 0)
+
+        detail_frame.add(detail_box)
+        result_box.pack_start(detail_frame, False, False, 0)
+
+        tab_content.pack_start(result_box, False, False, 0)
+
+        # Update remaining tabs (N-Best not directly supported by pycrfsuite)
+        for i in range(1, len(self._result_tab_labels)):
+            tab_label = self._result_tab_labels[i]
+            tab_content = self._result_tab_contents[i]
+            tab_label.set_text(f"#{i+1} (-.---)")
+
+            for child in tab_content.get_children():
+                tab_content.remove(child)
+
+            notice = Gtk.Label()
+            notice.set_markup(
+                "<i>N-Best decoding not directly supported by pycrfsuite.\n"
+                "Only 1-best Viterbi result is available.</i>"
+            )
+            notice.set_xalign(0)
+            notice.set_yalign(0)
+            tab_content.pack_start(notice, False, False, 0)
 
         self.results_notebook.show_all()
+
+    def _segment_by_tags(self, tokens, tags):
+        """Segment tokens into bunsetsu based on predicted B-/I- tags.
+
+        Args:
+            tokens: List of tokens
+            tags: List of predicted tags (B-L, I-L, B-P, I-P, or B, I)
+
+        Returns:
+            List of bunsetsu strings, each annotated with type if available.
+            E.g., ['きょう[L]', 'は[P]', 'てんき[L]', 'が[P]', 'よい[L]']
+        """
+        if not tokens or not tags:
+            return []
+
+        bunsetsu_list = []
+        current_bunsetsu = []
+        current_type = None
+
+        for token, tag in zip(tokens, tags):
+            if tag.startswith('B'):
+                # Start new bunsetsu
+                if current_bunsetsu:
+                    # Finish previous bunsetsu
+                    text = ''.join(current_bunsetsu)
+                    if current_type:
+                        text = f"{text}[{current_type}]"
+                    bunsetsu_list.append(text)
+                current_bunsetsu = [token]
+                # Extract type from tag (B-L -> L, B-P -> P, B -> None)
+                if '-' in tag:
+                    current_type = tag.split('-')[1]
+                else:
+                    current_type = None
+            else:
+                # Continue current bunsetsu
+                current_bunsetsu.append(token)
+
+        # Finish last bunsetsu
+        if current_bunsetsu:
+            text = ''.join(current_bunsetsu)
+            if current_type:
+                text = f"{text}[{current_type}]"
+            bunsetsu_list.append(text)
+
+        return bunsetsu_list
 
     def create_test_tab(self):
         """Create Test tab"""
@@ -565,20 +672,31 @@ class ConversionModelPanel(Gtk.Window):
         box.pack_start(self.test_predict_btn, False, False, 0)
 
         # ── N-Best Results (nested notebook) ──
-        results_frame = Gtk.Frame(label="N-Best Prediction Results")
-        results_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        results_box.set_border_width(10)
-        results_frame.add(results_box)
-
         self.results_notebook = Gtk.Notebook()
         self.results_notebook.set_scrollable(True)
-        results_box.pack_start(self.results_notebook, True, True, 0)
 
-        # Placeholder label when no results yet
-        self.no_results_label = Gtk.Label(label="Click 'Test Bunsetsu-split prediction' to see results.")
-        results_box.pack_start(self.no_results_label, True, True, 0)
+        # Pre-create N tabs based on config
+        config, _ = util.get_config_data()
+        n_best_count = config.get('bunsetsu_prediction_n_best', 5)
 
-        box.pack_start(results_frame, True, True, 0)
+        self._result_tab_labels = []  # Store label widgets for updating later
+        self._result_tab_contents = []  # Store content boxes for updating later
+
+        for i in range(n_best_count):
+            # Tab label
+            tab_label = Gtk.Label(label=f"#{i+1} (0.000)")
+            self._result_tab_labels.append(tab_label)
+
+            # Tab content (placeholder for now)
+            tab_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+            tab_content.set_border_width(10)
+            placeholder = Gtk.Label(label="(Enter a sentence and click the button above)")
+            tab_content.pack_start(placeholder, True, True, 0)
+            self._result_tab_contents.append(tab_content)
+
+            self.results_notebook.append_page(tab_content, tab_label)
+
+        box.pack_start(self.results_notebook, True, True, 0)
 
         return box
 
