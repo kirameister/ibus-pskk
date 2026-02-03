@@ -15,13 +15,32 @@ This is because at inference time, the model receives the user's typed
 hiragana input (before kana-to-kanji conversion), so training on kanji
 would create a domain mismatch.
 
-Correct format (hiragana with space-delimited bunsetsu):
-    きょうは てんきが よい
-    わたしは がっこうに いきます
+Two annotation formats are supported:
+
+1. Simple format (B/I labels only):
+   Space-delimited bunsetsu, no type distinction.
+
+       きょうは てんきが よい
+
+   Use parse_training_line() for this format.
+
+2. Annotated format (B-L/I-L/B-P/I-P labels):
+   Space-delimited bunsetsu with underscore markers for passthrough segments.
+   Bunsetsu starting or ending with '_' are Passthrough (output as-is).
+   Bunsetsu without '_' are Lookup (send to dictionary for conversion).
+
+       きょう _は_ てんき _が_ よい
+
+   Labels:
+     B-L = Beginning of Lookup bunsetsu (needs kana→kanji conversion)
+     I-L = Inside of Lookup bunsetsu
+     B-P = Beginning of Passthrough bunsetsu (output as-is, e.g., particles)
+     I-P = Inside of Passthrough bunsetsu
+
+   Use parse_annotated_line() for this format.
 
 Incorrect format (kanji - do NOT use):
     今日は 天気が 良い
-    私は 学校に 行きます
 
 If you have a kanji-annotated corpus, convert it to readings first
 using the dictionary or a morphological analyzer like MeCab.
@@ -115,6 +134,63 @@ def parse_training_line(line):
         for i, c in enumerate(bunsetsu):
             chars.append(c)
             tags.append('B' if i == 0 else 'I')
+    return chars, tags
+
+
+def parse_annotated_line(line):
+    """Parse an annotated line into characters and 4-class labels.
+
+    Annotation format: Space-delimited bunsetsu with underscore markers.
+    Bunsetsu starting or ending with '_' are Passthrough (no dictionary lookup).
+    Bunsetsu without '_' are Lookup (send to dictionary for conversion).
+
+    Labels:
+        B-L = Beginning of Lookup bunsetsu (needs kana→kanji conversion)
+        I-L = Inside of Lookup bunsetsu
+        B-P = Beginning of Passthrough bunsetsu (output as-is)
+        I-P = Inside of Passthrough bunsetsu
+
+    Example: "きょう _は_ てんき _が_ よい"
+      → chars: ['き', 'ょ', 'う', 'は', 'て', 'ん', 'き', 'が', 'よ', 'い']
+      → tags:  ['B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L']
+
+    Multi-char passthrough example: "いく _から_"
+      → chars: ['い', 'く', 'か', 'ら']
+      → tags:  ['B-L', 'I-L', 'B-P', 'I-P']
+
+    Args:
+        line: Annotated line with space-delimited bunsetsu
+
+    Returns:
+        Tuple of (chars, tags) where chars is list of characters
+        and tags is list of labels (B-L, I-L, B-P, I-P)
+    """
+    line = line.strip()
+    if not line:
+        return [], []
+
+    bunsetsu_list = line.split()
+    chars = []
+    tags = []
+
+    for bunsetsu in bunsetsu_list:
+        # Check if this bunsetsu is marked as passthrough
+        is_passthrough = bunsetsu.startswith('_') or bunsetsu.endswith('_')
+
+        # Strip underscore markers to get actual text
+        text = bunsetsu.strip('_')
+
+        if not text:
+            # Edge case: bunsetsu was just underscores, skip
+            continue
+
+        # Determine label suffix based on type
+        suffix = 'P' if is_passthrough else 'L'
+
+        for i, c in enumerate(text):
+            chars.append(c)
+            tags.append(f'B-{suffix}' if i == 0 else f'I-{suffix}')
+
     return chars, tags
 
 
