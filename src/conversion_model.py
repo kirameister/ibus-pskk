@@ -428,7 +428,7 @@ class ConversionModelPanel(Gtk.Window):
         dialog.destroy()
 
     def _preview_corpus(self, path):
-        """Load corpus and show stats."""
+        """Load corpus, parse with annotated format, dump to TSV, and show stats."""
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
@@ -436,22 +436,57 @@ class ConversionModelPanel(Gtk.Window):
             self.corpus_stats_label.set_text(f"Error reading file: {e}")
             return
 
-        sentence_count = 0
-        total_chars = 0
-        total_bunsetsu = 0
+        # Parse all lines using annotated format
+        sentences = []
         for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            bunsetsu_list = line.split()
-            sentence_count += 1
-            total_bunsetsu += len(bunsetsu_list)
-            total_chars += sum(len(b) for b in bunsetsu_list)
+            chars, tags = parse_annotated_line(line)
+            if chars:
+                sentences.append((chars, tags))
+
+        # Calculate stats
+        sentence_count = len(sentences)
+        total_chars = sum(len(chars) for chars, tags in sentences)
+
+        # Count bunsetsu by counting B-* tags
+        total_bunsetsu = sum(
+            sum(1 for tag in tags if tag.startswith('B-'))
+            for chars, tags in sentences
+        )
+
+        # Count by type
+        lookup_bunsetsu = sum(
+            sum(1 for tag in tags if tag == 'B-L')
+            for chars, tags in sentences
+        )
+        passthrough_bunsetsu = sum(
+            sum(1 for tag in tags if tag == 'B-P')
+            for chars, tags in sentences
+        )
+
+        # Dump parsed data to TSV (chars and tags only, no features yet)
+        tsv_path = os.path.join(util.get_user_config_dir(), 'crf_model_training_data.tsv')
+        try:
+            with open(tsv_path, 'w', encoding='utf-8') as f:
+                for sent_idx, (chars, tags) in enumerate(sentences):
+                    # Blank line before sentence marker (except first sentence)
+                    if sent_idx > 0:
+                        f.write('\n')
+                    f.write(f'# Sentence {sent_idx + 1}\n')
+
+                    # Write each character with its tag (no features yet)
+                    for char, tag in zip(chars, tags):
+                        f.write(f'{char}\t{tag}\n')
+
+            logger.debug(f'Parsed corpus dumped to: {tsv_path}')
+        except Exception as e:
+            logger.warning(f'Failed to dump parsed corpus: {e}')
 
         self.corpus_stats_label.set_markup(
             f"<b>{sentence_count:,}</b> sentences, "
-            f"<b>{total_bunsetsu:,}</b> bunsetsu, "
-            f"<b>{total_chars:,}</b> characters"
+            f"<b>{total_bunsetsu:,}</b> bunsetsu "
+            f"(<b>{lookup_bunsetsu:,}</b> lookup, <b>{passthrough_bunsetsu:,}</b> passthrough), "
+            f"<b>{total_chars:,}</b> characters\n"
+            f"<small>Parsed data saved to: {tsv_path}</small>"
         )
 
     def on_train(self, button):
@@ -492,7 +527,7 @@ class ConversionModelPanel(Gtk.Window):
 
         sentences = []
         for line in lines:
-            chars, tags = parse_training_line(line)
+            chars, tags = parse_annotated_line(line)
             if chars:
                 sentences.append((chars, tags))
 
