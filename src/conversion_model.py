@@ -56,7 +56,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 import util
-from util import char_type, tokenize_line, add_features_per_line
 
 try:
     import pycrfsuite
@@ -184,7 +183,7 @@ def parse_annotated_line(line):
 def extract_char_features(chars, i, dictionary_readings=None):
     """Extract CRF features for a single character at position i."""
     c = chars[i]
-    ct = char_type(c)
+    ct = util.char_type(c)
     n = len(chars)
     features = [
         'bias',
@@ -196,9 +195,9 @@ def extract_char_features(chars, i, dictionary_readings=None):
     if i >= 1:
         features.extend([
             f'char[-1]={chars[i-1]}',
-            f'type[-1]={char_type(chars[i-1])}',
+            f'type[-1]={util.char_type(chars[i-1])}',
             f'bigram[-1:0]={chars[i-1]}{c}',
-            f'type_change={char_type(chars[i-1]) != ct}',
+            f'type_change={util.char_type(chars[i-1]) != ct}',
         ])
     else:
         features.append('BOS')
@@ -206,13 +205,13 @@ def extract_char_features(chars, i, dictionary_readings=None):
     if i >= 2:
         features.extend([
             f'char[-2]={chars[i-2]}',
-            f'type[-2]={char_type(chars[i-2])}',
+            f'type[-2]={util.char_type(chars[i-2])}',
         ])
 
     if i < n - 1:
         features.extend([
             f'char[+1]={chars[i+1]}',
-            f'type[+1]={char_type(chars[i+1])}',
+            f'type[+1]={util.char_type(chars[i+1])}',
             f'bigram[0:+1]={c}{chars[i+1]}',
         ])
     else:
@@ -221,7 +220,7 @@ def extract_char_features(chars, i, dictionary_readings=None):
     if i < n - 2:
         features.extend([
             f'char[+2]={chars[i+2]}',
-            f'type[+2]={char_type(chars[i+2])}',
+            f'type[+2]={util.char_type(chars[i+2])}',
         ])
 
     # ── 助詞 / 助動詞 (substrings ending at position i) ──
@@ -383,24 +382,25 @@ class ConversionModelPanel(Gtk.Window):
         if not input_text:
             return
 
-        # Tokenize and extract features
-        tokens = tokenize_line(input_text)
+        # Tokenize input
+        tokens = util.tokenize_line(input_text)
         if not tokens:
             return
 
-        features = add_features_per_line(input_text)
+        # Run N-best Viterbi prediction
+        n_best_count = len(self._result_tab_labels)
+        nbest_results = util.crf_nbest_predict(self._tagger, input_text, n_best=n_best_count)
 
-        # Run 1-best Viterbi prediction
-        self._tagger.set(features)
-        predicted_tags = self._tagger.tag()
-        probability = self._tagger.probability(predicted_tags)
+        # Store results for tab switching
+        self._nbest_results = nbest_results
+        self._current_tokens = tokens
 
         # Prepare row headers and column headers for the grid
         row_headers = ["Label", "Score", "ctype"]  # Features to display
         col_headers = tokens  # Each token is a column
 
         # Rebuild grids for all tabs with new token columns
-        for tab_idx in range(len(self._result_tab_labels)):
+        for tab_idx in range(n_best_count):
             self._rebuild_result_grid(
                 tab_index=tab_idx,
                 num_cols=len(tokens),
@@ -408,29 +408,39 @@ class ConversionModelPanel(Gtk.Window):
                 col_headers=col_headers
             )
 
-        # Update first tab with 1-best result
-        self._result_tab_labels[0].set_text(f"#1 ({probability:.3f})")
-        cell_labels = self._result_cell_labels[0]
+        # Update all tabs with N-best results
+        for tab_idx in range(n_best_count):
+            if tab_idx < len(nbest_results):
+                labels, score = nbest_results[tab_idx]
+                self._result_tab_labels[tab_idx].set_text(f"#{tab_idx+1} ({score:.3f})")
+                self._update_result_grid(tab_idx, tokens, labels)
+            else:
+                # No result for this tab
+                self._result_tab_labels[tab_idx].set_text(f"#{tab_idx+1} (-.---)")
+                # Leave cells with default "-" values
 
-        # Fill in the cell values
-        for col_idx, (token, tag) in enumerate(zip(tokens, predicted_tags)):
+        self.results_notebook.show_all()
+
+    def _update_result_grid(self, tab_idx, tokens, labels):
+        """Update the cell values in a result grid for a specific tab.
+
+        Args:
+            tab_idx: Index of the tab to update
+            tokens: List of tokens
+            labels: List of predicted labels for this N-best result
+        """
+        cell_labels = self._result_cell_labels[tab_idx]
+
+        for col_idx, (token, label) in enumerate(zip(tokens, labels)):
             # Row 0: Label (predicted tag)
-            cell_labels[0][col_idx].set_text(tag)
+            cell_labels[0][col_idx].set_text(label)
 
-            # Row 1: Score (placeholder - marginal probability would go here)
-            # TODO: Use self._tagger.marginal(tag, col_idx) for actual marginal
+            # Row 1: Score (placeholder for now - could show marginal later)
             cell_labels[1][col_idx].set_text("-")
 
             # Row 2: ctype feature
-            ctype = 'hira' if (len(token) == 1 and char_type(token) == 'hiragana') else 'non-hira'
+            ctype = 'hira' if (len(token) == 1 and util.char_type(token) == 'hiragana') else 'non-hira'
             cell_labels[2][col_idx].set_text(ctype)
-
-        # Update remaining tabs (N-Best not directly supported by pycrfsuite)
-        for i in range(1, len(self._result_tab_labels)):
-            self._result_tab_labels[i].set_text(f"#{i+1} (-.---)")
-            # Leave cells with default "-" values
-
-        self.results_notebook.show_all()
 
     def _segment_by_tags(self, tokens, tags):
         """Segment tokens into bunsetsu based on predicted B-/I- tags.
@@ -846,7 +856,7 @@ class ConversionModelPanel(Gtk.Window):
         for chars, tags in self._sentences:
             # Join chars to form the line for tokenization
             line_text = ''.join(chars)
-            features = add_features_per_line(line_text)
+            features = util.add_features_per_line(line_text)
             self._features.append(features)
 
         self._log(f"Feature extraction complete")
