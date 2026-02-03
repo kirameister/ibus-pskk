@@ -580,6 +580,12 @@ class ConversionModelPanel(Gtk.Window):
 
 def main():
     """Run conversion model panel standalone"""
+    # Configure logging from user config
+    config, _ = util.get_config_data()
+    level_name = config.get('logging_level', 'WARNING').upper()
+    level = getattr(logging, level_name, logging.WARNING)
+    logging.basicConfig(level=level, format='%(asctime)s %(levelname)-8s %(message)s')
+
     win = ConversionModelPanel()
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
