@@ -434,6 +434,11 @@ class ConversionModelPanel(Gtk.Window):
         self.set_default_size(800, 600)
         self.set_border_width(10)
 
+        # State for 3-step pipeline: Browse → Feature Extract → Train
+        self._raw_lines = []      # Raw lines from corpus file (set by Browse)
+        self._sentences = []      # Parsed (chars, tags) tuples (set by Feature Extract)
+        self._features = []       # Extracted features per sentence (set by Feature Extract)
+
         # Create UI
         notebook = Gtk.Notebook()
         notebook.append_page(self.create_test_tab(), Gtk.Label(label="Test"))
@@ -492,6 +497,11 @@ class ConversionModelPanel(Gtk.Window):
         corpus_box.pack_start(self.corpus_stats_label, False, False, 0)
 
         box.pack_start(corpus_frame, False, False, 0)
+
+        # ── Feature Extraction Button ──
+        extract_btn = Gtk.Button(label="Feature Extraction")
+        extract_btn.connect("clicked", self.on_feature_extract)
+        box.pack_start(extract_btn, False, False, 0)
 
         # ── Train Button ──
         train_btn = Gtk.Button(label="Train")
@@ -558,69 +568,118 @@ class ConversionModelPanel(Gtk.Window):
         dialog.destroy()
 
     def _preview_corpus(self, path):
-        """Load corpus, parse with annotated format, dump to TSV, and show stats."""
+        """Load corpus file and show basic stats (step 1 of pipeline)."""
         try:
             with open(path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+                self._raw_lines = f.readlines()
         except Exception as e:
             self.corpus_stats_label.set_text(f"Error reading file: {e}")
+            self._raw_lines = []
             return
 
-        # Parse all lines using annotated format
-        sentences = []
-        for line in lines:
-            chars, tags = parse_annotated_line(line)
-            if chars:
-                sentences.append((chars, tags))
+        # Clear previous pipeline state
+        self._sentences = []
+        self._features = []
 
-        # Calculate stats
-        sentence_count = len(sentences)
-        total_chars = sum(len(chars) for chars, tags in sentences)
+        # Calculate basic stats (without parsing)
+        line_count = len([l for l in self._raw_lines if l.strip()])
+        total_chars = sum(len(l.strip()) for l in self._raw_lines)
 
-        # Count bunsetsu by counting B-* tags
-        total_bunsetsu = sum(
-            sum(1 for tag in tags if tag.startswith('B-'))
-            for chars, tags in sentences
+        self.corpus_stats_label.set_markup(
+            f"<b>{line_count:,}</b> lines loaded, "
+            f"<b>{total_chars:,}</b> characters\n"
+            f"<small>Click 'Feature Extraction' to parse and extract features.</small>"
         )
 
-        # Count by type
+    def on_feature_extract(self, button):
+        """Parse annotations and extract features (step 2 of pipeline)."""
+        if not self._raw_lines:
+            self._log("ERROR: No corpus loaded. Click 'Browse' first.")
+            return
+
+        self.log_buffer.set_text('')  # Clear log
+        self._log("=== Feature Extraction ===")
+        self._log("")
+
+        # ── Parse annotations ──
+        self._log("Parsing annotations...")
+        self._sentences = []
+        for line in self._raw_lines:
+            chars, tags = parse_annotated_line(line)
+            if chars:
+                self._sentences.append((chars, tags))
+
+        if not self._sentences:
+            self._log("ERROR: No valid sentences found in corpus.")
+            return
+
+        self._log(f"Parsed {len(self._sentences):,} sentences")
+
+        # Calculate stats
+        total_chars = sum(len(chars) for chars, tags in self._sentences)
+        total_bunsetsu = sum(
+            sum(1 for tag in tags if tag.startswith('B-'))
+            for chars, tags in self._sentences
+        )
         lookup_bunsetsu = sum(
             sum(1 for tag in tags if tag == 'B-L')
-            for chars, tags in sentences
+            for chars, tags in self._sentences
         )
         passthrough_bunsetsu = sum(
             sum(1 for tag in tags if tag == 'B-P')
-            for chars, tags in sentences
+            for chars, tags in self._sentences
         )
 
-        # Dump parsed data to TSV (chars and tags only, no features yet)
+        self._log(f"  Bunsetsu: {total_bunsetsu:,} ({lookup_bunsetsu:,} lookup, {passthrough_bunsetsu:,} passthrough)")
+        self._log(f"  Characters: {total_chars:,}")
+        self._log("")
+
+        # ── Extract features ──
+        self._log("Extracting features...")
+        self._features = []
+        for chars, tags in self._sentences:
+            # Join chars to form the line for tokenization
+            line_text = ''.join(chars)
+            features = add_features_per_line(line_text)
+            self._features.append(features)
+
+        self._log(f"Feature extraction complete")
+        self._log("")
+
+        # ── Dump to TSV (always, as intermediate file) ──
         tsv_path = os.path.join(util.get_user_config_dir(), 'crf_model_training_data.tsv')
         try:
             with open(tsv_path, 'w', encoding='utf-8') as f:
-                for sent_idx, (chars, tags) in enumerate(sentences):
+                for sent_idx, ((chars, tags), features) in enumerate(zip(self._sentences, self._features)):
                     # Blank line before sentence marker (except first sentence)
                     if sent_idx > 0:
                         f.write('\n')
                     f.write(f'# Sentence {sent_idx + 1}\n')
 
-                    # Write each character with its tag (no features yet)
-                    for char, tag in zip(chars, tags):
-                        f.write(f'{char}\t{tag}\n')
+                    # Write each token with its tag and features
+                    for char, tag, feat_dict in zip(chars, tags, features):
+                        # Convert feature dict to tab-separated string
+                        feat_str = '\t'.join(f'{k}={v}' for k, v in feat_dict.items())
+                        f.write(f'{char}\t{tag}\t{feat_str}\n')
 
-            logger.debug(f'Parsed corpus dumped to: {tsv_path}')
+            self._log(f"Training data saved to: {tsv_path}")
         except Exception as e:
-            logger.warning(f'Failed to dump parsed corpus: {e}')
+            self._log(f"WARNING: Failed to save training data: {e}")
 
+        # Update stats label
         self.corpus_stats_label.set_markup(
-            f"<b>{sentence_count:,}</b> sentences, "
+            f"<b>{len(self._sentences):,}</b> sentences, "
             f"<b>{total_bunsetsu:,}</b> bunsetsu "
             f"(<b>{lookup_bunsetsu:,}</b> lookup, <b>{passthrough_bunsetsu:,}</b> passthrough), "
             f"<b>{total_chars:,}</b> characters\n"
-            f"<small>Parsed data saved to: {tsv_path}</small>"
+            f"<small>Features extracted. Click 'Train' to train the model.</small>"
         )
 
+        self._log("")
+        self._log("Done. Ready for training.")
+
     def on_train(self, button):
-        """Run CRF training on the loaded corpus."""
+        """Run CRF training using extracted features (step 3 of pipeline)."""
         if not HAS_CRFSUITE:
             dialog = Gtk.MessageDialog(
                 transient_for=self, flags=0,
@@ -635,74 +694,27 @@ class ConversionModelPanel(Gtk.Window):
             dialog.destroy()
             return
 
-        corpus_path = self.corpus_path_entry.get_text().strip()
-        model_path = get_model_path()
-
-        if not corpus_path or not os.path.exists(corpus_path):
-            self._log("ERROR: No valid corpus file selected.")
+        # Check if features have been extracted
+        if not self._sentences or not self._features:
+            self._log("ERROR: No features extracted. Click 'Feature Extraction' first.")
             return
+
+        model_path = get_model_path()
 
         self.log_buffer.set_text('')  # Clear log
         self._log("=== CRF Bunsetsu Segmentation Training ===")
         self._log("")
+        self._log(f"Using {len(self._sentences):,} sentences with pre-extracted features")
+        self._log("")
 
-        # ── Load corpus ──
-        self._log(f"Loading corpus: {corpus_path}")
-        try:
-            with open(corpus_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-        except Exception as e:
-            self._log(f"ERROR: Failed to read corpus: {e}")
-            return
-
-        sentences = []
-        for line in lines:
-            chars, tags = parse_annotated_line(line)
-            if chars:
-                sentences.append((chars, tags))
-
-        self._log(f"Parsed {len(sentences):,} sentences")
-
-        if not sentences:
-            self._log("ERROR: No valid sentences found in corpus.")
-            return
-
-        # ── Load dictionary readings ──
-        self._log("Loading dictionary readings for feature extraction...")
-        dictionary_readings = load_dictionary_readings()
-        self._log(f"Loaded {len(dictionary_readings):,} dictionary readings")
-
-        # ── Extract features ──
-        self._log("Extracting features...")
-        X_train = []
-        y_train = []
-        for chars, tags in sentences:
-            X_train.append(extract_features(chars, dictionary_readings))
-            y_train.append(tags)
+        # ── Prepare training data ──
+        # X_train: list of feature sequences (each is a list of feature dicts)
+        # y_train: list of tag sequences
+        X_train = self._features
+        y_train = [tags for chars, tags in self._sentences]
 
         total_tokens = sum(len(seq) for seq in X_train)
-        self._log(f"Feature extraction complete: {total_tokens:,} tokens")
-
-        # ── Dump training data at DEBUG level ──
-        if logger.isEnabledFor(logging.DEBUG):
-            tsv_path = os.path.join(util.get_user_config_dir(), 'crf_model_training_data.tsv')
-            try:
-                with open(tsv_path, 'w', encoding='utf-8') as f:
-                    for sent_idx, ((chars, tags), features) in enumerate(zip(sentences, X_train)):
-                        # Blank line before sentence marker (except first sentence)
-                        if sent_idx > 0:
-                            f.write('\n')
-                        f.write(f'# Sentence {sent_idx + 1}\n')
-
-                        # Write each character with its tag and features
-                        for char, tag, char_features in zip(chars, tags, features):
-                            row = [char, tag] + char_features
-                            f.write('\t'.join(row) + '\n')
-
-                logger.debug(f'Training data dumped to: {tsv_path}')
-                self._log(f"DEBUG: Training data dumped to {tsv_path}")
-            except Exception as e:
-                logger.warning(f'Failed to dump training data: {e}')
+        self._log(f"Total tokens: {total_tokens:,}")
 
         # ── Train CRF ──
         self._log("")
