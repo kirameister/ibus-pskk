@@ -518,6 +518,27 @@ class ConversionModelPanel(Gtk.Window):
         total_tokens = sum(len(seq) for seq in X_train)
         self._log(f"Feature extraction complete: {total_tokens:,} tokens")
 
+        # ── Dump training data at DEBUG level ──
+        if logger.isEnabledFor(logging.DEBUG):
+            tsv_path = os.path.join(util.get_user_config_dir(), 'crf_model_training_data.tsv')
+            try:
+                with open(tsv_path, 'w', encoding='utf-8') as f:
+                    for sent_idx, ((chars, tags), features) in enumerate(zip(sentences, X_train)):
+                        # Blank line before sentence marker (except first sentence)
+                        if sent_idx > 0:
+                            f.write('\n')
+                        f.write(f'# Sentence {sent_idx + 1}\n')
+
+                        # Write each character with its tag and features
+                        for char, tag, char_features in zip(chars, tags, features):
+                            row = [char, tag] + char_features
+                            f.write('\t'.join(row) + '\n')
+
+                logger.debug(f'Training data dumped to: {tsv_path}')
+                self._log(f"DEBUG: Training data dumped to {tsv_path}")
+            except Exception as e:
+                logger.warning(f'Failed to dump training data: {e}')
+
         # ── Train CRF ──
         self._log("")
         self._log("Training CRF model (L-BFGS)...")
