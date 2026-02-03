@@ -274,14 +274,54 @@ def add_features_per_line(line):
     # Initialize feature list (one dict per token)
     features = [{} for _ in range(n)]
 
-    # TODO: Call feature sub-functions here
+    # Call feature sub-functions and merge results
     # Each sub-function returns a list of values (one per token)
+
+    # Character type feature: 'hira' or 'non-hira'
+    ctype_values = add_feature_ctype(tokens)
+    for i, val in enumerate(ctype_values):
+        features[i]['ctype'] = val
+
+    # TODO: Add more feature sub-functions here
     # Example:
-    #   char_values = add_char_feature(tokens)  # ['き', 'ょ', ...]
+    #   char_values = add_feature_char(tokens)
     #   for i, val in enumerate(char_values):
     #       features[i]['char'] = val
 
     return features
+
+
+# ─── Feature Sub-functions ────────────────────────────────────────────
+# Each function takes a list of tokens and returns a list of feature values
+# (one value per token). The wrapper add_features_per_line() calls these
+# and combines the results into feature dicts.
+
+def add_feature_ctype(tokens):
+    """Add character type feature: 'hira' or 'non-hira'.
+
+    A token is classified as 'hira' only if it is a single hiragana character.
+    All other tokens (multi-char, kanji, katakana, ASCII, etc.) are 'non-hira'.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+
+    Returns:
+        List of 'hira' or 'non-hira' strings (same length as tokens)
+
+    Example:
+        add_feature_ctype(['き', 'ょ', 'う', 'sunny'])
+        → ['hira', 'hira', 'hira', 'non-hira']
+
+        add_feature_ctype(['今', 'は', 'hello'])
+        → ['non-hira', 'hira', 'non-hira']
+    """
+    result = []
+    for token in tokens:
+        if len(token) == 1 and char_type(token) == 'hiragana':
+            result.append('hira')
+        else:
+            result.append('non-hira')
+    return result
 
 
 def extract_char_features(chars, i, dictionary_readings=None):
