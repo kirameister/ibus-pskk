@@ -194,6 +194,96 @@ def parse_annotated_line(line):
     return chars, tags
 
 
+# ─── Tokenization and Feature Extraction (New Modular System) ─────────
+
+def tokenize_line(line):
+    """Tokenize a line with mixed ASCII/non-ASCII handling.
+
+    Tokenization rules:
+    - Non-ASCII characters (hiragana, kanji, etc.): each character is a token
+    - ASCII words (consecutive letters/digits): each word is a single token
+    - Spaces are skipped (used only as delimiters)
+    - ASCII punctuation: each is a separate token
+
+    Example: "きょうは sunny day"
+      → ['き', 'ょ', 'う', 'は', 'sunny', 'day']
+
+    Example: "きょうはsunny"
+      → ['き', 'ょ', 'う', 'は', 'sunny']
+
+    Args:
+        line: Input string (underscores should already be stripped)
+
+    Returns:
+        List of tokens
+    """
+    tokens = []
+    ascii_buffer = []
+
+    def flush_ascii_buffer():
+        """Flush accumulated ASCII characters as a single token."""
+        if ascii_buffer:
+            tokens.append(''.join(ascii_buffer))
+            ascii_buffer.clear()
+
+    for c in line:
+        if c.isascii() and c.isalnum():
+            # ASCII letter or digit: accumulate into buffer
+            ascii_buffer.append(c)
+        elif c == ' ':
+            # Space: flush buffer but skip the space itself
+            flush_ascii_buffer()
+        else:
+            # Non-ASCII or ASCII punctuation: flush buffer first
+            flush_ascii_buffer()
+            # Add current character as its own token
+            tokens.append(c)
+
+    # Flush any remaining ASCII buffer
+    flush_ascii_buffer()
+
+    return tokens
+
+
+def add_features_per_line(line):
+    """Extract features for each token in a line.
+
+    This is a wrapper function that:
+    1. Tokenizes the line (handling mixed ASCII/non-ASCII)
+    2. Calls various feature sub-functions
+    3. Combines all features into a list of dicts (one per token)
+
+    Args:
+        line: Input string (underscores should already be stripped)
+
+    Returns:
+        List of dicts, where each dict contains features for one token.
+        Example:
+        [
+            {'char': 'き', 'prev_char': None, 'next_char': 'ょ', ...},
+            {'char': 'ょ', 'prev_char': 'き', 'next_char': 'う', ...},
+            ...
+        ]
+    """
+    tokens = tokenize_line(line)
+    n = len(tokens)
+
+    if n == 0:
+        return []
+
+    # Initialize feature list (one dict per token)
+    features = [{} for _ in range(n)]
+
+    # TODO: Call feature sub-functions here
+    # Each sub-function returns a list of values (one per token)
+    # Example:
+    #   char_values = add_char_feature(tokens)  # ['き', 'ょ', ...]
+    #   for i, val in enumerate(char_values):
+    #       features[i]['char'] = val
+
+    return features
+
+
 def extract_char_features(chars, i, dictionary_readings=None):
     """Extract CRF features for a single character at position i."""
     c = chars[i]
