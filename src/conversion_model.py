@@ -431,8 +431,11 @@ class ConversionModelPanel(Gtk.Window):
     def __init__(self):
         super().__init__(title="Conversion Model")
 
-        self.set_default_size(800, 600)
+        self.set_default_size(920, 600)
         self.set_border_width(10)
+
+        # Set up CSS styling for grid headers
+        self._setup_css()
 
         # State for 3-step pipeline: Browse → Feature Extract → Train
         self._raw_lines = []      # Raw lines from corpus file (set by Browse)
@@ -450,6 +453,27 @@ class ConversionModelPanel(Gtk.Window):
 
         # Connect Esc key to close window
         self.connect("key-press-event", self.on_key_press)
+
+    def _setup_css(self):
+        """Set up CSS styling for the window."""
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+            .grid-header {
+                background-color: #d0d0d0;
+                padding: 4px 8px;
+            }
+            .grid-corner {
+                background-color: #d0d0d0;
+            }
+            notebook > stack {
+                padding: 0;
+            }
+        """)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
 
     def on_key_press(self, widget, event):
         """Handle key press events"""
@@ -514,81 +538,40 @@ class ConversionModelPanel(Gtk.Window):
         predicted_tags = self._tagger.tag()
         probability = self._tagger.probability(predicted_tags)
 
-        # Segment tokens into bunsetsu based on predicted tags
-        bunsetsu_list = self._segment_by_tags(tokens, predicted_tags)
+        # Prepare row headers and column headers for the grid
+        row_headers = ["Label", "Score", "ctype"]  # Features to display
+        col_headers = tokens  # Each token is a column
+
+        # Rebuild grids for all tabs with new token columns
+        for tab_idx in range(len(self._result_tab_labels)):
+            self._rebuild_result_grid(
+                tab_index=tab_idx,
+                num_cols=len(tokens),
+                row_headers=row_headers,
+                col_headers=col_headers
+            )
 
         # Update first tab with 1-best result
-        tab_label = self._result_tab_labels[0]
-        tab_content = self._result_tab_contents[0]
-        tab_label.set_text(f"#1 ({probability:.3f})")
+        self._result_tab_labels[0].set_text(f"#1 ({probability:.3f})")
+        cell_labels = self._result_cell_labels[0]
 
-        # Clear existing content
-        for child in tab_content.get_children():
-            tab_content.remove(child)
+        # Fill in the cell values
+        for col_idx, (token, tag) in enumerate(zip(tokens, predicted_tags)):
+            # Row 0: Label (predicted tag)
+            cell_labels[0][col_idx].set_text(tag)
 
-        # Build result display
-        result_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            # Row 1: Score (placeholder - marginal probability would go here)
+            # TODO: Use self._tagger.marginal(tag, col_idx) for actual marginal
+            cell_labels[1][col_idx].set_text("-")
 
-        # Input display
-        input_label = Gtk.Label()
-        input_label.set_markup(f"<b>Input:</b> {GLib.markup_escape_text(input_text)}")
-        input_label.set_xalign(0)
-        result_box.pack_start(input_label, False, False, 0)
-
-        # Segmented result with visual bunsetsu markers
-        segmented_text = ' | '.join(bunsetsu_list)
-        segment_label = Gtk.Label()
-        segment_label.set_markup(f"<b>Segmented:</b> {GLib.markup_escape_text(segmented_text)}")
-        segment_label.set_xalign(0)
-        result_box.pack_start(segment_label, False, False, 0)
-
-        # Probability
-        prob_label = Gtk.Label()
-        prob_label.set_markup(f"<b>Probability:</b> {probability:.6f}")
-        prob_label.set_xalign(0)
-        result_box.pack_start(prob_label, False, False, 0)
-
-        # Detailed token-tag view
-        detail_frame = Gtk.Frame(label="Token Details")
-        detail_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        detail_box.set_border_width(6)
-
-        # Header
-        header = Gtk.Label()
-        header.set_markup("<tt><b>Token\tTag\tType</b></tt>")
-        header.set_xalign(0)
-        detail_box.pack_start(header, False, False, 0)
-
-        # Token rows
-        for token, tag in zip(tokens, predicted_tags):
+            # Row 2: ctype feature
             ctype = 'hira' if (len(token) == 1 and char_type(token) == 'hiragana') else 'non-hira'
-            row = Gtk.Label()
-            row.set_markup(f"<tt>{GLib.markup_escape_text(token)}\t{tag}\t{ctype}</tt>")
-            row.set_xalign(0)
-            detail_box.pack_start(row, False, False, 0)
-
-        detail_frame.add(detail_box)
-        result_box.pack_start(detail_frame, False, False, 0)
-
-        tab_content.pack_start(result_box, False, False, 0)
+            cell_labels[2][col_idx].set_text(ctype)
 
         # Update remaining tabs (N-Best not directly supported by pycrfsuite)
         for i in range(1, len(self._result_tab_labels)):
-            tab_label = self._result_tab_labels[i]
-            tab_content = self._result_tab_contents[i]
-            tab_label.set_text(f"#{i+1} (-.---)")
-
-            for child in tab_content.get_children():
-                tab_content.remove(child)
-
-            notice = Gtk.Label()
-            notice.set_markup(
-                "<i>N-Best decoding not directly supported by pycrfsuite.\n"
-                "Only 1-best Viterbi result is available.</i>"
-            )
-            notice.set_xalign(0)
-            notice.set_yalign(0)
-            tab_content.pack_start(notice, False, False, 0)
+            self._result_tab_labels[i].set_text(f"#{i+1} (-.---)")
+            # Leave cells with default "-" values
 
         self.results_notebook.show_all()
 
@@ -638,6 +621,118 @@ class ConversionModelPanel(Gtk.Window):
 
         return bunsetsu_list
 
+    def _create_result_grid(self, num_cols=3, row_headers=None, col_headers=None):
+        """Create a grid for displaying prediction results.
+
+        Args:
+            num_cols: Number of data columns (excluding row header column)
+            row_headers: List of row header strings (default: ["Label", "Score", "Feature"])
+            col_headers: List of column header strings (default: ["Token1", "Token2", ...])
+
+        Returns:
+            Tuple of (grid, cell_labels) where cell_labels is a 2D list of Gtk.Label
+            widgets for the data cells (excluding headers).
+        """
+        if row_headers is None:
+            row_headers = ["Label", "Score", "Feature"]
+        if col_headers is None:
+            col_headers = [f"Token{i+1}" for i in range(num_cols)]
+
+        num_rows = len(row_headers)
+
+        grid = Gtk.Grid()
+        grid.set_column_spacing(1)  # Minimal spacing for seamless header look
+        grid.set_row_spacing(1)
+        grid.set_column_homogeneous(False)
+        grid.set_row_homogeneous(False)
+        grid.set_margin_start(0)
+        grid.set_margin_top(0)
+
+        # Top-left corner cell (empty, with background)
+        corner_box = Gtk.EventBox()
+        corner_box.get_style_context().add_class("grid-corner")
+        corner_label = Gtk.Label(label="")
+        corner_box.add(corner_label)
+        grid.attach(corner_box, 0, 0, 1, 1)
+
+        # Column headers (row 0, columns 1..n)
+        for col_idx, header in enumerate(col_headers):
+            header_box = Gtk.EventBox()
+            header_box.get_style_context().add_class("grid-header")
+            label = Gtk.Label()
+            label.set_markup(f"<b>{GLib.markup_escape_text(header)}</b>")
+            label.set_xalign(0.5)
+            header_box.add(label)
+            grid.attach(header_box, col_idx + 1, 0, 1, 1)
+
+        # Row headers (column 0, rows 1..n)
+        for row_idx, header in enumerate(row_headers):
+            header_box = Gtk.EventBox()
+            header_box.get_style_context().add_class("grid-header")
+            label = Gtk.Label()
+            label.set_markup(f"<b>{GLib.markup_escape_text(header)}</b>")
+            label.set_xalign(1.0)  # Right-align row headers
+            header_box.add(label)
+            grid.attach(header_box, 0, row_idx + 1, 1, 1)
+
+        # Data cells (rows 1..n, columns 1..n)
+        cell_labels = []
+        for row_idx in range(num_rows):
+            row_labels = []
+            for col_idx in range(len(col_headers)):
+                label = Gtk.Label(label="-")
+                label.set_xalign(0.5)
+                label.set_margin_start(8)
+                label.set_margin_end(8)
+                label.set_margin_top(4)
+                label.set_margin_bottom(4)
+                grid.attach(label, col_idx + 1, row_idx + 1, 1, 1)
+                row_labels.append(label)
+            cell_labels.append(row_labels)
+
+        return grid, cell_labels
+
+    def _rebuild_result_grid(self, tab_index, num_cols, row_headers, col_headers):
+        """Rebuild the grid for a specific tab with new dimensions.
+
+        Args:
+            tab_index: Index of the tab to rebuild
+            num_cols: Number of data columns
+            row_headers: List of row header strings
+            col_headers: List of column header strings
+        """
+        # Get the scrolled window containing the grid
+        tab_content = self._result_tab_contents[tab_index]
+        scroll = tab_content.get_children()[0]  # First child is the ScrolledWindow
+
+        # Remove old grid
+        old_grid = self._result_grids[tab_index]
+        scroll.remove(old_grid)
+
+        # Create new grid
+        new_grid, new_cell_labels = self._create_result_grid(
+            num_cols=num_cols,
+            row_headers=row_headers,
+            col_headers=col_headers
+        )
+        scroll.add(new_grid)
+        new_grid.show_all()
+
+        # Update references
+        self._result_grids[tab_index] = new_grid
+        self._result_cell_labels[tab_index] = new_cell_labels
+
+    def on_result_tab_switched(self, notebook, page, page_num):
+        """Handle tab switch in results notebook.
+
+        This will update the cell values based on the selected N-best result.
+        For now, this is a placeholder - actual implementation will come later
+        when we store prediction results for each N-best.
+        """
+        # TODO: Update cell values based on which N-best result is selected
+        # For now, the grid already shows the values set during prediction
+        pass
+
     def create_test_tab(self):
         """Create Test tab"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -681,20 +776,35 @@ class ConversionModelPanel(Gtk.Window):
 
         self._result_tab_labels = []  # Store label widgets for updating later
         self._result_tab_contents = []  # Store content boxes for updating later
+        self._result_grids = []  # Store grid widgets for each tab
+        self._result_cell_labels = []  # Store cell label widgets for each tab (2D list)
 
         for i in range(n_best_count):
             # Tab label
             tab_label = Gtk.Label(label=f"#{i+1} (0.000)")
             self._result_tab_labels.append(tab_label)
 
-            # Tab content (placeholder for now)
-            tab_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-            tab_content.set_border_width(10)
-            placeholder = Gtk.Label(label="(Enter a sentence and click the button above)")
-            tab_content.pack_start(placeholder, True, True, 0)
+            # Tab content with scrollable grid (no border for tight grid appearance)
+            tab_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+            # Create scrolled window for the grid
+            scroll = Gtk.ScrolledWindow()
+            scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+            scroll.set_shadow_type(Gtk.ShadowType.NONE)  # Remove any shadow/border
+
+            # Create the default 4x4 grid
+            grid, cell_labels = self._create_result_grid()
+            scroll.add(grid)
+            tab_content.pack_start(scroll, True, True, 0)
+
             self._result_tab_contents.append(tab_content)
+            self._result_grids.append(grid)
+            self._result_cell_labels.append(cell_labels)
 
             self.results_notebook.append_page(tab_content, tab_label)
+
+        # Connect tab switch signal for updating values
+        self.results_notebook.connect("switch-page", self.on_result_tab_switched)
 
         box.pack_start(self.results_notebook, True, True, 0)
 
