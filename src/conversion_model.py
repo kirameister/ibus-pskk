@@ -429,6 +429,11 @@ class ConversionModelPanel(Gtk.Window):
             tokens: List of tokens
             labels: List of predicted labels for this N-best result
         """
+        # Update bunsetsu preview label
+        bunsetsu_markup = self._format_bunsetsu_markup(tokens, labels)
+        self._result_bunsetsu_labels[tab_idx].set_markup(bunsetsu_markup)
+
+        # Update grid cells
         cell_labels = self._result_cell_labels[tab_idx]
 
         for col_idx, (token, label) in enumerate(zip(tokens, labels)):
@@ -441,6 +446,57 @@ class ConversionModelPanel(Gtk.Window):
             # Row 2: ctype feature
             ctype = 'hira' if (len(token) == 1 and util.char_type(token) == 'hiragana') else 'non-hira'
             cell_labels[2][col_idx].set_text(ctype)
+
+    def _format_bunsetsu_markup(self, tokens, labels):
+        """Format bunsetsu split with Pango markup.
+
+        Lookup bunsetsu (B-L/I-L) are shown in bold.
+        Passthrough bunsetsu (B-P/I-P) are shown in normal text.
+        Bunsetsu are separated by spaces.
+
+        Example: tokens=['き','ょ','う','は'], labels=['B-L','I-L','I-L','B-P']
+          → "<b>きょう</b> は"
+
+        Args:
+            tokens: List of tokens
+            labels: List of predicted labels
+
+        Returns:
+            Pango markup string
+        """
+        if not tokens or not labels:
+            return ""
+
+        bunsetsu_parts = []
+        current_bunsetsu = []
+        current_is_lookup = None
+
+        for token, label in zip(tokens, labels):
+            if label.startswith('B'):
+                # Start new bunsetsu - first flush the current one
+                if current_bunsetsu:
+                    text = GLib.markup_escape_text(''.join(current_bunsetsu))
+                    if current_is_lookup:
+                        bunsetsu_parts.append(f"<b>{text}</b>")
+                    else:
+                        bunsetsu_parts.append(text)
+
+                # Start new bunsetsu
+                current_bunsetsu = [token]
+                current_is_lookup = label.endswith('-L') or label == 'B'
+            else:
+                # Continue current bunsetsu
+                current_bunsetsu.append(token)
+
+        # Flush last bunsetsu
+        if current_bunsetsu:
+            text = GLib.markup_escape_text(''.join(current_bunsetsu))
+            if current_is_lookup:
+                bunsetsu_parts.append(f"<b>{text}</b>")
+            else:
+                bunsetsu_parts.append(text)
+
+        return ' '.join(bunsetsu_parts)
 
     def _segment_by_tags(self, tokens, tags):
         """Segment tokens into bunsetsu based on predicted B-/I- tags.
@@ -645,14 +701,25 @@ class ConversionModelPanel(Gtk.Window):
         self._result_tab_contents = []  # Store content boxes for updating later
         self._result_grids = []  # Store grid widgets for each tab
         self._result_cell_labels = []  # Store cell label widgets for each tab (2D list)
+        self._result_bunsetsu_labels = []  # Store bunsetsu preview labels for each tab
 
         for i in range(n_best_count):
             # Tab label
             tab_label = Gtk.Label(label=f"#{i+1} (0.000)")
             self._result_tab_labels.append(tab_label)
 
-            # Tab content with scrollable grid (no border for tight grid appearance)
-            tab_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            # Tab content with scrollable grid
+            tab_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+
+            # Bunsetsu preview label (above the grid)
+            bunsetsu_label = Gtk.Label()
+            bunsetsu_label.set_markup("<i>(Enter a sentence and click the button above)</i>")
+            bunsetsu_label.set_xalign(0)
+            bunsetsu_label.set_margin_start(8)
+            bunsetsu_label.set_margin_top(4)
+            bunsetsu_label.set_margin_bottom(4)
+            tab_content.pack_start(bunsetsu_label, False, False, 0)
+            self._result_bunsetsu_labels.append(bunsetsu_label)
 
             # Create scrolled window for the grid
             scroll = Gtk.ScrolledWindow()
