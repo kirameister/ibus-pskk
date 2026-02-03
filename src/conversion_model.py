@@ -56,6 +56,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import util
+from util import char_type, tokenize_line, add_features_per_line
 
 try:
     import pycrfsuite
@@ -94,21 +95,7 @@ JODOUSHI_MAX_LEN = max(len(w) for w in JODOUSHI)
 
 
 # ─── Feature extraction ──────────────────────────────────────────────
-
-def char_type(c):
-    """Classify a character into its Unicode block type."""
-    cp = ord(c)
-    if 0x3040 <= cp <= 0x309F:
-        return 'hiragana'
-    elif 0x30A0 <= cp <= 0x30FF:
-        return 'katakana'
-    elif 0x4E00 <= cp <= 0x9FFF or 0x3400 <= cp <= 0x4DBF:
-        return 'kanji'
-    elif 0x0020 <= cp <= 0x007E:
-        return 'ascii'
-    else:
-        return 'other'
-
+# Note: char_type, tokenize_line, add_features_per_line are imported from util
 
 def parse_training_line(line):
     """Parse a space-delimited line into characters and BI tags.
@@ -192,136 +179,6 @@ def parse_annotated_line(line):
             tags.append(f'B-{suffix}' if i == 0 else f'I-{suffix}')
 
     return chars, tags
-
-
-# ─── Tokenization and Feature Extraction (New Modular System) ─────────
-
-def tokenize_line(line):
-    """Tokenize a line with mixed ASCII/non-ASCII handling.
-
-    Tokenization rules:
-    - Non-ASCII characters (hiragana, kanji, etc.): each character is a token
-    - ASCII words (consecutive letters/digits): each word is a single token
-    - Spaces are skipped (used only as delimiters)
-    - ASCII punctuation: each is a separate token
-
-    Example: "きょうは sunny day"
-      → ['き', 'ょ', 'う', 'は', 'sunny', 'day']
-
-    Example: "きょうはsunny"
-      → ['き', 'ょ', 'う', 'は', 'sunny']
-
-    Args:
-        line: Input string (underscores should already be stripped)
-
-    Returns:
-        List of tokens
-    """
-    tokens = []
-    ascii_buffer = []
-
-    def flush_ascii_buffer():
-        """Flush accumulated ASCII characters as a single token."""
-        if ascii_buffer:
-            tokens.append(''.join(ascii_buffer))
-            ascii_buffer.clear()
-
-    for c in line:
-        if c.isascii() and c.isalnum():
-            # ASCII letter or digit: accumulate into buffer
-            ascii_buffer.append(c)
-        elif c == ' ':
-            # Space: flush buffer but skip the space itself
-            flush_ascii_buffer()
-        else:
-            # Non-ASCII or ASCII punctuation: flush buffer first
-            flush_ascii_buffer()
-            # Add current character as its own token
-            tokens.append(c)
-
-    # Flush any remaining ASCII buffer
-    flush_ascii_buffer()
-
-    return tokens
-
-
-def add_features_per_line(line):
-    """Extract features for each token in a line.
-
-    This is a wrapper function that:
-    1. Tokenizes the line (handling mixed ASCII/non-ASCII)
-    2. Calls various feature sub-functions
-    3. Combines all features into a list of dicts (one per token)
-
-    Args:
-        line: Input string (underscores should already be stripped)
-
-    Returns:
-        List of dicts, where each dict contains features for one token.
-        Example:
-        [
-            {'char': 'き', 'prev_char': None, 'next_char': 'ょ', ...},
-            {'char': 'ょ', 'prev_char': 'き', 'next_char': 'う', ...},
-            ...
-        ]
-    """
-    tokens = tokenize_line(line)
-    n = len(tokens)
-
-    if n == 0:
-        return []
-
-    # Initialize feature list (one dict per token)
-    features = [{} for _ in range(n)]
-
-    # Call feature sub-functions and merge results
-    # Each sub-function returns a list of values (one per token)
-
-    # Character type feature: 'hira' or 'non-hira'
-    ctype_values = add_feature_ctype(tokens)
-    for i, val in enumerate(ctype_values):
-        features[i]['ctype'] = val
-
-    # TODO: Add more feature sub-functions here
-    # Example:
-    #   char_values = add_feature_char(tokens)
-    #   for i, val in enumerate(char_values):
-    #       features[i]['char'] = val
-
-    return features
-
-
-# ─── Feature Sub-functions ────────────────────────────────────────────
-# Each function takes a list of tokens and returns a list of feature values
-# (one value per token). The wrapper add_features_per_line() calls these
-# and combines the results into feature dicts.
-
-def add_feature_ctype(tokens):
-    """Add character type feature: 'hira' or 'non-hira'.
-
-    A token is classified as 'hira' only if it is a single hiragana character.
-    All other tokens (multi-char, kanji, katakana, ASCII, etc.) are 'non-hira'.
-
-    Args:
-        tokens: List of tokens from tokenize_line()
-
-    Returns:
-        List of 'hira' or 'non-hira' strings (same length as tokens)
-
-    Example:
-        add_feature_ctype(['き', 'ょ', 'う', 'sunny'])
-        → ['hira', 'hira', 'hira', 'non-hira']
-
-        add_feature_ctype(['今', 'は', 'hello'])
-        → ['non-hira', 'hira', 'non-hira']
-    """
-    result = []
-    for token in tokens:
-        if len(token) == 1 and char_type(token) == 'hiragana':
-            result.append('hira')
-        else:
-            result.append('non-hira')
-    return result
 
 
 def extract_char_features(chars, i, dictionary_readings=None):

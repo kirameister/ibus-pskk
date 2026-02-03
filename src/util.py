@@ -7,6 +7,313 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# ─── Character Classification and Tokenization ────────────────────────
+
+def char_type(c):
+    """Classify a character into its Unicode block type.
+
+    Args:
+        c: A single character
+
+    Returns:
+        One of: 'hiragana', 'katakana', 'kanji', 'ascii', 'other'
+    """
+    cp = ord(c)
+    if 0x3040 <= cp <= 0x309F:
+        return 'hiragana'
+    elif 0x30A0 <= cp <= 0x30FF:
+        return 'katakana'
+    elif 0x4E00 <= cp <= 0x9FFF or 0x3400 <= cp <= 0x4DBF:
+        return 'kanji'
+    elif 0x0020 <= cp <= 0x007E:
+        return 'ascii'
+    else:
+        return 'other'
+
+
+def tokenize_line(line):
+    """Tokenize a line with mixed ASCII/non-ASCII handling.
+
+    Tokenization rules:
+    - Non-ASCII characters (hiragana, kanji, etc.): each character is a token
+    - ASCII words (consecutive letters/digits): each word is a single token
+    - Spaces are skipped (used only as delimiters)
+    - ASCII punctuation: each is a separate token
+
+    Example: "きょうは sunny day"
+      → ['き', 'ょ', 'う', 'は', 'sunny', 'day']
+
+    Example: "きょうはsunny"
+      → ['き', 'ょ', 'う', 'は', 'sunny']
+
+    Args:
+        line: Input string (underscores should already be stripped)
+
+    Returns:
+        List of tokens
+    """
+    tokens = []
+    ascii_buffer = []
+
+    def flush_ascii_buffer():
+        """Flush accumulated ASCII characters as a single token."""
+        if ascii_buffer:
+            tokens.append(''.join(ascii_buffer))
+            ascii_buffer.clear()
+
+    for c in line:
+        if c.isascii() and c.isalnum():
+            # ASCII letter or digit: accumulate into buffer
+            ascii_buffer.append(c)
+        elif c == ' ':
+            # Space: flush buffer but skip the space itself
+            flush_ascii_buffer()
+        else:
+            # Non-ASCII or ASCII punctuation: flush buffer first
+            flush_ascii_buffer()
+            # Add current character as its own token
+            tokens.append(c)
+
+    # Flush any remaining ASCII buffer
+    flush_ascii_buffer()
+
+    return tokens
+
+
+# ─── CRF Feature Extraction ───────────────────────────────────────────
+
+def add_feature_ctype(tokens):
+    """Add character type feature: 'hira' or 'non-hira'.
+
+    A token is classified as 'hira' only if it is a single hiragana character.
+    All other tokens (multi-char, kanji, katakana, ASCII, etc.) are 'non-hira'.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+
+    Returns:
+        List of 'hira' or 'non-hira' strings (same length as tokens)
+
+    Example:
+        add_feature_ctype(['き', 'ょ', 'う', 'sunny'])
+        → ['hira', 'hira', 'hira', 'non-hira']
+
+        add_feature_ctype(['今', 'は', 'hello'])
+        → ['non-hira', 'hira', 'non-hira']
+    """
+    result = []
+    for token in tokens:
+        if len(token) == 1 and char_type(token) == 'hiragana':
+            result.append('hira')
+        else:
+            result.append('non-hira')
+    return result
+
+
+def add_features_per_line(line):
+    """Extract features for each token in a line.
+
+    This is a wrapper function that:
+    1. Tokenizes the line (handling mixed ASCII/non-ASCII)
+    2. Calls various feature sub-functions
+    3. Combines all features into a list of dicts (one per token)
+
+    Args:
+        line: Input string (underscores should already be stripped)
+
+    Returns:
+        List of dicts, where each dict contains features for one token.
+        Example:
+        [
+            {'ctype': 'hira'},
+            {'ctype': 'hira'},
+            ...
+        ]
+    """
+    tokens = tokenize_line(line)
+    n = len(tokens)
+
+    if n == 0:
+        return []
+
+    # Initialize feature list (one dict per token)
+    features = [{} for _ in range(n)]
+
+    # Call feature sub-functions and merge results
+    # Each sub-function returns a list of values (one per token)
+
+    # Character type feature: 'hira' or 'non-hira'
+    ctype_values = add_feature_ctype(tokens)
+    for i, val in enumerate(ctype_values):
+        features[i]['ctype'] = val
+
+    # TODO: Add more feature sub-functions here
+    # Example:
+    #   char_values = add_feature_char(tokens)
+    #   for i, val in enumerate(char_values):
+    #       features[i]['char'] = val
+
+    return features
+
+
+# ─── CRF N-best Viterbi ───────────────────────────────────────────────
+
+def crf_compute_emission_scores(features, state_features, labels):
+    """Compute emission scores for each position and label.
+
+    Args:
+        features: List of feature dicts (one per position), from add_features_per_line()
+        state_features: Dict of (feature_string, label) → weight from tagger.info()
+        labels: List of label strings (e.g., ['B-L', 'I-L', 'B-P', 'I-P'])
+
+    Returns:
+        2D list: emission[t][label_idx] = score for label at position t
+    """
+    n_positions = len(features)
+    n_labels = len(labels)
+    label_to_idx = {label: i for i, label in enumerate(labels)}
+
+    # Initialize emission scores to 0
+    emission = [[0.0] * n_labels for _ in range(n_positions)]
+
+    for t, feat_dict in enumerate(features):
+        for key, value in feat_dict.items():
+            # Build feature string in CRFsuite format: "key:value"
+            feat_str = f"{key}:{value}"
+            for label in labels:
+                weight = state_features.get((feat_str, label), 0.0)
+                if weight != 0.0:
+                    emission[t][label_to_idx[label]] += weight
+
+    return emission
+
+
+def crf_nbest_viterbi(emission, transitions, labels, n_best=5):
+    """Run N-best Viterbi algorithm to find top-N label sequences.
+
+    Args:
+        emission: 2D list emission[t][label_idx] = emission score
+        transitions: Dict of (from_label, to_label) → weight
+        labels: List of label strings
+        n_best: Number of best sequences to return
+
+    Returns:
+        List of (labels_list, score) tuples, sorted by score descending.
+        Each labels_list is a list of label strings for each position.
+    """
+    n_positions = len(emission)
+    n_labels = len(labels)
+
+    if n_positions == 0:
+        return []
+
+    # Build transition matrix: trans[from_idx][to_idx] = score
+    trans = [[0.0] * n_labels for _ in range(n_labels)]
+    for i, from_label in enumerate(labels):
+        for j, to_label in enumerate(labels):
+            trans[i][j] = transitions.get((from_label, to_label), 0.0)
+
+    # DP table: dp[t][label_idx] = list of (score, backpointer) tuples
+    # where backpointer = (prev_label_idx, prev_rank) or None for t=0
+    # We keep top N entries per cell
+    dp = [[[] for _ in range(n_labels)] for _ in range(n_positions)]
+
+    # Initialize t=0: emission score only, no transition
+    for label_idx in range(n_labels):
+        score = emission[0][label_idx]
+        dp[0][label_idx].append((score, None))
+
+    # Forward pass
+    for t in range(1, n_positions):
+        for curr_label in range(n_labels):
+            # Collect all candidates from previous position
+            candidates = []
+            for prev_label in range(n_labels):
+                for rank, (prev_score, _) in enumerate(dp[t-1][prev_label]):
+                    # Score = previous path score + transition + emission
+                    score = prev_score + trans[prev_label][curr_label] + emission[t][curr_label]
+                    candidates.append((score, (prev_label, rank)))
+
+            # Sort by score descending and keep top N
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            dp[t][curr_label] = candidates[:n_best]
+
+    # Collect final candidates from all labels at last position
+    final_candidates = []
+    for label_idx in range(n_labels):
+        for rank, (score, backptr) in enumerate(dp[n_positions-1][label_idx]):
+            final_candidates.append((score, label_idx, rank))
+
+    # Sort by score descending and keep top N
+    final_candidates.sort(key=lambda x: x[0], reverse=True)
+    final_candidates = final_candidates[:n_best]
+
+    # Backtrack to recover label sequences
+    results = []
+    for final_score, final_label, final_rank in final_candidates:
+        # Reconstruct path by backtracking
+        path = [final_label]
+        curr_label = final_label
+        curr_rank = final_rank
+
+        for t in range(n_positions - 1, 0, -1):
+            _, backptr = dp[t][curr_label][curr_rank]
+            if backptr is None:
+                break
+            prev_label, prev_rank = backptr
+            path.append(prev_label)
+            curr_label = prev_label
+            curr_rank = prev_rank
+
+        # Reverse to get path from start to end
+        path.reverse()
+
+        # Convert indices to label strings
+        label_sequence = [labels[idx] for idx in path]
+        results.append((label_sequence, final_score))
+
+    return results
+
+
+def crf_nbest_predict(tagger, input_text, n_best=5):
+    """Run N-best CRF prediction on input text.
+
+    This is the main entry point for N-best bunsetsu prediction.
+
+    Args:
+        tagger: pycrfsuite.Tagger with model already opened
+        input_text: Input string (hiragana text to segment)
+        n_best: Number of best sequences to return
+
+    Returns:
+        List of (labels_list, score) tuples, sorted by score descending.
+        Each labels_list is a list of label strings (e.g., ['B-L', 'I-L', 'B-P', ...])
+        for each token in the input.
+
+        Returns empty list if input is empty or has no tokens.
+    """
+    # Get model information
+    info = tagger.info()
+    labels = tagger.labels()
+    state_features = info.state_features
+    transitions = info.transitions
+
+    # Tokenize and extract features
+    tokens = tokenize_line(input_text)
+    if not tokens:
+        return []
+
+    features = add_features_per_line(input_text)
+
+    # Compute emission scores
+    emission = crf_compute_emission_scores(features, state_features, labels)
+
+    # Run N-best Viterbi
+    results = crf_nbest_viterbi(emission, transitions, labels, n_best)
+
+    return results
+
+
 def get_package_name():
     '''
     returns 'ibus-pskk'
