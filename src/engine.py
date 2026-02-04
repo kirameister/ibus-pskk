@@ -621,7 +621,15 @@ class EnginePSKK(IBus.Engine):
         combo_mask = (IBus.ModifierType.CONTROL_MASK |
                       IBus.ModifierType.MOD1_MASK |
                       IBus.ModifierType.SUPER_MASK)
-        if state & combo_mask:
+        if state & combo_mask and key_name not in modifier_key_names:
+            # Before passing through the combo-key back to IBus, commit the preedit buffer.
+            self._commit_string()
+            self._in_forced_preedit = False
+            self._bunsetsu_active = False
+            self._in_conversion = False
+            self._conversion_yomi = ''
+            self._lookup_table.clear()
+            self.hide_lookup_table()
             return False
 
         # =====================================================================
