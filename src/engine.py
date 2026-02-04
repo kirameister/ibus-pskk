@@ -964,6 +964,11 @@ class EnginePSKK(IBus.Engine):
             return False
 
         # On press: check each conversion key binding
+        # When preedit is empty, let the key pass through to the application
+        # (e.g., Ctrl+L should reach the browser to select the URL bar)
+        if not self._preedit_string:
+            return False
+
         for conversion_type, binding in conversion_keys.items():
             if self._matches_key_binding(key_name, state, binding):
                 logger.debug(f'conversion_key matched: {conversion_type} = {binding}')
@@ -1675,12 +1680,19 @@ class EnginePSKK(IBus.Engine):
         """Commit preedit to the application and clear all buffers."""
         if self._preedit_string:
             logger.debug(f'Committing: "{self._preedit_string}"')
-            self.commit_text(IBus.Text.new_from_string(self._preedit_string))
+            # Save the text to commit before clearing buffers
+            text_to_commit = self._preedit_string
+            # Clear preedit display FIRST to avoid race condition:
+            # commit_text() does not auto-clear the COMMIT-mode preedit,
+            # so a forwarded key event (return False) could arrive at the
+            # client before the preedit-clear signal, causing the client
+            # to auto-commit the preedit as well (double output).
             self._preedit_string = ""
             self._preedit_hiragana = ""
             self._preedit_ascii = ""
             self._conversion_disabled = False  # Re-enable Ctrl+K/J/L for next input
             self._update_preedit()
+            self.commit_text(IBus.Text.new_from_string(text_to_commit))
 
     def _parse_hex_color(self, color_str):
         """
