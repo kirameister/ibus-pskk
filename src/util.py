@@ -524,7 +524,10 @@ def labels_to_bunsetsu(tokens, labels):
     current_label = None
 
     for token, label in zip(tokens, labels):
-        if label.startswith('B'):
+        # CRFsuite doesn't enforce BIO constraints, so the first label
+        # may be 'I' instead of 'B'.  Treat a leading 'I' as 'B' since
+        # there is no preceding bunsetsu to continue.
+        if label.startswith('B') or current_label is None:
             # Start new bunsetsu - first flush the current one
             if current_bunsetsu:
                 text = ''.join(current_bunsetsu)
@@ -532,7 +535,11 @@ def labels_to_bunsetsu(tokens, labels):
 
             # Start new bunsetsu
             current_bunsetsu = [token]
-            current_label = label  # Keep the full label (B-L, B-P, or B)
+            # Promote I→B when forced (keep suffix like -L/-P intact)
+            if label.startswith('I'):
+                current_label = 'B' + label[1:]
+            else:
+                current_label = label
         else:
             # Continue current bunsetsu
             current_bunsetsu.append(token)
