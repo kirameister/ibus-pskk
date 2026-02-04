@@ -625,8 +625,9 @@ class ConversionModelPanel(Gtk.Window):
             col_headers: List of column header strings
         """
         # Get the scrolled window containing the grid
+        # (index 1 because index 0 is the bunsetsu preview label)
         tab_content = self._result_tab_contents[tab_index]
-        scroll = tab_content.get_children()[0]  # First child is the ScrolledWindow
+        scroll = tab_content.get_children()[1]  # Second child is the ScrolledWindow
 
         # Remove old grid
         old_grid = self._result_grids[tab_index]
