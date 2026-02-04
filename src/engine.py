@@ -690,10 +690,19 @@ class EnginePSKK(IBus.Engine):
                         return True
                     return False  # Pass through in whole-word mode
 
-            # Escape - cancel conversion
-            if keyval == IBus.KEY_Escape:
+            # Arrow keys in IDLE mode: commit preedit and pass through
+            if keyval in (IBus.KEY_Left, IBus.KEY_KP_Left,
+                          IBus.KEY_Right, IBus.KEY_KP_Right,
+                          IBus.KEY_Up, IBus.KEY_KP_Up,
+                          IBus.KEY_Down, IBus.KEY_KP_Down):
+                if self._preedit_string:
+                    self._commit_string()
+                return False
+
+            # Escape / Delete - cancel conversion or clear preedit
+            if keyval == IBus.KEY_Escape or keyval == IBus.KEY_Delete:
                 if self._in_conversion:
-                    logger.debug('Escape in CONVERTING: cancelling, reverting to yomi')
+                    logger.debug('Escape/Delete in CONVERTING: cancelling, reverting to yomi')
                     self._cancel_conversion()
                     return True
                 elif self._preedit_string:
