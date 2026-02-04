@@ -1204,6 +1204,8 @@ class EnginePSKK(IBus.Engine):
                 logger.debug('Space tap in IDLE: committing preedit + space')
                 self._commit_string()
                 self.commit_text(IBus.Text.new_from_string(' '))
+                # Ensure conversion is re-enabled for next input (fresh start)
+                self._conversion_disabled = False
         elif self._marker_state == MarkerState.FIRST_RELEASED:
             # Decision point: was this bunsetsu or forced preedit?
             self._handle_marker_release_decision()
