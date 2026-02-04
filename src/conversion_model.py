@@ -276,9 +276,7 @@ def load_dictionary_readings():
     return readings
 
 
-def get_model_path():
-    """Return the canonical path to the bunsetsu CRF model file."""
-    return os.path.join(util.get_user_config_dir(), 'bunsetsu.crfsuite')
+# Note: Use util.get_crf_model_path() for the canonical model path
 
 
 # ─── GTK Panel ────────────────────────────────────────────────────────
@@ -343,22 +341,8 @@ class ConversionModelPanel(Gtk.Window):
         if self._tagger is not None:
             return True
 
-        if not HAS_CRFSUITE:
-            return False
-
-        model_path = get_model_path()
-        if not os.path.exists(model_path):
-            return False
-
-        try:
-            self._tagger = pycrfsuite.Tagger()
-            self._tagger.open(model_path)
-            logger.info(f'Loaded CRF model from: {model_path}')
-            return True
-        except Exception as e:
-            logger.error(f'Failed to load CRF model: {e}')
-            self._tagger = None
-            return False
+        self._tagger = util.load_crf_tagger()
+        return self._tagger is not None
 
     def on_test_prediction(self, button):
         """Run bunsetsu-split prediction on input text."""
@@ -685,7 +669,7 @@ class ConversionModelPanel(Gtk.Window):
         self.test_predict_btn = Gtk.Button(label="Test Bunsetsu-split prediction")
         self.test_predict_btn.connect("clicked", self.on_test_prediction)
         # Disable if no model exists
-        if not os.path.exists(get_model_path()):
+        if not os.path.exists(util.get_crf_model_path()):
             self.test_predict_btn.set_sensitive(False)
             self.test_predict_btn.set_tooltip_text("No trained model found. Train a model first.")
         box.pack_start(self.test_predict_btn, False, False, 0)
@@ -983,7 +967,7 @@ class ConversionModelPanel(Gtk.Window):
             self._log("ERROR: No features extracted. Click 'Feature Extraction' first.")
             return
 
-        model_path = get_model_path()
+        model_path = util.get_crf_model_path()
 
         self.log_buffer.set_text('')  # Clear log
         self._log("=== CRF Bunsetsu Segmentation Training ===")

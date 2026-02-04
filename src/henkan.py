@@ -5,6 +5,8 @@ import json
 import logging
 import os
 
+import util
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,6 +42,9 @@ class HenkanProcessor:
         self._candidates = []    # Current conversion candidates
         self._selected_index = 0 # Currently selected candidate index
         self._dictionary_count = 0  # Number of successfully loaded dictionaries
+
+        # CRF tagger for bunsetsu prediction (lazy loaded)
+        self._tagger = None
 
         if dictionary_files:
             self._load_dictionaries(dictionary_files)
@@ -226,3 +231,110 @@ class HenkanProcessor:
             'reading_count': len(self._dictionary),
             'candidate_count': candidate_count
         }
+
+    # ─── CRF Bunsetsu Prediction ──────────────────────────────────────────
+
+    def _load_tagger(self):
+        """
+        Lazy load the CRF tagger for bunsetsu prediction.
+
+        Returns:
+            bool: True if tagger is available, False otherwise
+        """
+        if self._tagger is not None:
+            return True
+
+        self._tagger = util.load_crf_tagger()
+        return self._tagger is not None
+
+    def predict_bunsetsu(self, input_text, n_best=5):
+        """
+        Predict bunsetsu segmentation using CRF N-best Viterbi.
+
+        This method segments the input text into bunsetsu (phrase units),
+        identifying which segments should be sent to dictionary lookup
+        (Lookup bunsetsu) and which should be passed through as-is
+        (Passthrough bunsetsu, typically particles like は、が、を).
+
+        Args:
+            input_text: Hiragana input string to segment
+            n_best: Number of top predictions to return (default: 5)
+
+        Returns:
+            list: List of N-best predictions, each being a tuple of:
+                  (bunsetsu_list, score)
+                  where bunsetsu_list is a list of (text, type) tuples:
+                      - text: The bunsetsu text
+                      - type: 'L' for Lookup or 'P' for Passthrough
+                  Returns empty list if tagger is unavailable or input is empty.
+
+        Example:
+            >>> processor.predict_bunsetsu("きょうはてんきがよい", n_best=3)
+            [
+                ([('きょう', 'L'), ('は', 'P'), ('てんき', 'L'), ('が', 'P'), ('よい', 'L')], -2.34),
+                ([('きょうは', 'L'), ('てんき', 'L'), ('が', 'P'), ('よい', 'L')], -3.12),
+                ...
+            ]
+        """
+        if not input_text:
+            return []
+
+        if not self._load_tagger():
+            logger.debug('CRF tagger not available for bunsetsu prediction')
+            return []
+
+        # Run N-best Viterbi prediction
+        nbest_results = util.crf_nbest_predict(self._tagger, input_text, n_best=n_best)
+
+        # Convert label sequences to bunsetsu lists
+        output = []
+        tokens = util.tokenize_line(input_text)
+
+        for labels, score in nbest_results:
+            bunsetsu_list = self._labels_to_bunsetsu(tokens, labels)
+            output.append((bunsetsu_list, score))
+
+        return output
+
+    def _labels_to_bunsetsu(self, tokens, labels):
+        """
+        Convert a sequence of tokens and labels into bunsetsu list.
+
+        Args:
+            tokens: List of characters/tokens
+            labels: List of predicted labels (B-L, I-L, B-P, I-P)
+
+        Returns:
+            list: List of (text, type) tuples where type is 'L' or 'P'
+        """
+        if not tokens or not labels:
+            return []
+
+        bunsetsu_list = []
+        current_bunsetsu = []
+        current_type = None
+
+        for token, label in zip(tokens, labels):
+            if label.startswith('B'):
+                # Start new bunsetsu - first flush the current one
+                if current_bunsetsu:
+                    text = ''.join(current_bunsetsu)
+                    bunsetsu_list.append((text, current_type or 'L'))
+
+                # Start new bunsetsu
+                current_bunsetsu = [token]
+                # Extract type from label (B-L -> L, B-P -> P, B -> L)
+                if '-' in label:
+                    current_type = label.split('-')[1]
+                else:
+                    current_type = 'L'  # Default to Lookup
+            else:
+                # Continue current bunsetsu
+                current_bunsetsu.append(token)
+
+        # Flush last bunsetsu
+        if current_bunsetsu:
+            text = ''.join(current_bunsetsu)
+            bunsetsu_list.append((text, current_type or 'L'))
+
+        return bunsetsu_list

@@ -314,6 +314,52 @@ def crf_nbest_predict(tagger, input_text, n_best=5):
     return results
 
 
+def get_crf_model_path():
+    """Return the canonical path to the bunsetsu CRF model file.
+
+    Returns:
+        str: Path to bunsetsu.crfsuite in the user config directory
+    """
+    return os.path.join(get_user_config_dir(), 'bunsetsu.crfsuite')
+
+
+def load_crf_tagger(model_path=None):
+    """Load a CRF tagger from the model file.
+
+    Args:
+        model_path: Path to .crfsuite model file. If None, uses default path
+                   from get_crf_model_path().
+
+    Returns:
+        pycrfsuite.Tagger if successful, None otherwise.
+        Returns None if:
+        - pycrfsuite is not installed
+        - model file doesn't exist
+        - model loading fails
+    """
+    try:
+        import pycrfsuite
+    except ImportError:
+        logger.warning('pycrfsuite not installed. CRF tagger unavailable.')
+        return None
+
+    if model_path is None:
+        model_path = get_crf_model_path()
+
+    if not os.path.exists(model_path):
+        logger.debug(f'CRF model file not found: {model_path}')
+        return None
+
+    try:
+        tagger = pycrfsuite.Tagger()
+        tagger.open(model_path)
+        logger.info(f'Loaded CRF model from: {model_path}')
+        return tagger
+    except Exception as e:
+        logger.error(f'Failed to load CRF model: {e}')
+        return None
+
+
 def get_package_name():
     '''
     returns 'ibus-pskk'
