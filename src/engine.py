@@ -710,7 +710,13 @@ class EnginePSKK(IBus.Engine):
                     # in _preedit_ascii. User must ESC and retype, or commit and start fresh.
                     self._preedit_string = self._preedit_string[:-1]
                     self._preedit_hiragana = self._preedit_hiragana[:-1]
-                    self._conversion_disabled = True
+                    # Disable conversion after backspace because we can't reliably track
+                    # the many-to-one mapping from keystrokes to hiragana in _preedit_ascii.
+                    # However, re-enable if preedit is now empty (fresh start for next input).
+                    if self._preedit_string:
+                        self._conversion_disabled = True
+                    else:
+                        self._conversion_disabled = False
                     self._update_preedit()
                     return True
                 return False
