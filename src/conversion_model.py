@@ -453,9 +453,12 @@ class ConversionModelPanel(Gtk.Window):
             return ""
 
         parts = []
-        for text, btype in bunsetsu_list:
+        for text, label in bunsetsu_list:
             escaped = GLib.markup_escape_text(text)
-            if btype == 'L':
+            # Lookup bunsetsu (B-L or simple B) shown in bold
+            # Passthrough bunsetsu (B-P) shown in normal text
+            is_lookup = label.endswith('-L') or label == 'B'
+            if is_lookup:
                 parts.append(f"<b>{escaped}</b>")
             else:
                 parts.append(escaped)

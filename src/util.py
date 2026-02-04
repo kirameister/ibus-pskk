@@ -374,40 +374,41 @@ def labels_to_bunsetsu(tokens, labels):
                 - 2-class: B, I (simple boundary detection)
 
     Returns:
-        list: List of (text, type) tuples where:
+        list: List of (text, label) tuples where:
               - text: The bunsetsu text (joined tokens)
-              - type: 'L' for Lookup (needs dictionary conversion) or
-                      'P' for Passthrough (output as-is, e.g., particles)
-              For simple B/I labels without type suffix, defaults to 'L'.
+              - label: The full starting label of the bunsetsu (e.g., 'B-L', 'B-P', 'B')
+              For simple B/I labels without type suffix, the label is 'B'.
 
     Example:
         >>> labels_to_bunsetsu(['き','ょ','う','は'], ['B-L','I-L','I-L','B-P'])
-        [('きょう', 'L'), ('は', 'P')]
+        [('きょう', 'B-L'), ('は', 'B-P')]
 
         >>> labels_to_bunsetsu(['き','ょ','う','は'], ['B','I','I','B'])
-        [('きょう', 'L'), ('は', 'L')]
+        [('きょう', 'B'), ('は', 'B')]
+
+        # Consecutive Lookup bunsetsu are correctly separated:
+        >>> labels_to_bunsetsu(
+        ...     ['き','ぎ','ょ','う','し','ゅ','う','え','き'],
+        ...     ['B-L','I-L','I-L','I-L','B-L','I-L','I-L','I-L','I-L'])
+        [('きぎょう', 'B-L'), ('しゅうえき', 'B-L')]
     """
     if not tokens or not labels:
         return []
 
     bunsetsu_list = []
     current_bunsetsu = []
-    current_type = None
+    current_label = None
 
     for token, label in zip(tokens, labels):
         if label.startswith('B'):
             # Start new bunsetsu - first flush the current one
             if current_bunsetsu:
                 text = ''.join(current_bunsetsu)
-                bunsetsu_list.append((text, current_type or 'L'))
+                bunsetsu_list.append((text, current_label))
 
             # Start new bunsetsu
             current_bunsetsu = [token]
-            # Extract type from label (B-L -> L, B-P -> P, B -> L)
-            if '-' in label:
-                current_type = label.split('-')[1]
-            else:
-                current_type = 'L'  # Default to Lookup
+            current_label = label  # Keep the full label (B-L, B-P, or B)
         else:
             # Continue current bunsetsu
             current_bunsetsu.append(token)
@@ -415,7 +416,7 @@ def labels_to_bunsetsu(tokens, labels):
     # Flush last bunsetsu
     if current_bunsetsu:
         text = ''.join(current_bunsetsu)
-        bunsetsu_list.append((text, current_type or 'L'))
+        bunsetsu_list.append((text, current_label))
 
     return bunsetsu_list
 

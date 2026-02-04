@@ -263,17 +263,25 @@ class HenkanProcessor:
         Returns:
             list: List of N-best predictions, each being a tuple of:
                   (bunsetsu_list, score)
-                  where bunsetsu_list is a list of (text, type) tuples:
+                  where bunsetsu_list is a list of (text, label) tuples:
                       - text: The bunsetsu text
-                      - type: 'L' for Lookup or 'P' for Passthrough
+                      - label: The full CRF label ('B-L' for Lookup, 'B-P' for Passthrough)
+                  To check bunsetsu type: label.endswith('-L') for Lookup,
+                  label.endswith('-P') for Passthrough.
                   Returns empty list if tagger is unavailable or input is empty.
 
         Example:
             >>> processor.predict_bunsetsu("きょうはてんきがよい", n_best=3)
             [
-                ([('きょう', 'L'), ('は', 'P'), ('てんき', 'L'), ('が', 'P'), ('よい', 'L')], -2.34),
-                ([('きょうは', 'L'), ('てんき', 'L'), ('が', 'P'), ('よい', 'L')], -3.12),
+                ([('きょう', 'B-L'), ('は', 'B-P'), ('てんき', 'B-L'), ('が', 'B-P'), ('よい', 'B-L')], -2.34),
+                ([('きょうは', 'B-L'), ('てんき', 'B-L'), ('が', 'B-P'), ('よい', 'B-L')], -3.12),
                 ...
+            ]
+
+            # Consecutive Lookup bunsetsu (e.g., 企業収益 = きぎょうしゅうえき):
+            >>> processor.predict_bunsetsu("きぎょうしゅうえき", n_best=1)
+            [
+                ([('きぎょう', 'B-L'), ('しゅうえき', 'B-L')], -1.56),
             ]
         """
         if not input_text:
