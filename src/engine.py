@@ -784,6 +784,10 @@ class EnginePSKK(IBus.Engine):
         if self._check_conversion_keys(key_name, state, is_pressed):
             return True
 
+        # Check bunsetsu_prediction_cycle_key
+        if self._check_bunsetsu_prediction_key(key_name, state, is_pressed):
+            return True
+
         return False
 
     def _parse_key_binding(self, binding_str):
@@ -938,6 +942,41 @@ class EnginePSKK(IBus.Engine):
                 return True
 
         return False
+
+    def _check_bunsetsu_prediction_key(self, key_name, state, is_pressed):
+        """
+        Check and handle bunsetsu_prediction_cycle_key binding.
+
+        This key cycles through N-best bunsetsu prediction candidates.
+        """
+        binding = self._config.get('bunsetsu_prediction_cycle_key', '')
+        if not binding:
+            return False
+
+        # On release: consume if this key was handled on press
+        if not is_pressed:
+            if key_name in self._handled_config_keys:
+                self._handled_config_keys.discard(key_name)
+                return True
+            return False
+
+        # On press: check if key matches the binding
+        if self._matches_key_binding(key_name, state, binding):
+            logger.debug(f'bunsetsu_prediction_cycle_key matched: {binding}')
+            self._cycle_bunsetsu_prediction()
+            self._handled_config_keys.add(key_name)
+            return True
+
+        return False
+
+    def _cycle_bunsetsu_prediction(self):
+        """
+        Cycle to the next N-best bunsetsu prediction candidate.
+
+        TODO: Implement actual bunsetsu cycling logic.
+        """
+        logger.debug('_cycle_bunsetsu_prediction called (not yet implemented)')
+        pass
 
     def _handle_conversion(self, conversion_type):
         """
