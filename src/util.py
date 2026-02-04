@@ -110,6 +110,111 @@ def add_feature_ctype(tokens):
     return result
 
 
+def add_feature_char(tokens):
+    """Add character identity feature: the token string itself.
+
+    This is intentionally a simple pass-through so that it can be
+    individually enabled or disabled as a feature via user config.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+
+    Returns:
+        List of token strings (same length and content as input)
+
+    Example:
+        add_feature_char(['き', 'ょ', 'う', 'sunny'])
+        → ['き', 'ょ', 'う', 'sunny']
+    """
+    return list(tokens)
+
+
+def add_feature_char_left(tokens):
+    """Add left-adjacent character feature: the token to the left of each position.
+
+    The first token has no left neighbor, so 'BOS' (Beginning Of Sequence)
+    is used as a sentinel value.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+
+    Returns:
+        List of strings (same length as tokens)
+
+    Example:
+        add_feature_char_left(['き', 'ょ', 'う'])
+        → ['BOS', 'き', 'ょ']
+    """
+    if not tokens:
+        return []
+    return ['BOS'] + list(tokens[:-1])
+
+
+def add_feature_char_right(tokens):
+    """Add right-adjacent character feature: the token to the right of each position.
+
+    The last token has no right neighbor, so 'EOS' (End Of Sequence)
+    is used as a sentinel value.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+
+    Returns:
+        List of strings (same length as tokens)
+
+    Example:
+        add_feature_char_right(['き', 'ょ', 'う'])
+        → ['ょ', 'う', 'EOS']
+    """
+    if not tokens:
+        return []
+    return list(tokens[1:]) + ['EOS']
+
+
+def add_feature_bigram_left(tokens):
+    """Add left bigram feature: the current token paired with its left neighbor.
+
+    Each element is a space-separated string of the left neighbor and the
+    current token.  The first token uses 'BOS' as its left neighbor.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+
+    Returns:
+        List of strings (same length as tokens)
+
+    Example:
+        add_feature_bigram_left(['き', 'ょ', 'う'])
+        → ['BOS き', 'き ょ', 'ょ う']
+    """
+    if not tokens:
+        return []
+    left = ['BOS'] + list(tokens[:-1])
+    return [f'{l} {t}' for l, t in zip(left, tokens)]
+
+
+def add_feature_bigram_right(tokens):
+    """Add right bigram feature: the current token paired with its right neighbor.
+
+    Each element is a space-separated string of the current token and the
+    right neighbor.  The last token uses 'EOS' as its right neighbor.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+
+    Returns:
+        List of strings (same length as tokens)
+
+    Example:
+        add_feature_bigram_right(['き', 'ょ', 'う'])
+        → ['き ょ', 'ょ う', 'う EOS']
+    """
+    if not tokens:
+        return []
+    right = list(tokens[1:]) + ['EOS']
+    return [f'{t} {r}' for t, r in zip(tokens, right)]
+
+
 def add_features_per_line(line):
     """Extract features for each token in a line.
 
@@ -142,16 +247,35 @@ def add_features_per_line(line):
     # Call feature sub-functions and merge results
     # Each sub-function returns a list of values (one per token)
 
+    # Character identity feature: the token itself
+    char_values = add_feature_char(tokens)
+    for i, val in enumerate(char_values):
+        features[i]['char'] = val
+
+    # Left-adjacent character feature
+    char_left_values = add_feature_char_left(tokens)
+    for i, val in enumerate(char_left_values):
+        features[i]['char_left'] = val
+
+    # Right-adjacent character feature
+    char_right_values = add_feature_char_right(tokens)
+    for i, val in enumerate(char_right_values):
+        features[i]['char_right'] = val
+
+    # Left bigram feature: "left_token current_token"
+    bigram_left_values = add_feature_bigram_left(tokens)
+    for i, val in enumerate(bigram_left_values):
+        features[i]['bigram_left'] = val
+
+    # Right bigram feature: "current_token right_token"
+    bigram_right_values = add_feature_bigram_right(tokens)
+    for i, val in enumerate(bigram_right_values):
+        features[i]['bigram_right'] = val
+
     # Character type feature: 'hira' or 'non-hira'
     ctype_values = add_feature_ctype(tokens)
     for i, val in enumerate(ctype_values):
         features[i]['ctype'] = val
-
-    # TODO: Add more feature sub-functions here
-    # Example:
-    #   char_values = add_feature_char(tokens)
-    #   for i, val in enumerate(char_values):
-    #       features[i]['char'] = val
 
     return features
 
