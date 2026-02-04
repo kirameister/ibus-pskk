@@ -448,85 +448,19 @@ class ConversionModelPanel(Gtk.Window):
         Returns:
             Pango markup string
         """
-        if not tokens or not labels:
+        bunsetsu_list = util.labels_to_bunsetsu(tokens, labels)
+        if not bunsetsu_list:
             return ""
 
-        bunsetsu_parts = []
-        current_bunsetsu = []
-        current_is_lookup = None
-
-        for token, label in zip(tokens, labels):
-            if label.startswith('B'):
-                # Start new bunsetsu - first flush the current one
-                if current_bunsetsu:
-                    text = GLib.markup_escape_text(''.join(current_bunsetsu))
-                    if current_is_lookup:
-                        bunsetsu_parts.append(f"<b>{text}</b>")
-                    else:
-                        bunsetsu_parts.append(text)
-
-                # Start new bunsetsu
-                current_bunsetsu = [token]
-                current_is_lookup = label.endswith('-L') or label == 'B'
+        parts = []
+        for text, btype in bunsetsu_list:
+            escaped = GLib.markup_escape_text(text)
+            if btype == 'L':
+                parts.append(f"<b>{escaped}</b>")
             else:
-                # Continue current bunsetsu
-                current_bunsetsu.append(token)
+                parts.append(escaped)
 
-        # Flush last bunsetsu
-        if current_bunsetsu:
-            text = GLib.markup_escape_text(''.join(current_bunsetsu))
-            if current_is_lookup:
-                bunsetsu_parts.append(f"<b>{text}</b>")
-            else:
-                bunsetsu_parts.append(text)
-
-        return ' '.join(bunsetsu_parts)
-
-    def _segment_by_tags(self, tokens, tags):
-        """Segment tokens into bunsetsu based on predicted B-/I- tags.
-
-        Args:
-            tokens: List of tokens
-            tags: List of predicted tags (B-L, I-L, B-P, I-P, or B, I)
-
-        Returns:
-            List of bunsetsu strings, each annotated with type if available.
-            E.g., ['きょう[L]', 'は[P]', 'てんき[L]', 'が[P]', 'よい[L]']
-        """
-        if not tokens or not tags:
-            return []
-
-        bunsetsu_list = []
-        current_bunsetsu = []
-        current_type = None
-
-        for token, tag in zip(tokens, tags):
-            if tag.startswith('B'):
-                # Start new bunsetsu
-                if current_bunsetsu:
-                    # Finish previous bunsetsu
-                    text = ''.join(current_bunsetsu)
-                    if current_type:
-                        text = f"{text}[{current_type}]"
-                    bunsetsu_list.append(text)
-                current_bunsetsu = [token]
-                # Extract type from tag (B-L -> L, B-P -> P, B -> None)
-                if '-' in tag:
-                    current_type = tag.split('-')[1]
-                else:
-                    current_type = None
-            else:
-                # Continue current bunsetsu
-                current_bunsetsu.append(token)
-
-        # Finish last bunsetsu
-        if current_bunsetsu:
-            text = ''.join(current_bunsetsu)
-            if current_type:
-                text = f"{text}[{current_type}]"
-            bunsetsu_list.append(text)
-
-        return bunsetsu_list
+        return ' '.join(parts)
 
     def _create_result_grid(self, num_cols=3, row_headers=None, col_headers=None):
         """Create a grid for displaying prediction results.

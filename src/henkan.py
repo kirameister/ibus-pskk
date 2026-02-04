@@ -291,50 +291,7 @@ class HenkanProcessor:
         tokens = util.tokenize_line(input_text)
 
         for labels, score in nbest_results:
-            bunsetsu_list = self._labels_to_bunsetsu(tokens, labels)
+            bunsetsu_list = util.labels_to_bunsetsu(tokens, labels)
             output.append((bunsetsu_list, score))
 
         return output
-
-    def _labels_to_bunsetsu(self, tokens, labels):
-        """
-        Convert a sequence of tokens and labels into bunsetsu list.
-
-        Args:
-            tokens: List of characters/tokens
-            labels: List of predicted labels (B-L, I-L, B-P, I-P)
-
-        Returns:
-            list: List of (text, type) tuples where type is 'L' or 'P'
-        """
-        if not tokens or not labels:
-            return []
-
-        bunsetsu_list = []
-        current_bunsetsu = []
-        current_type = None
-
-        for token, label in zip(tokens, labels):
-            if label.startswith('B'):
-                # Start new bunsetsu - first flush the current one
-                if current_bunsetsu:
-                    text = ''.join(current_bunsetsu)
-                    bunsetsu_list.append((text, current_type or 'L'))
-
-                # Start new bunsetsu
-                current_bunsetsu = [token]
-                # Extract type from label (B-L -> L, B-P -> P, B -> L)
-                if '-' in label:
-                    current_type = label.split('-')[1]
-                else:
-                    current_type = 'L'  # Default to Lookup
-            else:
-                # Continue current bunsetsu
-                current_bunsetsu.append(token)
-
-        # Flush last bunsetsu
-        if current_bunsetsu:
-            text = ''.join(current_bunsetsu)
-            bunsetsu_list.append((text, current_type or 'L'))
-
-        return bunsetsu_list

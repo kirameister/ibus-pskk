@@ -360,6 +360,66 @@ def load_crf_tagger(model_path=None):
         return None
 
 
+def labels_to_bunsetsu(tokens, labels):
+    """Convert a sequence of tokens and CRF labels into bunsetsu segments.
+
+    This function takes character-level tokens and their predicted labels
+    (B-L, I-L, B-P, I-P or simple B, I) and groups them into bunsetsu
+    (phrase units).
+
+    Args:
+        tokens: List of characters/tokens
+        labels: List of predicted labels. Supported formats:
+                - 4-class: B-L, I-L, B-P, I-P (Lookup vs Passthrough)
+                - 2-class: B, I (simple boundary detection)
+
+    Returns:
+        list: List of (text, type) tuples where:
+              - text: The bunsetsu text (joined tokens)
+              - type: 'L' for Lookup (needs dictionary conversion) or
+                      'P' for Passthrough (output as-is, e.g., particles)
+              For simple B/I labels without type suffix, defaults to 'L'.
+
+    Example:
+        >>> labels_to_bunsetsu(['き','ょ','う','は'], ['B-L','I-L','I-L','B-P'])
+        [('きょう', 'L'), ('は', 'P')]
+
+        >>> labels_to_bunsetsu(['き','ょ','う','は'], ['B','I','I','B'])
+        [('きょう', 'L'), ('は', 'L')]
+    """
+    if not tokens or not labels:
+        return []
+
+    bunsetsu_list = []
+    current_bunsetsu = []
+    current_type = None
+
+    for token, label in zip(tokens, labels):
+        if label.startswith('B'):
+            # Start new bunsetsu - first flush the current one
+            if current_bunsetsu:
+                text = ''.join(current_bunsetsu)
+                bunsetsu_list.append((text, current_type or 'L'))
+
+            # Start new bunsetsu
+            current_bunsetsu = [token]
+            # Extract type from label (B-L -> L, B-P -> P, B -> L)
+            if '-' in label:
+                current_type = label.split('-')[1]
+            else:
+                current_type = 'L'  # Default to Lookup
+        else:
+            # Continue current bunsetsu
+            current_bunsetsu.append(token)
+
+    # Flush last bunsetsu
+    if current_bunsetsu:
+        text = ''.join(current_bunsetsu)
+        bunsetsu_list.append((text, current_type or 'L'))
+
+    return bunsetsu_list
+
+
 def get_package_name():
     '''
     returns 'ibus-pskk'
