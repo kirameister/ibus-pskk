@@ -665,6 +665,22 @@ class EnginePSKK(IBus.Engine):
                     logger.debug('Up arrow in CONVERTING: previous candidate')
                     self._cycle_candidate_backward()
                     return True
+                elif keyval == IBus.KEY_Right or keyval == IBus.KEY_KP_Right:
+                    # Right arrow: move to next bunsetsu (bunsetsu mode only)
+                    if self._henkan_processor.is_bunsetsu_mode():
+                        self._henkan_processor.next_bunsetsu()
+                        self._update_preedit()  # Update display with new selection
+                        logger.debug(f'Right arrow: moved to bunsetsu {self._henkan_processor.get_selected_bunsetsu_index()}')
+                        return True
+                    return False  # Pass through in whole-word mode
+                elif keyval == IBus.KEY_Left or keyval == IBus.KEY_KP_Left:
+                    # Left arrow: move to previous bunsetsu (bunsetsu mode only)
+                    if self._henkan_processor.is_bunsetsu_mode():
+                        self._henkan_processor.previous_bunsetsu()
+                        self._update_preedit()  # Update display with new selection
+                        logger.debug(f'Left arrow: moved to bunsetsu {self._henkan_processor.get_selected_bunsetsu_index()}')
+                        return True
+                    return False  # Pass through in whole-word mode
 
             # Escape - cancel conversion
             if keyval == IBus.KEY_Escape:
@@ -973,10 +989,37 @@ class EnginePSKK(IBus.Engine):
         """
         Cycle to the next N-best bunsetsu prediction candidate.
 
-        TODO: Implement actual bunsetsu cycling logic.
+        This is triggered by bunsetsu_prediction_cycle_key and cycles through:
+        - Whole-word dictionary match (if available)
+        - CRF N-best #1 (if multi-bunsetsu)
+        - CRF N-best #2 (if multi-bunsetsu)
+        - ... and wraps around
         """
-        logger.debug('_cycle_bunsetsu_prediction called (not yet implemented)')
-        pass
+        if not self._in_conversion:
+            logger.debug('_cycle_bunsetsu_prediction: not in conversion mode')
+            return
+
+        # Cycle to next prediction
+        changed = self._henkan_processor.cycle_bunsetsu_prediction()
+        if not changed:
+            logger.debug('_cycle_bunsetsu_prediction: no change (no predictions available)')
+            return
+
+        # Update preedit with new prediction
+        self._preedit_string = self._henkan_processor.get_display_surface()
+        self._update_preedit()
+
+        # Update lookup table if not in bunsetsu mode (whole-word mode has lookup table)
+        if not self._henkan_processor.is_bunsetsu_mode():
+            # Back to whole-word mode - restore lookup table
+            self._lookup_table.set_cursor_pos(0)
+            self.update_lookup_table(self._lookup_table, True)
+        else:
+            # In bunsetsu mode - hide whole-word lookup table
+            self.hide_lookup_table()
+
+        logger.debug(f'_cycle_bunsetsu_prediction: bunsetsu_mode={self._henkan_processor.is_bunsetsu_mode()}, '
+                    f'surface="{self._preedit_string}"')
 
     def _handle_conversion(self, conversion_type):
         """
@@ -1383,8 +1426,8 @@ class EnginePSKK(IBus.Engine):
 
         Called when space is tapped in BUNSETSU_ACTIVE state.
         Uses HenkanProcessor to look up candidates and either:
-        - Single candidate: auto-replace in preedit
-        - Multiple candidates: show lookup table for selection
+        - Dictionary match: show lookup table for selection
+        - No match: automatically enter bunsetsu mode with CRF prediction
         """
         if not self._preedit_string:
             logger.debug('_trigger_conversion: empty preedit, nothing to convert')
@@ -1395,6 +1438,7 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'_trigger_conversion: yomi="{self._conversion_yomi}"')
 
         # Get candidates from HenkanProcessor
+        # This will automatically enter bunsetsu mode if no dictionary match
         candidates = self._henkan_processor.convert(self._conversion_yomi)
 
         if not candidates:
@@ -1402,76 +1446,109 @@ class EnginePSKK(IBus.Engine):
             logger.debug('_trigger_conversion: no candidates found')
             return
 
-        # Clear and populate lookup table
-        self._lookup_table.clear()
-        for candidate in candidates:
-            self._lookup_table.append_candidate(
-                IBus.Text.new_from_string(candidate['surface'])
-            )
+        # Enter conversion mode
+        self._in_conversion = True
+        self._bunsetsu_active = False
 
-        if len(candidates) == 1:
-            # Single candidate: auto-select and update preedit (but stay in conversion mode)
+        # Check if we're in bunsetsu mode (automatic fallback when no dictionary match)
+        if self._henkan_processor.is_bunsetsu_mode():
+            # Bunsetsu mode: display combined surface, hide lookup table
+            self._preedit_string = self._henkan_processor.get_display_surface()
+            self._update_preedit()
+            self.hide_lookup_table()
+            logger.debug(f'_trigger_conversion: bunsetsu mode, surface="{self._preedit_string}", '
+                        f'{self._henkan_processor.get_bunsetsu_count()} bunsetsu')
+        else:
+            # Whole-word mode: populate and show lookup table
+            self._lookup_table.clear()
+            for candidate in candidates:
+                self._lookup_table.append_candidate(
+                    IBus.Text.new_from_string(candidate['surface'])
+                )
+
             self._preedit_string = candidates[0]['surface']
             self._update_preedit()
-            self._in_conversion = True
-            self._bunsetsu_active = False
-            # Don't show lookup table for single candidate
-            self.hide_lookup_table()
-            logger.debug(f'_trigger_conversion: single candidate "{candidates[0]["surface"]}"')
-        else:
-            # Multiple candidates: show lookup table
-            self._in_conversion = True
-            self._bunsetsu_active = False
-            self._preedit_string = candidates[0]['surface']  # Show first candidate in preedit
-            self._update_preedit()
-            self.update_lookup_table(self._lookup_table, True)
-            logger.debug(f'_trigger_conversion: {len(candidates)} candidates, showing lookup table')
+
+            if len(candidates) == 1:
+                # Single candidate: don't show lookup table
+                self.hide_lookup_table()
+                logger.debug(f'_trigger_conversion: single candidate "{candidates[0]["surface"]}"')
+            else:
+                # Multiple candidates: show lookup table
+                self.update_lookup_table(self._lookup_table, True)
+                logger.debug(f'_trigger_conversion: {len(candidates)} candidates, showing lookup table')
 
     def _cycle_candidate(self):
         """
         Cycle to the next conversion candidate.
 
-        Called when space is tapped in CONVERTING state.
+        Called when space is tapped or Down arrow is pressed in CONVERTING state.
+        In bunsetsu mode, cycles candidates for the currently selected bunsetsu.
         """
         if not self._in_conversion:
             return
 
-        # Move to next candidate (wraps around)
-        self._lookup_table.cursor_down()
+        if self._henkan_processor.is_bunsetsu_mode():
+            # Bunsetsu mode: cycle candidates for selected bunsetsu
+            new_candidate = self._henkan_processor.next_bunsetsu_candidate()
+            if new_candidate:
+                # Update combined display surface
+                self._preedit_string = self._henkan_processor.get_display_surface()
+                self._update_preedit()
+                logger.debug(f'_cycle_candidate (bunsetsu): selected "{new_candidate["surface"]}" '
+                           f'for bunsetsu {self._henkan_processor.get_selected_bunsetsu_index()}')
+            else:
+                # Passthrough bunsetsu has no alternatives
+                logger.debug('_cycle_candidate (bunsetsu): passthrough bunsetsu, no alternatives')
+        else:
+            # Whole-word mode: use lookup table
+            self._lookup_table.cursor_down()
 
-        # Update preedit with currently selected candidate
-        cursor_pos = self._lookup_table.get_cursor_pos()
-        candidate = self._lookup_table.get_candidate(cursor_pos)
-        if candidate:
-            self._preedit_string = candidate.get_text()
-            self._update_preedit()
-            # Show lookup table if multiple candidates
-            if self._lookup_table.get_number_of_candidates() > 1:
-                self.update_lookup_table(self._lookup_table, True)
-            logger.debug(f'_cycle_candidate: selected "{self._preedit_string}" (index {cursor_pos})')
+            cursor_pos = self._lookup_table.get_cursor_pos()
+            candidate = self._lookup_table.get_candidate(cursor_pos)
+            if candidate:
+                self._preedit_string = candidate.get_text()
+                self._update_preedit()
+                # Show lookup table if multiple candidates
+                if self._lookup_table.get_number_of_candidates() > 1:
+                    self.update_lookup_table(self._lookup_table, True)
+                logger.debug(f'_cycle_candidate: selected "{self._preedit_string}" (index {cursor_pos})')
 
     def _cycle_candidate_backward(self):
         """
         Cycle to the previous conversion candidate.
 
         Called when Up arrow is pressed in CONVERTING state.
+        In bunsetsu mode, cycles candidates backward for the currently selected bunsetsu.
         """
         if not self._in_conversion:
             return
 
-        # Move to previous candidate (wraps around)
-        self._lookup_table.cursor_up()
+        if self._henkan_processor.is_bunsetsu_mode():
+            # Bunsetsu mode: cycle candidates backward for selected bunsetsu
+            new_candidate = self._henkan_processor.previous_bunsetsu_candidate()
+            if new_candidate:
+                # Update combined display surface
+                self._preedit_string = self._henkan_processor.get_display_surface()
+                self._update_preedit()
+                logger.debug(f'_cycle_candidate_backward (bunsetsu): selected "{new_candidate["surface"]}" '
+                           f'for bunsetsu {self._henkan_processor.get_selected_bunsetsu_index()}')
+            else:
+                # Passthrough bunsetsu has no alternatives
+                logger.debug('_cycle_candidate_backward (bunsetsu): passthrough bunsetsu, no alternatives')
+        else:
+            # Whole-word mode: use lookup table
+            self._lookup_table.cursor_up()
 
-        # Update preedit with currently selected candidate
-        cursor_pos = self._lookup_table.get_cursor_pos()
-        candidate = self._lookup_table.get_candidate(cursor_pos)
-        if candidate:
-            self._preedit_string = candidate.get_text()
-            self._update_preedit()
-            # Show lookup table if multiple candidates
-            if self._lookup_table.get_number_of_candidates() > 1:
-                self.update_lookup_table(self._lookup_table, True)
-            logger.debug(f'_cycle_candidate_backward: selected "{self._preedit_string}" (index {cursor_pos})')
+            cursor_pos = self._lookup_table.get_cursor_pos()
+            candidate = self._lookup_table.get_candidate(cursor_pos)
+            if candidate:
+                self._preedit_string = candidate.get_text()
+                self._update_preedit()
+                # Show lookup table if multiple candidates
+                if self._lookup_table.get_number_of_candidates() > 1:
+                    self.update_lookup_table(self._lookup_table, True)
+                logger.debug(f'_cycle_candidate_backward: selected "{self._preedit_string}" (index {cursor_pos})')
 
     def _cancel_conversion(self):
         """
@@ -1604,7 +1681,11 @@ class EnginePSKK(IBus.Engine):
             return None
 
     def _update_preedit(self):
-        """Update the preedit display in the application with configured colors."""
+        """Update the preedit display in the application with configured colors.
+
+        In bunsetsu mode, shows each bunsetsu with the selected one highlighted
+        using a double underline, while non-selected bunsetsu have single underline.
+        """
         if self._preedit_string:
             preedit_text = IBus.Text.new_from_string(self._preedit_string)
             attrs = IBus.AttrList()
@@ -1619,6 +1700,10 @@ class EnginePSKK(IBus.Engine):
                        and not self._in_conversion)
             stealth = is_idle and self._logging_level != 'DEBUG'
 
+            # Check if we're in bunsetsu mode for special display handling
+            in_bunsetsu_mode = (self._in_conversion and
+                               self._henkan_processor.is_bunsetsu_mode())
+
             if stealth:
                 # Explicitly set UNDERLINE_NONE to override the default
                 # preedit underline that GTK/IBus clients add automatically.
@@ -1629,6 +1714,43 @@ class EnginePSKK(IBus.Engine):
                     preedit_len
                 ))
                 logger.debug('Stealth preedit: no styling in IDLE mode')
+            elif in_bunsetsu_mode:
+                # Bunsetsu mode: show selected bunsetsu with double underline,
+                # non-selected bunsetsu with single underline
+                bunsetsu_segments = self._henkan_processor.get_display_surface_with_selection()
+                pos = 0
+                for surface, is_selected in bunsetsu_segments:
+                    segment_len = len(surface)
+                    if segment_len == 0:
+                        continue
+
+                    # Set underline style based on selection
+                    underline_style = (IBus.AttrUnderline.DOUBLE if is_selected
+                                      else IBus.AttrUnderline.SINGLE)
+                    attrs.append(IBus.Attribute.new(
+                        IBus.AttrType.UNDERLINE,
+                        underline_style,
+                        pos,
+                        pos + segment_len
+                    ))
+
+                    # Apply background color to selected bunsetsu for better visibility
+                    if is_selected:
+                        selected_bg = self._parse_hex_color(
+                            self._config.get('preedit_background_color', '0xd1eaff')
+                        )
+                        if selected_bg is not None:
+                            attrs.append(IBus.Attribute.new(
+                                IBus.AttrType.BACKGROUND,
+                                selected_bg,
+                                pos,
+                                pos + segment_len
+                            ))
+
+                    pos += segment_len
+
+                logger.debug(f'Bunsetsu mode preedit: {len(bunsetsu_segments)} segments, '
+                           f'selected={self._henkan_processor.get_selected_bunsetsu_index()}')
             elif self._config.get('use_ibus_hint_colors', False):
                 # Use IBus AttrType.HINT for theme-based styling (requires IBus >= 1.5.33)
                 # AttrPreedit.WHOLE (1) indicates the entire preedit text
