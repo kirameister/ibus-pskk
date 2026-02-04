@@ -8,11 +8,14 @@
 
     "enable_hiragana_key": "Henkan",
     "enable_hiragana_key_": "Key to enable hiragana/Japanese typing",
+    "enable_hiragana_key_ja": "ひらがな/日本語を入力するモードを起動するキー",
     "disable_hiragana_key": "Muhenkan",
     "disable_hiragana_key_": "Key to disable hiragana/Japanese typing",
+    "disable_hiragana_key_ja": "ひらがな/日本語を入力するモードを停止するキー (直接入力への切り替えキー)",
 
-    "forced_preedit_trigger_key_": "The key to trigger the forceed preedit mode",
     "forced_preedit_trigger_key": "f",
+    "forced_preedit_trigger_key_": "The key to trigger the forceed preedit mode",
+    "forced_preedit_trigger_key_ja": "強制 Preedit モードを起動するためのトリガーキー",
 
     "layout": "shingeta.json",
     "layout_": "Name of the JSON file containing the typing layout. It will be searched under ${config_dir} and then '/opt/ibus-pskk/layout'. When specified file is not found, shingeta.json under '/opt/ibus-pskk/layout' will be used as default",
