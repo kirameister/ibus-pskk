@@ -1062,6 +1062,14 @@ class EnginePSKK(IBus.Engine):
             logger.warning(f'Unknown conversion type: {conversion_type}')
             return
 
+        # Exit bunsetsu/conversion mode when doing character conversion
+        # (user explicitly wants katakana/hiragana/ascii/zenkaku, not kanji)
+        if self._in_conversion:
+            self._in_conversion = False
+            self._henkan_processor.reset()
+            self.hide_lookup_table()
+            logger.debug(f'Exited conversion mode for {conversion_type}')
+
         logger.debug(f'Conversion {conversion_type}: "{original}" → "{self._preedit_string}"')
         self._update_preedit()
 
