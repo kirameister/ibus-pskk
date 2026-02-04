@@ -126,6 +126,13 @@ class SettingsPanel(Gtk.Window):
             self.kanchoku_marker_value = result
             self.kanchoku_marker_button.set_label(result if result else "Not Set")
 
+    def on_bunsetsu_cycle_key_button_clicked(self, button):
+        """Show key capture dialog for bunsetsu prediction cycle key"""
+        result = self.show_key_capture_dialog("Bunsetsu Prediction Cycle Key", self.bunsetsu_cycle_key_value)
+        if result is not None:
+            self.bunsetsu_cycle_key_value = result
+            self.bunsetsu_cycle_key_button.set_label(result if result else "Not Set")
+
     def show_key_capture_dialog(self, title, current_value):
         """Show dialog to capture key press
 
@@ -682,6 +689,26 @@ class SettingsPanel(Gtk.Window):
 
         box.pack_start(keys_frame, False, False, 0)
 
+        # Bunsetsu Prediction settings
+        bunsetsu_frame = Gtk.Frame(label="Bunsetsu Prediction")
+        bunsetsu_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        bunsetsu_box.set_border_width(10)
+        bunsetsu_frame.add(bunsetsu_box)
+
+        # Bunsetsu Prediction Cycle Key
+        cycle_key_box = Gtk.Box(spacing=6)
+        cycle_key_label = Gtk.Label(label="Bunsetsu Prediction Cycle Key:")
+        cycle_key_box.pack_start(cycle_key_label, False, False, 0)
+        self.bunsetsu_cycle_key_button = Gtk.Button(label="Not Set")
+        self.bunsetsu_cycle_key_button.connect("clicked", self.on_bunsetsu_cycle_key_button_clicked)
+        cycle_key_box.pack_start(self.bunsetsu_cycle_key_button, True, True, 0)
+        bunsetsu_box.pack_start(cycle_key_box, False, False, 0)
+
+        # Initialize bunsetsu prediction instance variable
+        self.bunsetsu_cycle_key_value = None
+
+        box.pack_start(bunsetsu_frame, False, False, 0)
+
         return box
 
 
@@ -1215,6 +1242,11 @@ class SettingsPanel(Gtk.Window):
         self.to_zenkaku_value = conv_keys.get("to_zenkaku", default_conv_keys.get("to_zenkaku", "Ctrl+Shift+L"))
         self.to_zenkaku_button.set_label(self.to_zenkaku_value or "Not Set")
 
+        # Bunsetsu Prediction settings
+        self.bunsetsu_cycle_key_value = self.config.get("bunsetsu_prediction_cycle_key",
+                                                         default_config.get("bunsetsu_prediction_cycle_key", ""))
+        self.bunsetsu_cycle_key_button.set_label(self.bunsetsu_cycle_key_value or "Not Set")
+
         # Dictionaries tab
         dictionaries = self.config.get("dictionaries") or {}
         if not isinstance(dictionaries, dict):
@@ -1375,6 +1407,9 @@ class SettingsPanel(Gtk.Window):
             "to_ascii": self.to_ascii_value or "",
             "to_zenkaku": self.to_zenkaku_value or ""
         }
+
+        # Bunsetsu Prediction settings
+        self.config["bunsetsu_prediction_cycle_key"] = self.bunsetsu_cycle_key_value or ""
 
         # Dictionaries tab
         # For both system and user dictionaries, save as {path: weight} for enabled entries only
