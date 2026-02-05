@@ -1,5 +1,6 @@
 import util
 import settings_panel
+import conversion_model
 from simultaneous_processor import SimultaneousInputProcessor
 from kanchoku import KanchokuProcessor
 from henkan import HenkanProcessor
@@ -173,6 +174,7 @@ class EnginePSKK(IBus.Engine):
         self._preedit_hiragana = ''  # Source of truth: hiragana output from simul_processor
         self._preedit_ascii = ''     # Source of truth: raw ASCII input characters
         self._conversion_disabled = False  # Set True after backspace; disables Ctrl+K/J/L conversions
+        self._converted = False  # Set True after Ctrl+K/J/L; next char input auto-commits
         self._previous_text = ''
 
         # This property is for confirming the kanji-kana converted string
@@ -201,6 +203,7 @@ class EnginePSKK(IBus.Engine):
 
         self._about_dialog = None
         self._settings_panel = None
+        self._conversion_model_panel = None
         self._q = queue.Queue()
 
 
@@ -288,6 +291,17 @@ class EnginePSKK(IBus.Engine):
             state=IBus.PropState.UNCHECKED,
             sub_props=None)
         self._prop_list.append(settings_prop)
+        conversion_model_prop = IBus.Property(
+            key='ConversionModel',
+            prop_type=IBus.PropType.NORMAL,
+            label=IBus.Text.new_from_string("Conversion Model..."),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.UNCHECKED,
+            sub_props=None)
+        self._prop_list.append(conversion_model_prop)
         prop = IBus.Property(
             key='About',
             prop_type=IBus.PropType.NORMAL,
@@ -477,12 +491,28 @@ class EnginePSKK(IBus.Engine):
 
         return False  # Don't repeat this idle callback
 
+    def _show_conversion_model_panel(self):
+        if self._conversion_model_panel:
+            self._conversion_model_panel.present()
+            return False  # Don't repeat this idle callback
+
+        panel = conversion_model.ConversionModelPanel()
+        panel.connect("destroy", self.conversion_model_panel_closed_callback)
+        self._conversion_model_panel = panel
+        panel.show_all()
+
+        return False  # Don't repeat this idle callback
+
 
     def do_property_activate(self, prop_name, state):
         logger.info(f'property_activate({prop_name}, {state})')
         if prop_name == 'Settings':
             # Schedule settings panel creation on the main loop
             GLib.idle_add(self._show_settings_panel)
+            return
+        elif prop_name == 'ConversionModel':
+            # Schedule conversion model panel creation on the main loop
+            GLib.idle_add(self._show_conversion_model_panel)
             return
         elif prop_name == 'About':
             # Schedule dialog creation on the main loop
@@ -504,6 +534,9 @@ class EnginePSKK(IBus.Engine):
 
     def settings_panel_closed_callback(self, panel):
         self._settings_panel = None
+
+    def conversion_model_panel_closed_callback(self, panel):
+        self._conversion_model_panel = None
 
     def _update_input_mode(self):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))
@@ -761,6 +794,14 @@ class EnginePSKK(IBus.Engine):
             self._preedit_string = ''
             self._preedit_hiragana = ''
             self._preedit_ascii = ''
+            # Continue to process the new character below
+
+        # If preedit was converted (e.g., to katakana via Ctrl+K), commit it
+        # before starting fresh input. Unlike _in_conversion, this flag does NOT
+        # affect Escape/Enter/arrow behavior (they treat it as normal IDLE preedit).
+        elif is_pressed and self._converted:
+            logger.debug(f'Char input after conversion: committing "{self._preedit_string}"')
+            self._commit_string()
             # Continue to process the new character below
 
         # Convert keyval to character for simultaneous processor
@@ -1097,6 +1138,10 @@ class EnginePSKK(IBus.Engine):
             self._henkan_processor.reset()
             self.hide_lookup_table()
             logger.debug(f'Exited conversion mode for {conversion_type}')
+
+        # Mark as converted so the next character input auto-commits this preedit.
+        # Escape/Enter/arrow keys ignore this flag and treat it as normal IDLE preedit.
+        self._converted = True
 
         logger.debug(f'Conversion {conversion_type}: "{original}" → "{self._preedit_string}"')
         self._update_preedit()
@@ -1672,6 +1717,7 @@ class EnginePSKK(IBus.Engine):
         self._in_conversion = False
         self._in_forced_preedit = False
         self._conversion_disabled = False  # Re-enable Ctrl+K/J/L conversions
+        self._converted = False
         self._conversion_yomi = ''
         self._preedit_string = ''
         self._preedit_hiragana = ''
@@ -1700,6 +1746,7 @@ class EnginePSKK(IBus.Engine):
             self._preedit_hiragana = ""
             self._preedit_ascii = ""
             self._conversion_disabled = False  # Re-enable Ctrl+K/J/L for next input
+            self._converted = False
             self._update_preedit()
             self.commit_text(IBus.Text.new_from_string(text_to_commit))
 
