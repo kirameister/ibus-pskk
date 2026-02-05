@@ -298,6 +298,8 @@ class ConversionModelPanel(Gtk.Window):
 
         # State for Test tab
         self._tagger = None       # CRF tagger (lazy loaded)
+        # Pre-computed dictionary features for CRF
+        self._crf_feature_materials = util.load_crf_feature_materials()
 
         # Create UI
         notebook = Gtk.Notebook()
@@ -373,7 +375,8 @@ class ConversionModelPanel(Gtk.Window):
 
         # Run N-best Viterbi prediction
         n_best_count = len(self._result_tab_labels)
-        nbest_results = util.crf_nbest_predict(self._tagger, input_text, n_best=n_best_count)
+        nbest_results = util.crf_nbest_predict(self._tagger, input_text, n_best=n_best_count,
+                                               dict_materials=self._crf_feature_materials)
 
         # Store results for tab switching
         self._nbest_results = nbest_results
@@ -845,7 +848,7 @@ class ConversionModelPanel(Gtk.Window):
         for chars, tags in self._sentences:
             # Join chars to form the line for tokenization
             line_text = ''.join(chars)
-            features = util.add_features_per_line(line_text)
+            features = util.add_features_per_line(line_text, self._crf_feature_materials)
             self._features.append(features)
 
         self._log(f"Feature extraction complete")

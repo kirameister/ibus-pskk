@@ -45,6 +45,8 @@ class HenkanProcessor:
 
         # CRF tagger for bunsetsu prediction (lazy loaded)
         self._tagger = None
+        # Pre-computed dictionary features for CRF (loaded once)
+        self._crf_feature_materials = util.load_crf_feature_materials()
 
         # ─── Bunsetsu Mode State ───
         # Bunsetsu mode allows multi-bunsetsu conversion when:
@@ -365,7 +367,8 @@ class HenkanProcessor:
             return []
 
         # Run N-best Viterbi prediction
-        nbest_results = util.crf_nbest_predict(self._tagger, input_text, n_best=n_best)
+        nbest_results = util.crf_nbest_predict(self._tagger, input_text, n_best=n_best,
+                                               dict_materials=self._crf_feature_materials)
 
         # Convert label sequences to bunsetsu lists
         output = []

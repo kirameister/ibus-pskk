@@ -1574,6 +1574,10 @@ class SettingsPanel(Gtk.Window):
         # Close progress dialog
         dialog.destroy()
 
+        # Regenerate CRF feature materials after dictionary change
+        if success:
+            util.generate_crf_feature_materials()
+
         # Show result
         if success:
             result_dialog = Gtk.MessageDialog(
@@ -1688,6 +1692,10 @@ class SettingsPanel(Gtk.Window):
 
         # Close progress dialog
         dialog.destroy()
+
+        # Regenerate CRF feature materials after dictionary change
+        if success:
+            util.generate_crf_feature_materials()
 
         # Show result
         if success:
@@ -1809,6 +1817,10 @@ class SettingsPanel(Gtk.Window):
         )
 
         dialog.destroy()
+
+        # Regenerate CRF feature materials after dictionary change
+        if success:
+            util.generate_crf_feature_materials()
 
         # Show result
         if success:

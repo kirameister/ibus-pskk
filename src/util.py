@@ -1,5 +1,6 @@
 import codecs
 import json
+import math
 import os
 from gi.repository import GLib
 import logging
@@ -215,7 +216,82 @@ def add_feature_bigram_right(tokens):
     return [f'{t} {r}' for t, r in zip(tokens, right)]
 
 
-def add_features_per_line(line):
+def add_feature_dict_max_kl_start(tokens, materials):
+    """Add feature: max dictionary yomi key length starting with this token.
+
+    For each token, looks up the longest yomi key in the dictionary that
+    starts with this character. Returns the length as a string.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+        materials: Dict from load_crf_feature_materials()
+
+    Returns:
+        List of string values (same length as tokens)
+
+    Example:
+        # If longest yomi starting with 'き' is 'きょうかしょ' (6 chars):
+        add_feature_dict_max_kl_start(['き', 'ょ', 'う'], materials)
+        → ['6', '3', '5']
+    """
+    lookup = materials.get('max_key_len_starting_with', {})
+    return [str(lookup.get(t, 0)) for t in tokens]
+
+
+def add_feature_dict_max_kl_end(tokens, materials):
+    """Add feature: max dictionary yomi key length ending with this token.
+
+    For each token, looks up the longest yomi key in the dictionary that
+    ends with this character. Returns the length as a string.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+        materials: Dict from load_crf_feature_materials()
+
+    Returns:
+        List of string values (same length as tokens)
+    """
+    lookup = materials.get('max_key_len_ending_with', {})
+    return [str(lookup.get(t, 0)) for t in tokens]
+
+
+def add_feature_dict_entry_ct_start(tokens, materials):
+    """Add feature: log-bucketed count of kanji entries for yomi keys starting with this token.
+
+    Raw counts are stored in the materials JSON. This function applies
+    int(log2(count + 1)) to compress large counts into small integers
+    suitable as CRF feature values.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+        materials: Dict from load_crf_feature_materials()
+
+    Returns:
+        List of string values (same length as tokens)
+    """
+    lookup = materials.get('dict_entry_count_starting_with', {})
+    return [str(int(math.log2(lookup.get(t, 0) + 1))) for t in tokens]
+
+
+def add_feature_dict_entry_ct_end(tokens, materials):
+    """Add feature: log-bucketed count of kanji entries for yomi keys ending with this token.
+
+    Raw counts are stored in the materials JSON. This function applies
+    int(log2(count + 1)) to compress large counts into small integers
+    suitable as CRF feature values.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+        materials: Dict from load_crf_feature_materials()
+
+    Returns:
+        List of string values (same length as tokens)
+    """
+    lookup = materials.get('dict_entry_count_ending_with', {})
+    return [str(int(math.log2(lookup.get(t, 0) + 1))) for t in tokens]
+
+
+def add_features_per_line(line, dict_materials=None):
     """Extract features for each token in a line.
 
     This is a wrapper function that:
@@ -225,13 +301,15 @@ def add_features_per_line(line):
 
     Args:
         line: Input string (underscores should already be stripped)
+        dict_materials: Optional dict from load_crf_feature_materials().
+                        If provided, dictionary-derived features are included.
+                        If None, they are skipped (graceful fallback).
 
     Returns:
         List of dicts, where each dict contains features for one token.
         Example:
         [
-            {'ctype': 'hira'},
-            {'ctype': 'hira'},
+            {'char': 'き', 'ctype': 'hira', 'dict_max_kl_s': '6', ...},
             ...
         ]
     """
@@ -276,6 +354,24 @@ def add_features_per_line(line):
     ctype_values = add_feature_ctype(tokens)
     for i, val in enumerate(ctype_values):
         features[i]['ctype'] = val
+
+    # Dictionary-derived features (only if materials are provided)
+    if dict_materials:
+        max_kl_s = add_feature_dict_max_kl_start(tokens, dict_materials)
+        for i, val in enumerate(max_kl_s):
+            features[i]['dict_max_kl_s'] = val
+
+        max_kl_e = add_feature_dict_max_kl_end(tokens, dict_materials)
+        for i, val in enumerate(max_kl_e):
+            features[i]['dict_max_kl_e'] = val
+
+        entry_ct_s = add_feature_dict_entry_ct_start(tokens, dict_materials)
+        for i, val in enumerate(entry_ct_s):
+            features[i]['dict_entry_ct_s'] = val
+
+        entry_ct_e = add_feature_dict_entry_ct_end(tokens, dict_materials)
+        for i, val in enumerate(entry_ct_e):
+            features[i]['dict_entry_ct_e'] = val
 
     return features
 
@@ -399,7 +495,7 @@ def crf_nbest_viterbi(emission, transitions, labels, n_best=5):
     return results
 
 
-def crf_nbest_predict(tagger, input_text, n_best=5):
+def crf_nbest_predict(tagger, input_text, n_best=5, dict_materials=None):
     """Run N-best CRF prediction on input text.
 
     This is the main entry point for N-best bunsetsu prediction.
@@ -408,6 +504,8 @@ def crf_nbest_predict(tagger, input_text, n_best=5):
         tagger: pycrfsuite.Tagger with model already opened
         input_text: Input string (hiragana text to segment)
         n_best: Number of best sequences to return
+        dict_materials: Optional dict from load_crf_feature_materials().
+                        Passed through to add_features_per_line().
 
     Returns:
         List of (labels_list, score) tuples, sorted by score descending.
@@ -427,7 +525,7 @@ def crf_nbest_predict(tagger, input_text, n_best=5):
     if not tokens:
         return []
 
-    features = add_features_per_line(input_text)
+    features = add_features_per_line(input_text, dict_materials)
 
     # Compute emission scores
     emission = crf_compute_emission_scores(features, state_features, labels)
@@ -822,6 +920,131 @@ def get_dictionary_files(config=None):
 
     logger.info(f'Dictionary files to use: {len(dictionary_files)} file(s)')
     return dictionary_files
+
+
+def generate_crf_feature_materials(output_path=None):
+    """Pre-compute dictionary-derived CRF feature materials and save as JSON.
+
+    Loads all dictionary JSON files (system, user, extended), merges them,
+    and computes per-character statistics used as CRF features for bunsetsu
+    boundary prediction.
+
+    The output JSON contains four dicts keyed by single characters:
+      - max_key_len_starting_with: longest yomi key starting with this char
+      - max_key_len_ending_with: longest yomi key ending with this char
+      - dict_entry_count_starting_with: total kanji entries across all yomi
+            keys starting with this char
+      - dict_entry_count_ending_with: total kanji entries across all yomi
+            keys ending with this char
+
+    Args:
+        output_path: Where to write the JSON. Defaults to
+                     ~/.config/ibus-pskk/crf_feature_materials.json
+
+    Returns:
+        str: Path to the written JSON file, or None on failure.
+    """
+    if output_path is None:
+        output_path = os.path.join(get_user_config_dir(),
+                                   'crf_feature_materials.json')
+
+    # Load and merge all dictionaries (same logic as HenkanProcessor)
+    dictionary_files = get_dictionary_files()
+    merged = {}
+    for file_path in dictionary_files:
+        if not os.path.exists(file_path):
+            continue
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                continue
+            for reading, candidates in data.items():
+                if not isinstance(candidates, dict):
+                    continue
+                if reading not in merged:
+                    merged[reading] = {}
+                for candidate, count in candidates.items():
+                    if not isinstance(count, (int, float)):
+                        count = 1
+                    if candidate in merged[reading]:
+                        merged[reading][candidate] += count
+                    else:
+                        merged[reading][candidate] = count
+        except Exception as e:
+            logger.error(f'Failed to load dictionary for CRF materials: '
+                         f'{file_path} - {e}')
+
+    # Compute per-character statistics
+    max_kl_start = {}
+    max_kl_end = {}
+    entry_ct_start = {}
+    entry_ct_end = {}
+
+    for yomi, candidates in merged.items():
+        if not yomi:
+            continue
+        yomi_len = len(yomi)
+        num_entries = len(candidates)
+        first_char = yomi[0]
+        last_char = yomi[-1]
+
+        # Max key length
+        if yomi_len > max_kl_start.get(first_char, 0):
+            max_kl_start[first_char] = yomi_len
+        if yomi_len > max_kl_end.get(last_char, 0):
+            max_kl_end[last_char] = yomi_len
+
+        # Entry counts
+        entry_ct_start[first_char] = entry_ct_start.get(first_char, 0) + num_entries
+        entry_ct_end[last_char] = entry_ct_end.get(last_char, 0) + num_entries
+
+    materials = {
+        'max_key_len_starting_with': max_kl_start,
+        'max_key_len_ending_with': max_kl_end,
+        'dict_entry_count_starting_with': entry_ct_start,
+        'dict_entry_count_ending_with': entry_ct_end,
+    }
+
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(materials, f, ensure_ascii=False, indent=2)
+        logger.info(f'CRF feature materials written: {output_path} '
+                    f'({len(max_kl_start)} chars)')
+        return output_path
+    except Exception as e:
+        logger.error(f'Failed to write CRF feature materials: {e}')
+        return None
+
+
+def load_crf_feature_materials(path=None):
+    """Load pre-computed CRF feature materials from JSON.
+
+    Args:
+        path: Path to the JSON file. Defaults to
+              ~/.config/ibus-pskk/crf_feature_materials.json
+
+    Returns:
+        dict: The materials dict with 4 sub-dicts, or empty dict if
+              the file is missing or invalid.
+    """
+    if path is None:
+        path = os.path.join(get_user_config_dir(),
+                            'crf_feature_materials.json')
+    if not os.path.exists(path):
+        logger.debug(f'CRF feature materials not found: {path}')
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            logger.info(f'Loaded CRF feature materials: {path}')
+            return data
+        logger.warning(f'Invalid CRF feature materials format: {path}')
+        return {}
+    except Exception as e:
+        logger.error(f'Failed to load CRF feature materials: {path} - {e}')
+        return {}
 
 
 def get_skk_dicts_dir():
