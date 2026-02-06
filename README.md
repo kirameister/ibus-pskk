@@ -1,16 +1,29 @@
 # PSKK
 
-IME, the final frontier. 
+IME, the final frontier.
 
-`PSKK` stands for `Personaliz(ed|able) SKK` and is meant/aimed to provide an easy, but effective, implementation of IME, which is highly configuable. 
+IME、それは最後のフロンティア。
 
-## Features of `PSKK`
+`PSKK` stands for `Personaliz(ed|able) SKK` and is meant/aimed to provide an easy, but effective, implementation of IME, which is highly configurable.
 
-* No statistical model, or training model for predicting the Kanji -- instead, it is heavily reliant upon the dictionary contents. 
-* Highly customizable -- `PSKK` has SandS feature, which should be considered more like `XandY` features. 
+`PSKK`は「`Personaliz(ed|able) SKK`」の略で、簡単かつ効果的で、高度にカスタマイズ可能なIMEの実装を目指しています。
+
+## Features of `PSKK` / PSKKの特徴
+
+* Dictionary-driven conversion with optional CRF-based bunsetsu prediction for multi-phrase input.
+* Highly customizable -- `PSKK` has SandS feature。
+* 漢直 -- Support for Kanchoku (漢直), also as part of the input to Kana-to-Kanji conversion
+
+* 辞書ベースの変換機能に加え、複数文節入力のためのCRFベースの文節予測機能をオプションで搭載。
+* 高度にカスタマイズ可能 -- SandS機能を搭載。
+* 漢直 -- (漢字変換の入力の一部としても) 漢直をサポート。
 
 
-## Requirement and installation
+## Requirement and Installation / 必要なパッケージとインストール
+
+Install the following system packages before running `just install`:
+
+`just install`を実行する前に、以下のシステムパッケージをインストールしてください：
 
 ### Arch Linux:
 ```
