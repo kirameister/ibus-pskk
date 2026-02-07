@@ -4,7 +4,7 @@
 	<name>org.freedesktop.IBus.PSKK</name>
 	<description>PSKK</description>
     <exec>/opt/ibus-pskk/venv/bin/python /opt/ibus-pskk/lib/main.py --ibus</exec>
-	<version>0.0.1</version>
+	<version>0.1.0</version>
 	<author>Akira K.</author>
 	<license>MIT</license>
 	<homepage>https://github.com/kirameister/ibus-pskk</homepage>
