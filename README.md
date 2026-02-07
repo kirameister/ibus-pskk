@@ -57,12 +57,3 @@ UniDic is distributed under a triple license:
 
 This product uses UniDic under the terms of the BSD License.
 
-----
-
-This product includes SKK dictionaries.
-
-SKK dictionaries are developed by the SKK Open Source Project
-and distributed under a BSD-style license.
-
-Copyright (c) The SKK Open Source Project and contributors.
-
