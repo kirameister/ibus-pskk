@@ -310,6 +310,9 @@ class ConversionModelPanel(Gtk.Window):
         # Connect Esc key to close window
         self.connect("key-press-event", self.on_key_press)
 
+        # Set initial focus to input field for immediate typing
+        self.test_input_entry.grab_focus()
+
     def _setup_css(self):
         """Set up CSS styling for the window."""
         css_provider = Gtk.CssProvider()
@@ -336,6 +339,21 @@ class ConversionModelPanel(Gtk.Window):
         if event.keyval == Gdk.KEY_Escape:
             self.destroy()
             return True
+
+        # Arrow key navigation for N-best results
+        if event.keyval == Gdk.KEY_Down:
+            current = self.results_notebook.get_current_page()
+            n_pages = self.results_notebook.get_n_pages()
+            if current < n_pages - 1:
+                self.results_notebook.set_current_page(current + 1)
+            return True
+
+        if event.keyval == Gdk.KEY_Up:
+            current = self.results_notebook.get_current_page()
+            if current > 0:
+                self.results_notebook.set_current_page(current - 1)
+            return True
+
         return False
 
     def _load_tagger(self):
@@ -601,6 +619,7 @@ class ConversionModelPanel(Gtk.Window):
 
         self.test_input_entry = Gtk.Entry()
         self.test_input_entry.set_placeholder_text("e.g., きょうはてんきがよい")
+        self.test_input_entry.connect("activate", self.on_test_prediction)
         input_box.pack_start(self.test_input_entry, False, False, 0)
 
         box.pack_start(input_frame, False, False, 0)
