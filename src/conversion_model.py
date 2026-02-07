@@ -401,12 +401,24 @@ class ConversionModelPanel(Gtk.Window):
         nbest_results = util.crf_nbest_predict(self._tagger, input_text, n_best=n_best_count,
                                                dict_materials=self._crf_feature_materials)
 
+        # Extract features for display (same as what CRF uses internally)
+        token_features = util.add_features_per_line(input_text, self._crf_feature_materials)
+
         # Store results for tab switching
         self._nbest_results = nbest_results
         self._current_tokens = tokens
+        self._current_features = token_features
+
+        # Feature keys to display (in order)
+        self._feature_keys = [
+            "char", "char_left", "char_right",
+            "bigram_left", "bigram_right",
+            "dict_max_kl_s", "dict_max_kl_e",
+            "dict_entry_ct_s", "dict_entry_ct_e",
+        ]
 
         # Prepare row headers and column headers for the grid
-        row_headers = ["Label", "Score", "ctype"]  # Features to display
+        row_headers = ["Label"] + self._feature_keys
         col_headers = tokens  # Each token is a column
 
         # Rebuild grids for all tabs with new token columns
@@ -450,12 +462,12 @@ class ConversionModelPanel(Gtk.Window):
             # Row 0: Label (predicted tag)
             cell_labels[0][col_idx].set_text(label)
 
-            # Row 1: Score (placeholder for now - could show marginal later)
-            cell_labels[1][col_idx].set_text("-")
-
-            # Row 2: ctype feature
-            ctype = 'hira' if (len(token) == 1 and util.char_type(token) == 'hiragana') else 'non-hira'
-            cell_labels[2][col_idx].set_text(ctype)
+            # Rows 1+: Feature values from extracted features
+            if hasattr(self, '_current_features') and col_idx < len(self._current_features):
+                feat_dict = self._current_features[col_idx]
+                for row_idx, key in enumerate(self._feature_keys):
+                    value = feat_dict.get(key, "-")
+                    cell_labels[row_idx + 1][col_idx].set_text(str(value))
 
     def _format_bunsetsu_markup(self, tokens, labels):
         """Format bunsetsu split with Pango markup.
