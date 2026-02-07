@@ -285,7 +285,7 @@ class ConversionModelPanel(Gtk.Window):
     def __init__(self):
         super().__init__(title="Conversion Model")
 
-        self.set_default_size(920, 600)
+        self.set_default_size(1100, 800)
         self.set_border_width(10)
 
         # Set up CSS styling for grid headers
