@@ -404,10 +404,21 @@ class ConversionModelPanel(Gtk.Window):
         # Extract features for display (same as what CRF uses internally)
         token_features = util.add_features_per_line(input_text, self._crf_feature_materials)
 
+        # Get model info for emission score computation
+        info = self._tagger.info()
+        model_labels = self._tagger.labels()
+        state_features = info.state_features
+
+        # Compute emission scores: emission[t][label_idx] = score
+        emission = util.crf_compute_emission_scores(token_features, state_features, model_labels)
+
         # Store results for tab switching
         self._nbest_results = nbest_results
         self._current_tokens = tokens
         self._current_features = token_features
+        self._model_labels = model_labels
+        self._state_features = state_features
+        self._emission_scores = emission
 
         # Feature keys to display (in order)
         self._feature_keys = [
@@ -417,15 +428,52 @@ class ConversionModelPanel(Gtk.Window):
             "dict_entry_ct_s", "dict_entry_ct_e",
         ]
 
-        # Prepare row headers and column headers for the grid
-        row_headers = ["Label"] + self._feature_keys
-        col_headers = tokens  # Each token is a column
+        # Get transition scores from model
+        transitions = info.transitions
 
-        # Rebuild grids for all tabs with new token columns
+        # Check if DEBUG logging is enabled
+        is_debug = logger.isEnabledFor(logging.DEBUG)
+
+        # Build row headers:
+        # 1. Label (predicted)
+        # 2. Transition scores (M rows for Option C, M×M for Option A in DEBUG)
+        # 3. Emission scores for each model label (e.g., emit_B-L, emit_I-L, ...)
+        # 4. Feature values
+        # 5. Feature weights (contribution to predicted label) - DEBUG only
+        emission_headers = [f"emit_{lbl}" for lbl in model_labels]
+
+        if is_debug:
+            # Option A: All M×M transitions + feature weights
+            trans_headers = [f"tr_{fr}→{to}" for fr in model_labels for to in model_labels]
+            weight_headers = [f"{key}_w" for key in self._feature_keys]
+        else:
+            # Option C: Only M transitions from previous predicted label, no weights
+            trans_headers = [f"tr_prev→{to}" for to in model_labels]
+            weight_headers = []
+
+        row_headers = ["Label"] + trans_headers + emission_headers + self._feature_keys + weight_headers
+
+        # Build interleaved column headers: [t0, t0→t1, t1, t1→t2, t2, ...]
+        col_headers = []
+        col_types = []  # Track whether each column is 'token' or 'trans'
+        for i, token in enumerate(tokens):
+            col_headers.append(token)
+            col_types.append('token')
+            if i < len(tokens) - 1:
+                col_headers.append(f"→")
+                col_types.append('trans')
+
+        # Store for use in _update_result_grid
+        self._transitions = transitions
+        self._col_types = col_types
+        self._is_debug = is_debug
+        self._trans_headers = trans_headers
+
+        # Rebuild grids for all tabs with new columns (tokens + transitions interleaved)
         for tab_idx in range(n_best_count):
             self._rebuild_result_grid(
                 tab_index=tab_idx,
-                num_cols=len(tokens),
+                num_cols=len(col_headers),
                 row_headers=row_headers,
                 col_headers=col_headers
             )
@@ -457,17 +505,90 @@ class ConversionModelPanel(Gtk.Window):
 
         # Update grid cells
         cell_labels = self._result_cell_labels[tab_idx]
+        n_trans_rows = len(self._trans_headers)
+        n_emission_rows = len(self._model_labels)
+        n_feature_rows = len(self._feature_keys)
 
-        for col_idx, (token, label) in enumerate(zip(tokens, labels)):
-            # Row 0: Label (predicted tag)
-            cell_labels[0][col_idx].set_text(label)
+        # Calculate row offsets (transition rows now come first after Label)
+        row_label = 0
+        row_trans_start = 1
+        row_emission_start = row_trans_start + n_trans_rows
+        row_feature_start = row_emission_start + n_emission_rows
+        row_weight_start = row_feature_start + n_feature_rows  # Only used in DEBUG mode
 
-            # Rows 1+: Feature values from extracted features
-            if hasattr(self, '_current_features') and col_idx < len(self._current_features):
-                feat_dict = self._current_features[col_idx]
-                for row_idx, key in enumerate(self._feature_keys):
-                    value = feat_dict.get(key, "-")
-                    cell_labels[row_idx + 1][col_idx].set_text(str(value))
+        token_idx = 0  # Index into tokens/labels arrays
+        trans_idx = 0  # Index for transitions (0 = between token 0 and 1)
+
+        for col_idx, col_type in enumerate(self._col_types):
+            if col_type == 'token':
+                # Token column: show label, emissions, features, weights
+                pred_label = labels[token_idx]
+
+                # Row 0: Label (predicted tag)
+                cell_labels[row_label][col_idx].set_text(pred_label)
+
+                # Emission scores for each label
+                if hasattr(self, '_emission_scores') and token_idx < len(self._emission_scores):
+                    for label_idx in range(n_emission_rows):
+                        score = self._emission_scores[token_idx][label_idx]
+                        cell_labels[row_emission_start + label_idx][col_idx].set_text(f"{score:.2f}")
+
+                # Feature values
+                if hasattr(self, '_current_features') and token_idx < len(self._current_features):
+                    feat_dict = self._current_features[token_idx]
+                    for feat_idx, key in enumerate(self._feature_keys):
+                        value = feat_dict.get(key, "-")
+                        cell_labels[row_feature_start + feat_idx][col_idx].set_text(str(value))
+
+                # Feature weights for the predicted label (DEBUG only)
+                if self._is_debug and hasattr(self, '_state_features') and token_idx < len(self._current_features):
+                    feat_dict = self._current_features[token_idx]
+                    for feat_idx, key in enumerate(self._feature_keys):
+                        value = feat_dict.get(key)
+                        if value is not None:
+                            feat_str = f"{key}:{value}"
+                            weight = self._state_features.get((feat_str, pred_label), 0.0)
+                            cell_labels[row_weight_start + feat_idx][col_idx].set_text(f"{weight:.2f}")
+                        else:
+                            cell_labels[row_weight_start + feat_idx][col_idx].set_text("-")
+
+                # Transition rows are empty for token columns
+                for trans_row in range(n_trans_rows):
+                    cell_labels[row_trans_start + trans_row][col_idx].set_text("")
+
+                token_idx += 1
+
+            else:  # col_type == 'trans'
+                # Transition column: show transition scores, empty for other rows
+                prev_label = labels[trans_idx]
+
+                # Empty cells for non-transition rows
+                cell_labels[row_label][col_idx].set_text("")
+                for i in range(n_emission_rows):
+                    cell_labels[row_emission_start + i][col_idx].set_text("")
+                for i in range(n_feature_rows):
+                    cell_labels[row_feature_start + i][col_idx].set_text("")
+                # Weight rows only exist in DEBUG mode
+                if self._is_debug:
+                    for i in range(n_feature_rows):
+                        cell_labels[row_weight_start + i][col_idx].set_text("")
+
+                # Transition scores
+                if self._is_debug:
+                    # Option A: All M×M transitions
+                    trans_row = 0
+                    for from_label in self._model_labels:
+                        for to_label in self._model_labels:
+                            score = self._transitions.get((from_label, to_label), 0.0)
+                            cell_labels[row_trans_start + trans_row][col_idx].set_text(f"{score:.2f}")
+                            trans_row += 1
+                else:
+                    # Option C: Only M transitions from previous predicted label
+                    for to_idx, to_label in enumerate(self._model_labels):
+                        score = self._transitions.get((prev_label, to_label), 0.0)
+                        cell_labels[row_trans_start + to_idx][col_idx].set_text(f"{score:.2f}")
+
+                trans_idx += 1
 
     def _format_bunsetsu_markup(self, tokens, labels):
         """Format bunsetsu split with Pango markup.
