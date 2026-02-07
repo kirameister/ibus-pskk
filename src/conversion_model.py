@@ -311,6 +311,11 @@ class ConversionModelPanel(Gtk.Window):
         self.connect("key-press-event", self.on_key_press)
 
         # Set initial focus to input field for immediate typing
+        # (must be done after window is mapped/shown)
+        self.connect("map", self._on_window_map)
+
+    def _on_window_map(self, widget):
+        """Called when window becomes visible. Set focus to input field."""
         self.test_input_entry.grab_focus()
 
     def _setup_css(self):
