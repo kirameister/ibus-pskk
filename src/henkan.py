@@ -159,15 +159,13 @@ class HenkanProcessor:
             # Whole-word dictionary match found
             self._has_whole_word_match = True
             candidates_dict = self._dictionary[reading]
-            # Sort by count (descending) - higher count = lower cost = better candidate
+            # Sort by cost (ascending) - lower cost = better candidate
             sorted_candidates = sorted(
                 candidates_dict.items(),
                 key=lambda x: x[1],
-                reverse=True
+                reverse=False
             )
-            for surface, count in sorted_candidates:
-                # Cost is inverse of count (higher count = lower cost)
-                cost = 1.0 / (count + 1)
+            for surface, cost in sorted_candidates:
                 self._candidates.append({
                     'surface': surface,
                     'reading': reading,
@@ -397,14 +395,13 @@ class HenkanProcessor:
 
         if bunsetsu_text in self._dictionary:
             candidates_dict = self._dictionary[bunsetsu_text]
-            # Sort by count (descending)
+            # Sort by cost (ascending) - lower cost = better candidate
             sorted_candidates = sorted(
                 candidates_dict.items(),
                 key=lambda x: x[1],
-                reverse=True
+                reverse=False
             )
-            for surface, count in sorted_candidates:
-                cost = 1.0 / (count + 1)
+            for surface, cost in sorted_candidates:
                 candidates.append({
                     'surface': surface,
                     'reading': bunsetsu_text,

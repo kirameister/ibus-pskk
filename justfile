@@ -55,10 +55,10 @@ install-files:
     cp data/layouts/* {{install_root}}/layouts/
     mkdir -p {{install_root}}/kanchoku_layouts
     cp data/kanchoku_layouts/* {{install_root}}/kanchoku_layouts/
-    # Copy SKK-dictionary files
+    # Copy UniDic files
     mkdir -p {{install_root}}/dictionaries
-    mkdir -p {{install_root}}/dictionaries/skk_dict
-    cp data/skk_dict/* {{install_root}}/dictionaries/skk_dict/
+    mkdir -p {{install_root}}/dictionaries/UniDic
+    cp data/UniDic/*.csv {{install_root}}/dictionaries/UniDic/
     # XML file copy
     cp data/pskk.xml {{ibus_component_dir}}/
     chmod 644 {{ibus_component_dir}}/pskk.xml

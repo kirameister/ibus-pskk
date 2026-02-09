@@ -32,6 +32,28 @@ def char_type(c):
         return 'other'
 
 
+def katakana_to_hiragana(text):
+    """Convert katakana characters to hiragana.
+
+    Args:
+        text: Input string (may contain katakana, hiragana, or other characters)
+
+    Returns:
+        String with katakana converted to hiragana (other characters unchanged)
+    """
+    result = []
+    for c in text:
+        cp = ord(c)
+        # Katakana range: 0x30A1 (ァ) to 0x30F6 (ヶ)
+        # Hiragana range: 0x3041 (ぁ) to 0x3096 (ゖ)
+        # Offset: 0x60 (96)
+        if 0x30A1 <= cp <= 0x30F6:
+            result.append(chr(cp - 0x60))
+        else:
+            result.append(c)
+    return ''.join(result)
+
+
 def tokenize_line(line):
     """Tokenize a line with mixed ASCII/non-ASCII handling.
 
@@ -1213,95 +1235,110 @@ def convert_all_skk_dictionaries():
 
 def generate_system_dictionary(output_path=None, source_weights=None):
     """
-    Generate a merged system dictionary from SKK dictionary files.
+    Generate a merged system dictionary from UniDic CSV files.
 
-    Reads SKK dictionaries and merges them into a single JSON file.
-    The count for each candidate is weighted by the source dictionary's weight.
+    Reads UniDic CSV files and merges them into a single JSON file.
+    The cost value from the CSV is used directly as the dictionary weight.
+
+    UniDic CSV format (with header):
+        読み,原型,品詞,活用型,コスト
+        reading (katakana), lemma, POS, conj_type, cost
 
     Args:
         output_path: Path for the output JSON file.
                     If None, defaults to ~/.config/ibus-pskk/system_dictionary.json
-        source_weights: Dict mapping full file paths to integer weights.
-                       If None, all files in skk_dicts directory are used with weight 1.
+        source_weights: Dict mapping full file paths to weight multipliers.
+                       If None, all CSV files in system dicts directory are used with weight 1.
 
     Returns:
         tuple: (success: bool, output_path: str or None, stats: dict)
                stats contains 'files_processed', 'total_readings', 'total_candidates'
     """
-    skk_dir = get_skk_dicts_dir()
+    import csv
+
+    sys_dict_dir = get_skk_dicts_dir()  # Reusing the same directory path
     stats = {'files_processed': 0, 'total_readings': 0, 'total_candidates': 0}
 
-    # Determine output path (system_dictionary.json goes in config dir, not dictionaries subdir)
+    # Determine output path (system_dictionary.json goes in config dir)
     if output_path is None:
         config_dir = get_user_config_dir()
         os.makedirs(config_dir, exist_ok=True)
         output_path = os.path.join(config_dir, 'system_dictionary.json')
 
-    # If no weights specified, scan all files in skk_dicts with weight 1
+    # If no weights specified, scan all CSV files with weight 1
     if source_weights is None:
-        if not os.path.exists(skk_dir):
-            logger.warning(f'SKK dictionaries directory not found: {skk_dir}')
+        if not os.path.exists(sys_dict_dir):
+            logger.warning(f'System dictionaries directory not found: {sys_dict_dir}')
             return False, None, stats
         source_weights = {}
-        for filename in os.listdir(skk_dir):
-            skk_path = os.path.join(skk_dir, filename)
-            if os.path.isfile(skk_path):
-                source_weights[skk_path] = 1
+        for filename in os.listdir(sys_dict_dir):
+            if filename.lower().endswith('.csv'):
+                csv_path = os.path.join(sys_dict_dir, filename)
+                if os.path.isfile(csv_path):
+                    source_weights[csv_path] = 1
 
-    # Merged dictionary: {reading: {candidate: count}}
+    # Merged dictionary: {reading: {candidate: cost}}
+    # For duplicate entries, we keep the lowest (best) cost
     merged_dictionary = {}
 
-    # Process each SKK dictionary file
-    for skk_path, weight in source_weights.items():
-        if not os.path.isfile(skk_path):
-            logger.warning(f'Dictionary file not found: {skk_path}')
+    # Process each UniDic CSV file
+    for csv_path, weight_multiplier in source_weights.items():
+        if not os.path.isfile(csv_path):
+            logger.warning(f'Dictionary file not found: {csv_path}')
             continue
 
-        # Try different encodings
-        encodings = ['utf-8', 'euc-jp', 'shift-jis']
-        file_content = None
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
 
-        for encoding in encodings:
-            try:
-                with open(skk_path, 'r', encoding=encoding) as f:
-                    file_content = f.readlines()
-                logger.debug(f'Successfully read {skk_path} with encoding {encoding}')
-                break
-            except UnicodeDecodeError:
-                continue
+                # Skip header row
+                header = next(reader, None)
+                if header is None:
+                    logger.warning(f'Empty CSV file: {csv_path}')
+                    continue
 
-        if file_content is None:
-            logger.warning(f'Failed to read {skk_path} with any supported encoding, skipping')
-            continue
+                entries_added = 0
+                for row in reader:
+                    # Expected columns: 読み, 原型, 品詞, 活用型, コスト
+                    if len(row) < 5:
+                        continue
 
-        # Track candidates seen in this file to avoid double-counting within same file
-        seen_in_this_file = {}  # {reading: set(candidates)}
+                    reading_katakana = row[0]  # 読み (katakana)
+                    lemma = row[1]             # 原型 (surface form / lemma)
+                    # row[2] = POS, row[3] = conj_type (not used for dictionary)
+                    cost_str = row[4]          # コスト
 
-        # Process each line
-        for line in file_content:
-            reading, candidates = parse_skk_dictionary_line(line)
-            if not reading or not candidates:
-                continue
+                    # Skip entries with placeholder values
+                    if reading_katakana == '*' or lemma == '*':
+                        continue
 
-            # Initialize tracking for this reading if needed
-            if reading not in seen_in_this_file:
-                seen_in_this_file[reading] = set()
+                    # Convert katakana reading to hiragana
+                    reading = katakana_to_hiragana(reading_katakana)
 
-            # Initialize merged dictionary entry if needed
-            if reading not in merged_dictionary:
-                merged_dictionary[reading] = {}
+                    # Parse cost
+                    try:
+                        cost = int(cost_str) * weight_multiplier
+                    except ValueError:
+                        continue
 
-            # Add candidates, incrementing by weight (only once per file)
-            for candidate in candidates:
-                if candidate not in seen_in_this_file[reading]:
-                    seen_in_this_file[reading].add(candidate)
-                    if candidate in merged_dictionary[reading]:
-                        merged_dictionary[reading][candidate] += weight
+                    # Initialize reading entry if needed
+                    if reading not in merged_dictionary:
+                        merged_dictionary[reading] = {}
+
+                    # For duplicate entries, keep the lowest (best) cost
+                    if lemma in merged_dictionary[reading]:
+                        if cost < merged_dictionary[reading][lemma]:
+                            merged_dictionary[reading][lemma] = cost
                     else:
-                        merged_dictionary[reading][candidate] = weight
+                        merged_dictionary[reading][lemma] = cost
+                        entries_added += 1
 
-        stats['files_processed'] += 1
-        logger.debug(f'Processed {os.path.basename(skk_path)} with weight {weight}')
+            stats['files_processed'] += 1
+            logger.debug(f'Processed {os.path.basename(csv_path)}: {entries_added} entries')
+
+        except Exception as e:
+            logger.error(f'Failed to process {csv_path}: {e}')
+            continue
 
     # Calculate stats
     stats['total_readings'] = len(merged_dictionary)
@@ -1362,8 +1399,9 @@ def generate_user_dictionary(output_path=None, source_weights=None):
             if filename.endswith('.txt'):
                 source_weights[filename] = 1
 
-    # Merged dictionary: {reading: {candidate: count}}
-    merged_dictionary = {}
+    # First pass: count weighted occurrences
+    # {reading: {candidate: weighted_count}}
+    occurrence_counts = {}
 
     # Process each file in the user dictionaries directory
     for filename, weight in source_weights.items():
@@ -1402,21 +1440,31 @@ def generate_user_dictionary(output_path=None, source_weights=None):
             if reading not in seen_in_this_file:
                 seen_in_this_file[reading] = set()
 
-            # Initialize merged dictionary entry if needed
-            if reading not in merged_dictionary:
-                merged_dictionary[reading] = {}
+            # Initialize occurrence entry if needed
+            if reading not in occurrence_counts:
+                occurrence_counts[reading] = {}
 
             # Add candidates, incrementing by weight (only once per file)
             for candidate in candidates:
                 if candidate not in seen_in_this_file[reading]:
                     seen_in_this_file[reading].add(candidate)
-                    if candidate in merged_dictionary[reading]:
-                        merged_dictionary[reading][candidate] += weight
+                    if candidate in occurrence_counts[reading]:
+                        occurrence_counts[reading][candidate] += weight
                     else:
-                        merged_dictionary[reading][candidate] = weight
+                        occurrence_counts[reading][candidate] = weight
 
         stats['files_processed'] += 1
         logger.debug(f'Processed user dictionary: {filename} with weight {weight}')
+
+    # Second pass: convert weighted counts to costs using formula
+    # cost = max(-10000 * weighted_count, -1e6)
+    # Lower cost = better (more frequent entries get more negative costs)
+    merged_dictionary = {}
+    for reading, candidates in occurrence_counts.items():
+        merged_dictionary[reading] = {}
+        for candidate, weighted_count in candidates.items():
+            cost = max(-10000 * weighted_count, -1e6)
+            merged_dictionary[reading][candidate] = cost
 
     # Calculate stats
     stats['total_readings'] = len(merged_dictionary)
