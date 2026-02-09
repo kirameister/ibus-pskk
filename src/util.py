@@ -5,6 +5,8 @@ import os
 from gi.repository import GLib
 import logging
 
+import katsuyou
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,6 +54,34 @@ def katakana_to_hiragana(text):
         else:
             result.append(c)
     return ''.join(result)
+
+
+def normalize_pos(pos: str) -> str:
+    """Normalize part-of-speech to a single character code.
+
+    Maps detailed POS values from UniDic to simplified categories:
+    - 動詞 (verb) → "動"
+    - 名詞 (noun) → "名"
+    - 形容詞 (i-adjective) → "形"
+    - All others → "他"
+
+    Args:
+        pos: The original POS string from UniDic (e.g., "動詞", "名詞", "助詞")
+
+    Returns:
+        Single character POS code: "動", "名", "形", or "他"
+    """
+    if not pos:
+        return "他"
+
+    if pos.startswith("動詞") or pos == "動":
+        return "動"
+    elif pos.startswith("名詞") or pos == "名":
+        return "名"
+    elif pos.startswith("形容詞") or pos == "形":
+        return "形"
+    else:
+        return "他"
 
 
 def tokenize_line(line):
@@ -1257,7 +1287,8 @@ def generate_system_dictionary(output_path=None, source_weights=None):
     import csv
 
     sys_dict_dir = get_skk_dicts_dir()  # Reusing the same directory path
-    stats = {'files_processed': 0, 'total_readings': 0, 'total_candidates': 0}
+    stats = {'files_processed': 0, 'total_readings': 0, 'total_candidates': 0,
+             'conjugations_generated': 0}
 
     # Determine output path (system_dictionary.json goes in config dir)
     if output_path is None:
@@ -1298,6 +1329,7 @@ def generate_system_dictionary(output_path=None, source_weights=None):
                     continue
 
                 entries_added = 0
+                conjugations_added = 0
                 for row in reader:
                     # Expected columns: 読み, 原型, 品詞, 活用型, コスト
                     if len(row) < 5:
@@ -1305,7 +1337,8 @@ def generate_system_dictionary(output_path=None, source_weights=None):
 
                     reading_katakana = row[0]  # 読み (katakana)
                     lemma = row[1]             # 原型 (surface form / lemma)
-                    pos = row[2]               # 品詞 (part of speech)
+                    pos = normalize_pos(row[2])  # 品詞 → normalized (動/名/形/他)
+                    conj_type = row[3]         # 活用型 (conjugation type)
                     cost_str = row[4]          # コスト
 
                     # Skip entries with placeholder values
@@ -1333,8 +1366,37 @@ def generate_system_dictionary(output_path=None, source_weights=None):
                         merged_dictionary[reading][lemma] = {"POS": pos, "cost": cost}
                         entries_added += 1
 
+                    # Generate conjugated forms if applicable
+                    if katsuyou.is_conjugatable(conj_type):
+                        conjugations = katsuyou.generate_conjugations(
+                            reading, lemma, pos, conj_type, cost
+                        )
+                        for conj_reading, conj_surface, conj_cost in conjugations:
+                            # Skip the base form (already added above)
+                            if conj_reading == reading and conj_surface == lemma:
+                                continue
+
+                            # Initialize reading entry if needed
+                            if conj_reading not in merged_dictionary:
+                                merged_dictionary[conj_reading] = {}
+
+                            # For duplicate entries, keep the lowest (best) cost
+                            if conj_surface in merged_dictionary[conj_reading]:
+                                if conj_cost < merged_dictionary[conj_reading][conj_surface]["cost"]:
+                                    merged_dictionary[conj_reading][conj_surface] = {
+                                        "POS": pos,
+                                        "cost": conj_cost
+                                    }
+                            else:
+                                merged_dictionary[conj_reading][conj_surface] = {
+                                    "POS": pos,
+                                    "cost": conj_cost
+                                }
+                                conjugations_added += 1
+
             stats['files_processed'] += 1
-            logger.debug(f'Processed {os.path.basename(csv_path)}: {entries_added} entries')
+            stats['conjugations_generated'] += conjugations_added
+            logger.debug(f'Processed {os.path.basename(csv_path)}: {entries_added} entries, {conjugations_added} conjugations')
 
         except Exception as e:
             logger.error(f'Failed to process {csv_path}: {e}')
@@ -1352,7 +1414,8 @@ def generate_system_dictionary(output_path=None, source_weights=None):
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(merged_dictionary, f, ensure_ascii=False, indent=2)
         logger.info(f'Generated system dictionary: {output_path}')
-        logger.info(f'Stats: {stats["files_processed"]} files, {stats["total_readings"]} readings, {stats["total_candidates"]} candidates')
+        logger.info(f'Stats: {stats["files_processed"]} files, {stats["total_readings"]} readings, '
+                   f'{stats["total_candidates"]} candidates ({stats["conjugations_generated"]} from conjugation)')
         return True, output_path, stats
     except Exception as e:
         logger.error(f'Failed to write system dictionary: {e}')
@@ -1459,13 +1522,13 @@ def generate_user_dictionary(output_path=None, source_weights=None):
     # Second pass: convert weighted counts to costs using formula
     # cost = max(-10000 * weighted_count, -1e6)
     # Lower cost = better (more frequent entries get more negative costs)
-    # All user dictionary entries are treated as nouns (名詞)
+    # All user dictionary entries are treated as nouns (名)
     merged_dictionary = {}
     for reading, candidates in occurrence_counts.items():
         merged_dictionary[reading] = {}
         for candidate, weighted_count in candidates.items():
             cost = max(-10000 * weighted_count, -1e6)
-            merged_dictionary[reading][candidate] = {"POS": "名詞", "cost": cost}
+            merged_dictionary[reading][candidate] = {"POS": "名", "cost": cost}
 
     # Calculate stats
     stats['total_readings'] = len(merged_dictionary)
@@ -1613,7 +1676,7 @@ def generate_extended_dictionary(config=None, source_paths=None):
                     # Entry should be {"POS": str, "cost": float}
                     if not isinstance(entry, dict):
                         # Handle legacy format (bare cost value)
-                        entry = {"POS": "名詞", "cost": entry if isinstance(entry, (int, float)) else 0}
+                        entry = {"POS": "名", "cost": entry if isinstance(entry, (int, float)) else 0}
                     # Keep the lower cost when merging (lower = better)
                     if candidate not in combined_dict[reading]:
                         combined_dict[reading][candidate] = entry

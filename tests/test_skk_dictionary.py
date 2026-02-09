@@ -357,55 +357,69 @@ class TestConvertAllSkkDictionaries:
 
 
 class TestGenerateSystemDictionary:
-    """Test suite for generate_system_dictionary() function"""
+    """Test suite for generate_system_dictionary() function
+
+    Note: generate_system_dictionary() now processes UniDic CSV files,
+    not SKK-format .utf8 files. The CSV format is:
+        読み,原型,品詞,活用型,コスト
+    """
 
     @pytest.fixture
     def temp_dirs(self, monkeypatch):
-        """Create temporary directories for SKK and user dictionaries"""
+        """Create temporary directories for UniDic CSV and output dictionaries"""
         temp_base = tempfile.mkdtemp()
-        skk_dir = os.path.join(temp_base, "skk_dicts")
+        csv_dir = os.path.join(temp_base, "skk_dicts")  # Reuses same dir path
         dict_dir = os.path.join(temp_base, "dictionaries")
-        os.makedirs(skk_dir)
+        os.makedirs(csv_dir)
+        os.makedirs(dict_dir)
 
-        monkeypatch.setattr('util.get_skk_dicts_dir', lambda: skk_dir)
-        monkeypatch.setattr('util.get_user_dictionaries_dir', lambda: dict_dir)
+        monkeypatch.setattr('util.get_skk_dicts_dir', lambda: csv_dir)
+        monkeypatch.setattr('util.get_user_config_dir', lambda: dict_dir)
 
-        yield {'base': temp_base, 'skk': skk_dir, 'dict': dict_dir}
+        yield {'base': temp_base, 'csv': csv_dir, 'dict': dict_dir}
         shutil.rmtree(temp_base)
 
     def test_merge_multiple_files(self, temp_dirs):
-        """Test merging multiple SKK dictionary files into one"""
-        # Create two dictionary files with overlapping entries
-        with open(os.path.join(temp_dirs['skk'], "dict1.utf8"), 'w', encoding='utf-8') as f:
-            f.write("あい /愛/相/\nかく /書く/\n")
-        with open(os.path.join(temp_dirs['skk'], "dict2.utf8"), 'w', encoding='utf-8') as f:
-            f.write("あい /愛/藍/\nよむ /読む/\n")
+        """Test merging multiple UniDic CSV files into one"""
+        # Create two CSV files with overlapping entries (using nouns to avoid conjugation)
+        # Format: 読み,原型,品詞,活用型,コスト
+        with open(os.path.join(temp_dirs['csv'], "dict1.csv"), 'w', encoding='utf-8') as f:
+            f.write("読み,原型,品詞,活用型,コスト\n")
+            f.write("アイ,愛,名詞,*,5000\n")
+            f.write("アイ,相,名詞,*,6000\n")
+            f.write("ニホン,日本,名詞,*,5000\n")
+        with open(os.path.join(temp_dirs['csv'], "dict2.csv"), 'w', encoding='utf-8') as f:
+            f.write("読み,原型,品詞,活用型,コスト\n")
+            f.write("アイ,愛,名詞,*,4000\n")  # Lower cost, should be kept
+            f.write("アイ,藍,名詞,*,7000\n")
+            f.write("セカイ,世界,名詞,*,5000\n")
 
         success, output_path, stats = generate_system_dictionary()
 
         assert success is True
         assert output_path == os.path.join(temp_dirs['dict'], 'system_dictionary.json')
         assert stats['files_processed'] == 2
-        assert stats['total_readings'] == 3  # あい, かく, よむ
+        assert stats['total_readings'] == 3  # あい, にほん, せかい
 
         # Verify merged content
         with open(output_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        # "愛" appears in both files, so count should be 2
-        assert data["あい"]["愛"] == 2
-        # "相" only in dict1, "藍" only in dict2
-        assert data["あい"]["相"] == 1
-        assert data["あい"]["藍"] == 1
+        # "愛" appears in both files, should keep lower cost (4000)
+        assert data["あい"]["愛"]["cost"] == 4000
+        assert data["あい"]["愛"]["POS"] == "名"
         # Other entries
-        assert data["かく"]["書く"] == 1
-        assert data["よむ"]["読む"] == 1
+        assert data["あい"]["相"]["cost"] == 6000
+        assert data["あい"]["藍"]["cost"] == 7000
 
     def test_no_double_count_within_file(self, temp_dirs):
-        """Test that same candidate appearing twice in one file counts as 1"""
+        """Test that duplicate entries in same file keep lowest cost"""
         # Create a file where same reading/candidate appears twice
-        with open(os.path.join(temp_dirs['skk'], "dict.utf8"), 'w', encoding='utf-8') as f:
-            f.write("あい /愛/相/\nあい /愛/藍/\n")  # 愛 appears twice in same file
+        with open(os.path.join(temp_dirs['csv'], "dict.csv"), 'w', encoding='utf-8') as f:
+            f.write("読み,原型,品詞,活用型,コスト\n")
+            f.write("アイ,愛,名詞,*,6000\n")
+            f.write("アイ,愛,名詞,*,5000\n")  # Lower cost, should be kept
+            f.write("アイ,相,名詞,*,7000\n")
 
         success, output_path, stats = generate_system_dictionary()
 
@@ -414,17 +428,17 @@ class TestGenerateSystemDictionary:
         with open(output_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        # "愛" appears twice in the SAME file, so count should still be 1
-        assert data["あい"]["愛"] == 1
-        assert data["あい"]["相"] == 1
-        assert data["あい"]["藍"] == 1
+        # Should keep the lower cost
+        assert data["あい"]["愛"]["cost"] == 5000
+        assert data["あい"]["相"]["cost"] == 7000
 
     def test_count_across_files(self, temp_dirs):
-        """Test that count correctly reflects number of source files"""
-        # Create three files, each containing "愛"
+        """Test that entries from multiple files merge correctly (lowest cost wins)"""
+        # Create three files, each containing "愛" with different costs
         for i in range(3):
-            with open(os.path.join(temp_dirs['skk'], f"dict{i}.utf8"), 'w', encoding='utf-8') as f:
-                f.write("あい /愛/\n")
+            with open(os.path.join(temp_dirs['csv'], f"dict{i}.csv"), 'w', encoding='utf-8') as f:
+                f.write("読み,原型,品詞,活用型,コスト\n")
+                f.write(f"アイ,愛,名詞,*,{5000 + i * 1000}\n")  # 5000, 6000, 7000
 
         success, output_path, stats = generate_system_dictionary()
 
@@ -434,13 +448,14 @@ class TestGenerateSystemDictionary:
         with open(output_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        # "愛" appears in all 3 files
-        assert data["あい"]["愛"] == 3
+        # Should keep the lowest cost (5000)
+        assert data["あい"]["愛"]["cost"] == 5000
 
     def test_custom_output_path(self, temp_dirs):
         """Test specifying a custom output path"""
-        with open(os.path.join(temp_dirs['skk'], "dict.utf8"), 'w', encoding='utf-8') as f:
-            f.write("てすと /テスト/\n")
+        with open(os.path.join(temp_dirs['csv'], "dict.csv"), 'w', encoding='utf-8') as f:
+            f.write("読み,原型,品詞,活用型,コスト\n")
+            f.write("テスト,テスト,名詞,*,5000\n")
 
         custom_path = os.path.join(temp_dirs['base'], 'custom', 'output.json')
         success, output_path, stats = generate_system_dictionary(output_path=custom_path)
@@ -449,8 +464,8 @@ class TestGenerateSystemDictionary:
         assert output_path == custom_path
         assert os.path.exists(custom_path)
 
-    def test_empty_skk_directory(self, temp_dirs):
-        """Test handling of empty SKK directory"""
+    def test_empty_csv_directory(self, temp_dirs):
+        """Test handling of empty CSV directory"""
         success, output_path, stats = generate_system_dictionary()
 
         assert success is True
@@ -462,8 +477,8 @@ class TestGenerateSystemDictionary:
             data = json.load(f)
         assert data == {}
 
-    def test_nonexistent_skk_directory(self, monkeypatch):
-        """Test handling when SKK directory doesn't exist"""
+    def test_nonexistent_csv_directory(self, monkeypatch):
+        """Test handling when CSV directory doesn't exist"""
         monkeypatch.setattr('util.get_skk_dicts_dir', lambda: "/nonexistent/path")
 
         success, output_path, stats = generate_system_dictionary()
@@ -473,16 +488,20 @@ class TestGenerateSystemDictionary:
         assert stats['files_processed'] == 0
 
     def test_stats_accuracy(self, temp_dirs):
-        """Test that statistics are accurate"""
-        with open(os.path.join(temp_dirs['skk'], "dict.utf8"), 'w', encoding='utf-8') as f:
-            f.write("あい /愛/相/藍/\n")  # 1 reading, 3 candidates
-            f.write("かく /書く/描く/\n")  # 1 reading, 2 candidates
+        """Test that statistics are accurate (using nouns to avoid conjugation)"""
+        with open(os.path.join(temp_dirs['csv'], "dict.csv"), 'w', encoding='utf-8') as f:
+            f.write("読み,原型,品詞,活用型,コスト\n")
+            f.write("アイ,愛,名詞,*,5000\n")
+            f.write("アイ,相,名詞,*,6000\n")
+            f.write("アイ,藍,名詞,*,7000\n")  # 3 candidates for あい
+            f.write("ニホン,日本,名詞,*,5000\n")
+            f.write("ニホン,二本,名詞,*,6000\n")  # 2 candidates for にほん
 
         success, output_path, stats = generate_system_dictionary()
 
         assert success is True
         assert stats['files_processed'] == 1
-        assert stats['total_readings'] == 2
+        assert stats['total_readings'] == 2  # あい, にほん
         assert stats['total_candidates'] == 5  # 3 + 2
 
 

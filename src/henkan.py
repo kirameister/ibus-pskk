@@ -113,7 +113,7 @@ class HenkanProcessor:
                         # Entry should be {"POS": str, "cost": float}
                         if not isinstance(entry, dict):
                             # Handle legacy format (bare cost value)
-                            entry = {"POS": "名詞", "cost": entry if isinstance(entry, (int, float)) else 0}
+                            entry = {"POS": "名", "cost": entry if isinstance(entry, (int, float)) else 0}
 
                         if candidate in self._dictionary[reading]:
                             # Keep entry with lower cost (better candidate)
