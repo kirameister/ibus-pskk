@@ -1594,7 +1594,7 @@ def generate_extended_dictionary(config=None, source_paths=None):
     logger.info(f'Extended dict generation: {stats["yomi_kanji_mappings"]} yomi→kanji mappings from {stats["files_processed"]} source files')
 
     # ── Step 3: Load system_dictionary.json and user_dictionary.json ──
-    combined_dict = {}  # {reading: {candidate: weight}}
+    combined_dict = {}  # {reading: {candidate: {"POS": str, "cost": float}}}
 
     for dict_filename in ['system_dictionary.json', 'user_dictionary.json']:
         dict_path = os.path.join(config_dir, dict_filename)
@@ -1609,10 +1609,19 @@ def generate_extended_dictionary(config=None, source_paths=None):
                     continue
                 if reading not in combined_dict:
                     combined_dict[reading] = {}
-                for candidate, count in candidates.items():
-                    # Keep the higher weight when merging
-                    if candidate not in combined_dict[reading] or count > combined_dict[reading][candidate]:
-                        combined_dict[reading][candidate] = count
+                for candidate, entry in candidates.items():
+                    # Entry should be {"POS": str, "cost": float}
+                    if not isinstance(entry, dict):
+                        # Handle legacy format (bare cost value)
+                        entry = {"POS": "名詞", "cost": entry if isinstance(entry, (int, float)) else 0}
+                    # Keep the lower cost when merging (lower = better)
+                    if candidate not in combined_dict[reading]:
+                        combined_dict[reading][candidate] = entry
+                    else:
+                        existing_cost = combined_dict[reading][candidate].get("cost", 0)
+                        new_cost = entry.get("cost", 0)
+                        if new_cost < existing_cost:
+                            combined_dict[reading][candidate] = entry
         except Exception as e:
             logger.warning(f'Failed to load {dict_path} for ext-dict generation: {e}')
 
@@ -1620,7 +1629,7 @@ def generate_extended_dictionary(config=None, source_paths=None):
     logger.info(f'Extended dict generation: {len(combined_dict)} entries from system/user dictionaries')
 
     # ── Step 4: Substring matching and replacement ──
-    extended_dict = {}  # {new_reading: {candidate: weight}}
+    extended_dict = {}  # {new_reading: {candidate: {"POS": str, "cost": float}}}
 
     for reading, candidates in combined_dict.items():
         for yomi, kanji_set in yomi_to_kanji.items():
@@ -1647,7 +1656,7 @@ def generate_extended_dictionary(config=None, source_paths=None):
                     # Skip single-character candidates — those are already
                     # directly produceable via kanchoku and would be noise.
                     matching_candidates = {
-                        c: w for c, w in candidates.items() if kanji in c and len(c) > 1
+                        c: entry for c, entry in candidates.items() if kanji in c and len(c) > 1
                     }
                     if not matching_candidates:
                         continue
@@ -1658,9 +1667,15 @@ def generate_extended_dictionary(config=None, source_paths=None):
                     # Merge into extended dictionary
                     if new_reading not in extended_dict:
                         extended_dict[new_reading] = {}
-                    for candidate, weight in matching_candidates.items():
-                        if candidate not in extended_dict[new_reading] or weight > extended_dict[new_reading][candidate]:
-                            extended_dict[new_reading][candidate] = weight
+                    for candidate, entry in matching_candidates.items():
+                        # Keep entry with lower cost (lower = better)
+                        if candidate not in extended_dict[new_reading]:
+                            extended_dict[new_reading][candidate] = entry
+                        else:
+                            existing_cost = extended_dict[new_reading][candidate].get("cost", 0)
+                            new_cost = entry.get("cost", 0)
+                            if new_cost < existing_cost:
+                                extended_dict[new_reading][candidate] = entry
 
     # Calculate output stats
     stats['total_readings'] = len(extended_dict)
