@@ -1277,7 +1277,7 @@ def generate_system_dictionary(output_path=None, source_weights=None):
                 if os.path.isfile(csv_path):
                     source_weights[csv_path] = 1
 
-    # Merged dictionary: {reading: {candidate: cost}}
+    # Merged dictionary: {reading: {candidate: {"POS": pos, "cost": cost}}}
     # For duplicate entries, we keep the lowest (best) cost
     merged_dictionary = {}
 
@@ -1305,7 +1305,7 @@ def generate_system_dictionary(output_path=None, source_weights=None):
 
                     reading_katakana = row[0]  # 読み (katakana)
                     lemma = row[1]             # 原型 (surface form / lemma)
-                    # row[2] = POS, row[3] = conj_type (not used for dictionary)
+                    pos = row[2]               # 品詞 (part of speech)
                     cost_str = row[4]          # コスト
 
                     # Skip entries with placeholder values
@@ -1327,10 +1327,10 @@ def generate_system_dictionary(output_path=None, source_weights=None):
 
                     # For duplicate entries, keep the lowest (best) cost
                     if lemma in merged_dictionary[reading]:
-                        if cost < merged_dictionary[reading][lemma]:
-                            merged_dictionary[reading][lemma] = cost
+                        if cost < merged_dictionary[reading][lemma]["cost"]:
+                            merged_dictionary[reading][lemma] = {"POS": pos, "cost": cost}
                     else:
-                        merged_dictionary[reading][lemma] = cost
+                        merged_dictionary[reading][lemma] = {"POS": pos, "cost": cost}
                         entries_added += 1
 
             stats['files_processed'] += 1
@@ -1459,12 +1459,13 @@ def generate_user_dictionary(output_path=None, source_weights=None):
     # Second pass: convert weighted counts to costs using formula
     # cost = max(-10000 * weighted_count, -1e6)
     # Lower cost = better (more frequent entries get more negative costs)
+    # All user dictionary entries are treated as nouns (名詞)
     merged_dictionary = {}
     for reading, candidates in occurrence_counts.items():
         merged_dictionary[reading] = {}
         for candidate, weighted_count in candidates.items():
             cost = max(-10000 * weighted_count, -1e6)
-            merged_dictionary[reading][candidate] = cost
+            merged_dictionary[reading][candidate] = {"POS": "名詞", "cost": cost}
 
     # Calculate stats
     stats['total_readings'] = len(merged_dictionary)

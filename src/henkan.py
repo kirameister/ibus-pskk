@@ -22,10 +22,14 @@ class HenkanProcessor:
 
     Dictionary format (JSON):
         {
-            "reading": {"candidate1": count1, "candidate2": count2, ...},
+            "reading": {
+                "candidate1": {"POS": "品詞", "cost": cost1},
+                "candidate2": {"POS": "品詞", "cost": cost2},
+                ...
+            },
             ...
         }
-    where count represents the frequency/priority (higher is better).
+    where cost represents the priority (lower cost = better candidate).
     """
 
     def __init__(self, dictionary_files=None):
@@ -37,7 +41,7 @@ class HenkanProcessor:
                              Files are loaded in order; later files can
                              add new entries or increase counts for existing ones.
         """
-        # Merged dictionary: {reading: {candidate: count}}
+        # Merged dictionary: {reading: {candidate: {"POS": str, "cost": float}}}
         self._dictionary = {}
         self._candidates = []    # Current conversion candidates (whole-word mode)
         self._selected_index = 0 # Currently selected candidate index (whole-word mode)
@@ -76,9 +80,9 @@ class HenkanProcessor:
         Load and merge multiple dictionary files.
 
         Each dictionary file is a JSON object mapping readings to candidates:
-            {"reading": {"candidate1": count1, "candidate2": count2}}
+            {"reading": {"candidate1": {"POS": "品詞", "cost": cost1}, ...}}
 
-        When merging, counts are summed for duplicate candidates.
+        When merging, the entry with lower cost is kept for duplicate candidates.
 
         Args:
             dictionary_files: List of paths to dictionary JSON files
@@ -105,13 +109,20 @@ class HenkanProcessor:
                     if reading not in self._dictionary:
                         self._dictionary[reading] = {}
 
-                    for candidate, count in candidates.items():
-                        if not isinstance(count, (int, float)):
-                            count = 1
+                    for candidate, entry in candidates.items():
+                        # Entry should be {"POS": str, "cost": float}
+                        if not isinstance(entry, dict):
+                            # Handle legacy format (bare cost value)
+                            entry = {"POS": "名詞", "cost": entry if isinstance(entry, (int, float)) else 0}
+
                         if candidate in self._dictionary[reading]:
-                            self._dictionary[reading][candidate] += count
+                            # Keep entry with lower cost (better candidate)
+                            existing_cost = self._dictionary[reading][candidate].get("cost", 0)
+                            new_cost = entry.get("cost", 0)
+                            if new_cost < existing_cost:
+                                self._dictionary[reading][candidate] = entry
                         else:
-                            self._dictionary[reading][candidate] = count
+                            self._dictionary[reading][candidate] = entry
                         entries_added += 1
 
                 self._dictionary_count += 1
@@ -162,14 +173,15 @@ class HenkanProcessor:
             # Sort by cost (ascending) - lower cost = better candidate
             sorted_candidates = sorted(
                 candidates_dict.items(),
-                key=lambda x: x[1],
+                key=lambda x: x[1].get("cost", 0),
                 reverse=False
             )
-            for surface, cost in sorted_candidates:
+            for surface, entry in sorted_candidates:
                 self._candidates.append({
                     'surface': surface,
                     'reading': reading,
-                    'cost': cost
+                    'cost': entry.get("cost", 0),
+                    'POS': entry.get("POS", "")
                 })
             logger.debug(f'HenkanProcessor.convert("{reading}") → {len(self._candidates)} candidates')
         else:
@@ -398,14 +410,15 @@ class HenkanProcessor:
             # Sort by cost (ascending) - lower cost = better candidate
             sorted_candidates = sorted(
                 candidates_dict.items(),
-                key=lambda x: x[1],
+                key=lambda x: x[1].get("cost", 0),
                 reverse=False
             )
-            for surface, cost in sorted_candidates:
+            for surface, entry in sorted_candidates:
                 candidates.append({
                     'surface': surface,
                     'reading': bunsetsu_text,
-                    'cost': cost
+                    'cost': entry.get("cost", 0),
+                    'POS': entry.get("POS", "")
                 })
         else:
             # No dictionary match - return original text
