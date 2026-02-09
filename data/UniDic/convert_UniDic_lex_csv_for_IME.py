@@ -4,8 +4,8 @@ This script converts the lex.csv file provided as part of the UniDic project.
 The script will only take the following columns from the CSV file, and store it as UniDic.csv
 
 Columns (First column index is 1, instead of 0):
-    12 --   読み	カタカナでの発音
-    11 --   原型	見出し語（辞書形）
+    11 --   読み	カタカナでの発音
+    10 --   原型	見出し語（辞書形）
     5  --   品詞	主分類
     9  --   活用型  活用形生成 / 辞書補助
     4  --   コスト	生起コスト（低いほど優先）
@@ -27,8 +27,8 @@ import os
 COL_COST = 3        # Column 4: コスト (generation cost)
 COL_POS = 4         # Column 5: 品詞 (part of speech)
 COL_CONJ_TYPE = 8   # Column 9: 活用型 (conjugation type)
-COL_LEMMA = 10      # Column 11: 原型 (lemma/dictionary form)
-COL_READING = 11    # Column 12: 読み (reading in katakana)
+COL_LEMMA = 11      # Column 11: 原型 (lemma/dictionary form)
+COL_READING = 10    # Column 12: 読み (reading in katakana)
 
 
 def convert_unidic_lex(input_path: str, output_path: str) -> None:
