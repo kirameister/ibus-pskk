@@ -666,7 +666,7 @@ def process_sentence_full(tagger, sentence: str, reading_set: set) -> tuple:
         return '', 0
 
     # Get full hiragana reading
-    full_reading = ''.join(reading for _, _, reading, _ in morphemes)
+    full_reading = ''.join(reading for _, _, reading, _, _ in morphemes)
 
     if not full_reading:
         return '', 0
