@@ -4,11 +4,16 @@ This script converts the lex.csv file provided as part of the UniDic project.
 The script will only take the following columns from the CSV file, and store it as UniDic.csv
 
 Columns (First column index is 1, instead of 0):
-    11 --   読み	カタカナでの発音
-    10 --   原型	見出し語（辞書形）
-    5  --   品詞	主分類
-    9  --   活用型  活用形生成 / 辞書補助
-    4  --   コスト	生起コスト（低いほど優先）
+    11 --   読み      カタカナでの発音
+    10 --   原型      見出し語（辞書形）
+    5  --   品詞      主分類
+    6  --   品詞細分類1  (used for proper noun detection: "固有名詞")
+    9  --   活用型    活用形生成 / 辞書補助
+    4  --   コスト    生起コスト（低いほど優先）
+
+Cost adjustment:
+    Proper nouns (固有名詞) have their cost multiplied by COST_MULTIPLIER_FOR_PROPER_NOUN
+    (default: 3) to reduce their priority in conversion candidates.
 
 How to run:
 1. Download the latest UniDic src ZIP file.
@@ -24,11 +29,17 @@ import os
 
 
 # Column indices (0-based) for the fields we need
-COL_COST = 3        # Column 4: コスト (generation cost)
-COL_POS = 4         # Column 5: 品詞 (part of speech)
-COL_CONJ_TYPE = 8   # Column 9: 活用型 (conjugation type)
-COL_LEMMA = 11      # Column 11: 原型 (lemma/dictionary form)
-COL_READING = 10    # Column 12: 読み (reading in katakana)
+COL_COST = 3            # Column 4: コスト (generation cost)
+COL_POS = 4             # Column 5: 品詞 (part of speech, main category)
+COL_POS_SUBCAT1 = 5     # Column 6: 品詞細分類1 (POS subcategory, e.g., "固有名詞")
+COL_CONJ_TYPE = 8       # Column 9: 活用型 (conjugation type)
+COL_LEMMA = 11          # Column 11: 原型 (lemma/dictionary form)
+COL_READING = 10        # Column 12: 読み (reading in katakana)
+
+# Cost adjustment for proper nouns (固有名詞)
+# Proper nouns are less common in general text, so we increase their cost
+# to make them appear less frequently in conversion candidates
+COST_MULTIPLIER_FOR_PROPER_NOUN = 3
 
 
 def convert_unidic_lex(input_path: str, output_path: str) -> None:
@@ -60,11 +71,12 @@ def convert_unidic_lex(input_path: str, output_path: str) -> None:
                 continue
 
             # Extract the columns we need
-            reading = row[COL_READING]      # 読み (katakana)
-            lemma = row[COL_LEMMA]          # 原型 (dictionary form)
-            pos = row[COL_POS]              # 品詞 (part of speech)
-            conj_type = row[COL_CONJ_TYPE]  # 活用型 (conjugation type)
-            cost_str = row[COL_COST]        # コスト (cost)
+            reading = row[COL_READING]          # 読み (katakana)
+            lemma = row[COL_LEMMA]              # 原型 (dictionary form)
+            pos = row[COL_POS]                  # 品詞 (part of speech)
+            pos_subcat1 = row[COL_POS_SUBCAT1]  # 品詞細分類1 (POS subcategory)
+            conj_type = row[COL_CONJ_TYPE]      # 活用型 (conjugation type)
+            cost_str = row[COL_COST]            # コスト (cost)
 
             # Parse cost as integer for comparison
             try:
@@ -72,6 +84,12 @@ def convert_unidic_lex(input_path: str, output_path: str) -> None:
             except ValueError:
                 rows_skipped += 1
                 continue
+
+            # Apply cost multiplier for proper nouns (固有名詞)
+            # Use strip() to handle potential whitespace/CR characters in CSV
+            if pos_subcat1.strip() == "固有名詞":
+                cost_int = int(cost_int * COST_MULTIPLIER_FOR_PROPER_NOUN)
+                cost_str = str(cost_int)
 
             # Deduplication key (without cost)
             key = (reading, lemma, pos, conj_type)
