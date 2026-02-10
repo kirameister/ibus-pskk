@@ -39,7 +39,7 @@ COL_READING = 10        # Column 12: 読み (reading in katakana)
 # Cost adjustment for proper nouns (固有名詞)
 # Proper nouns are less common in general text, so we increase their cost
 # to make them appear less frequently in conversion candidates
-COST_MULTIPLIER_FOR_PROPER_NOUN = 3
+COST_MULTIPLIER_FOR_PROPER_NOUN = 5
 
 
 def convert_unidic_lex(input_path: str, output_path: str) -> None:
