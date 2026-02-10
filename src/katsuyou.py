@@ -712,3 +712,129 @@ def _conjugate_keiyoushi(reading: str, lemma: str, base_cost: float) -> list:
                    base_cost + COST_PENALTIES["ば形"]))
 
     return results
+
+
+# ============================================================================
+# SKK Okurigana Expansion
+# ============================================================================
+# Maps SKK's trailing alphabet (okurigana marker) to conjugation parameters.
+#
+# In SKK dictionaries, entries like "かk /書/" use an alphabet suffix to
+# indicate the conjugation class. This allows the dictionary to store only
+# the stem while the user types the full okurigana.
+
+# Maps SKK suffix → (終止形 hiragana suffix, conjugation type)
+SKK_OKURIGANA_MAP = {
+    # 五段動詞
+    "k": ("く", "五段-カ行"),
+    "g": ("ぐ", "五段-ガ行"),
+    "s": ("す", "五段-サ行"),
+    "t": ("つ", "五段-タ行"),
+    "n": ("ぬ", "五段-ナ行"),
+    "b": ("ぶ", "五段-バ行"),
+    "m": ("む", "五段-マ行"),
+    "r": ("る", "五段-ラ行"),
+    "w": ("う", "五段-ワア行"),
+    "u": ("う", "五段-ワア行"),  # Alternative notation
+    # 形容詞
+    "i": ("い", "形容詞"),
+}
+
+
+def expand_skk_okurigana(reading: str, kanji: str, base_count: int = 1) -> list:
+    """
+    Expand an SKK okurigana entry into all conjugated forms.
+
+    Takes an SKK-style entry where the reading ends with an alphabet character
+    indicating the conjugation class, and generates all conjugated forms.
+
+    Args:
+        reading: SKK reading with trailing alphabet (e.g., "かk", "わるi")
+        kanji: Kanji stem without okurigana (e.g., "書", "悪")
+        base_count: The count/weight value to use for generated entries
+
+    Returns:
+        List of tuples: [(full_reading, full_kanji, count), ...]
+        Each tuple represents one conjugated form.
+
+        Returns empty list if the reading doesn't end with a recognized
+        okurigana marker or if conjugation fails.
+
+    Example:
+        >>> expand_skk_okurigana("かk", "書", 1)
+        [
+            ("かく", "書く", 1),      # 終止形
+            ("かき", "書き", 1),      # 連用形
+            ("かか", "書か", 1),      # 未然形
+            ("かけ", "書け", 1),      # 仮定形/命令形
+            ("かいて", "書いて", 1),  # て形
+            ("かいた", "書いた", 1),  # た形
+            ...
+        ]
+
+        >>> expand_skk_okurigana("わるi", "悪", 1)
+        [
+            ("わるい", "悪い", 1),      # 終止形
+            ("わるく", "悪く", 1),      # 連用形
+            ("わるかった", "悪かった", 1),  # た形
+            ...
+        ]
+    """
+    if not reading or len(reading) < 2:
+        return []
+
+    # Check if reading ends with an okurigana marker
+    suffix = reading[-1]
+    if suffix not in SKK_OKURIGANA_MAP:
+        return []
+
+    # Get conjugation info
+    kana_suffix, conj_type = SKK_OKURIGANA_MAP[suffix]
+
+    # Build the dictionary form (終止形)
+    stem_r = reading[:-1]  # Remove alphabet suffix
+    dict_reading = stem_r + kana_suffix
+    dict_surface = kanji + kana_suffix
+
+    # Determine POS based on conjugation type
+    if conj_type == "形容詞":
+        pos = "形容詞"
+    else:
+        pos = "動詞"
+
+    # Use existing conjugation logic (cost-based → count-based conversion)
+    # In the original katsuyou, lower cost = better. For SKK, we use counts.
+    # We'll use base_count for all forms (can be refined later with penalties).
+    raw_results = generate_conjugations(
+        reading=dict_reading,
+        lemma=dict_surface,
+        pos=pos,
+        conj_type=conj_type,
+        base_cost=0  # We'll ignore costs and use base_count
+    )
+
+    # Convert to (reading, surface, count) format
+    results = []
+    seen = set()  # Deduplicate identical readings
+    for conj_reading, conj_surface, _cost in raw_results:
+        key = (conj_reading, conj_surface)
+        if key not in seen:
+            seen.add(key)
+            results.append((conj_reading, conj_surface, base_count))
+
+    return results
+
+
+def is_skk_okurigana_entry(reading: str) -> bool:
+    """
+    Check if a reading is an SKK okurigana entry (ends with alphabet marker).
+
+    Args:
+        reading: The reading string to check
+
+    Returns:
+        True if the reading ends with a recognized okurigana marker
+    """
+    if not reading or len(reading) < 2:
+        return False
+    return reading[-1] in SKK_OKURIGANA_MAP
