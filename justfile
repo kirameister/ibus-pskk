@@ -17,13 +17,17 @@ skk_dict_files := "SKK-JISYO.L SKK-JISYO.M SKK-JISYO.ML SKK-JISYO.S"
 default:
     @just --list
 
-# Create virtual environment
+# Create virtual environment (skip if already exists)
 create-venv:
-    python3 -m venv --system-site-packages {{venv_path}}
+    @if [ ! -d "{{venv_path}}" ]; then \
+        echo "Creating venv at {{venv_path}}..."; \
+        python3 -m venv --system-site-packages {{venv_path}}; \
+    else \
+        echo "venv already exists at {{venv_path}}, skipping"; \
+    fi
 
 # Install Python dependencies
 install-deps: create-venv
-    {{venv_path}}/bin/pip install --upgrade pip
     {{venv_path}}/bin/pip install -r requirements.txt
 
 # Compile and install GSettings schema
