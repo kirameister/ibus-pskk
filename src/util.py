@@ -1265,30 +1265,31 @@ def convert_all_skk_dictionaries():
 
 def generate_system_dictionary(output_path=None, source_weights=None):
     """
-    Generate a merged system dictionary from UniDic CSV files.
+    Generate a merged system dictionary from SKK dictionary files.
 
-    Reads UniDic CSV files and merges them into a single JSON file.
-    The cost value from the CSV is used directly as the dictionary weight.
+    Reads SKK-format dictionary files and merges them into a single JSON file.
+    The value for each candidate is the weighted occurrence count across all source files.
 
-    UniDic CSV format (with header):
-        読み,原型,品詞,活用型,コスト
-        reading (katakana), lemma, POS, conj_type, cost
+    SKK format: reading /candidate1/candidate2/.../
+    Example: あい /愛/相/藍/
+
+    Output JSON format: {reading: {candidate: count}}
+    Example: {"あい": {"愛": 3, "相": 2, "藍": 1}}
+
+    Higher count = appears in more dictionaries = should be ranked higher.
 
     Args:
         output_path: Path for the output JSON file.
                     If None, defaults to ~/.config/ibus-pskk/system_dictionary.json
         source_weights: Dict mapping full file paths to weight multipliers.
-                       If None, all CSV files in system dicts directory are used with weight 1.
+                       If None, all files in system dicts directory are used with weight 1.
 
     Returns:
         tuple: (success: bool, output_path: str or None, stats: dict)
                stats contains 'files_processed', 'total_readings', 'total_candidates'
     """
-    import csv
-
-    sys_dict_dir = get_skk_dicts_dir()  # Reusing the same directory path
-    stats = {'files_processed': 0, 'total_readings': 0, 'total_candidates': 0,
-             'conjugations_generated': 0}
+    sys_dict_dir = get_skk_dicts_dir()
+    stats = {'files_processed': 0, 'total_readings': 0, 'total_candidates': 0}
 
     # Determine output path (system_dictionary.json goes in config dir)
     if output_path is None:
@@ -1296,111 +1297,73 @@ def generate_system_dictionary(output_path=None, source_weights=None):
         os.makedirs(config_dir, exist_ok=True)
         output_path = os.path.join(config_dir, 'system_dictionary.json')
 
-    # If no weights specified, scan all CSV files with weight 1
+    # If no weights specified, scan all files in the directory with weight 1
     if source_weights is None:
         if not os.path.exists(sys_dict_dir):
             logger.warning(f'System dictionaries directory not found: {sys_dict_dir}')
             return False, None, stats
         source_weights = {}
         for filename in os.listdir(sys_dict_dir):
-            if filename.lower().endswith('.csv'):
-                csv_path = os.path.join(sys_dict_dir, filename)
-                if os.path.isfile(csv_path):
-                    source_weights[csv_path] = 1
+            file_path = os.path.join(sys_dict_dir, filename)
+            if os.path.isfile(file_path):
+                source_weights[file_path] = 1
 
-    # Merged dictionary: {reading: {candidate: {"POS": pos, "cost": cost}}}
-    # For duplicate entries, we keep the lowest (best) cost
+    # Merged dictionary: {reading: {candidate: weighted_count}}
     merged_dictionary = {}
 
-    # Process each UniDic CSV file
-    for csv_path, weight_multiplier in source_weights.items():
-        if not os.path.isfile(csv_path):
-            logger.warning(f'Dictionary file not found: {csv_path}')
+    # Process each SKK dictionary file
+    for file_path, weight_multiplier in source_weights.items():
+        if not os.path.isfile(file_path):
+            logger.warning(f'Dictionary file not found: {file_path}')
             continue
 
-        try:
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
+        # Try different encodings (SKK files may use various encodings)
+        encodings = ['utf-8', 'euc-jp', 'shift-jis']
+        file_content = None
 
-                # Skip header row
-                header = next(reader, None)
-                if header is None:
-                    logger.warning(f'Empty CSV file: {csv_path}')
-                    continue
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    file_content = f.readlines()
+                logger.debug(f'Successfully read {file_path} with encoding {encoding}')
+                break
+            except UnicodeDecodeError:
+                continue
 
-                entries_added = 0
-                conjugations_added = 0
-                for row in reader:
-                    # Expected columns: 読み, 原型, 品詞, 活用型, コスト
-                    if len(row) < 5:
-                        continue
+        if file_content is None:
+            logger.warning(f'Failed to read {file_path} with any supported encoding, skipping')
+            continue
 
-                    reading_katakana = row[0]  # 読み (katakana)
-                    lemma = row[1]             # 原型 (surface form / lemma)
-                    pos = normalize_pos(row[2])  # 品詞 → normalized (動/名/形/他)
-                    conj_type = row[3]         # 活用型 (conjugation type)
-                    cost_str = row[4]          # コスト
+        # Track candidates seen in this file to avoid double-counting within same file
+        seen_in_this_file = {}  # {reading: set(candidates)}
+        entries_added = 0
 
-                    # Skip entries with placeholder values
-                    if reading_katakana == '*' or lemma == '*':
-                        continue
+        # Process each line
+        for line in file_content:
+            reading, candidates = parse_skk_dictionary_line(line)
+            if not reading or not candidates:
+                continue
 
-                    # Convert katakana reading to hiragana
-                    reading = katakana_to_hiragana(reading_katakana)
+            # Initialize tracking for this reading if needed
+            if reading not in seen_in_this_file:
+                seen_in_this_file[reading] = set()
 
-                    # Parse cost
-                    try:
-                        cost = int(cost_str) * weight_multiplier
-                    except ValueError:
-                        continue
+            # Initialize merged entry if needed
+            if reading not in merged_dictionary:
+                merged_dictionary[reading] = {}
 
-                    # Initialize reading entry if needed
-                    if reading not in merged_dictionary:
-                        merged_dictionary[reading] = {}
-
-                    # For duplicate entries, keep the lowest (best) cost
-                    if lemma in merged_dictionary[reading]:
-                        if cost < merged_dictionary[reading][lemma]["cost"]:
-                            merged_dictionary[reading][lemma] = {"POS": pos, "cost": cost}
+            # Add candidates, incrementing by weight (only once per file)
+            for candidate in candidates:
+                if candidate not in seen_in_this_file[reading]:
+                    seen_in_this_file[reading].add(candidate)
+                    if candidate in merged_dictionary[reading]:
+                        merged_dictionary[reading][candidate] += weight_multiplier
                     else:
-                        merged_dictionary[reading][lemma] = {"POS": pos, "cost": cost}
+                        merged_dictionary[reading][candidate] = weight_multiplier
                         entries_added += 1
 
-                    # Generate conjugated forms if applicable
-                    if katsuyou.is_conjugatable(conj_type):
-                        conjugations = katsuyou.generate_conjugations(
-                            reading, lemma, pos, conj_type, cost
-                        )
-                        for conj_reading, conj_surface, conj_cost in conjugations:
-                            # Skip the base form (already added above)
-                            if conj_reading == reading and conj_surface == lemma:
-                                continue
-
-                            # Initialize reading entry if needed
-                            if conj_reading not in merged_dictionary:
-                                merged_dictionary[conj_reading] = {}
-
-                            # For duplicate entries, keep the lowest (best) cost
-                            if conj_surface in merged_dictionary[conj_reading]:
-                                if conj_cost < merged_dictionary[conj_reading][conj_surface]["cost"]:
-                                    merged_dictionary[conj_reading][conj_surface] = {
-                                        "POS": pos,
-                                        "cost": conj_cost
-                                    }
-                            else:
-                                merged_dictionary[conj_reading][conj_surface] = {
-                                    "POS": pos,
-                                    "cost": conj_cost
-                                }
-                                conjugations_added += 1
-
-            stats['files_processed'] += 1
-            stats['conjugations_generated'] += conjugations_added
-            logger.debug(f'Processed {os.path.basename(csv_path)}: {entries_added} entries, {conjugations_added} conjugations')
-
-        except Exception as e:
-            logger.error(f'Failed to process {csv_path}: {e}')
-            continue
+        stats['files_processed'] += 1
+        logger.debug(f'Processed {os.path.basename(file_path)}: {entries_added} new entries')
 
     # Calculate stats
     stats['total_readings'] = len(merged_dictionary)
@@ -1415,7 +1378,7 @@ def generate_system_dictionary(output_path=None, source_weights=None):
             json.dump(merged_dictionary, f, ensure_ascii=False, indent=2)
         logger.info(f'Generated system dictionary: {output_path}')
         logger.info(f'Stats: {stats["files_processed"]} files, {stats["total_readings"]} readings, '
-                   f'{stats["total_candidates"]} candidates ({stats["conjugations_generated"]} from conjugation)')
+                   f'{stats["total_candidates"]} candidates')
         return True, output_path, stats
     except Exception as e:
         logger.error(f'Failed to write system dictionary: {e}')
@@ -1427,7 +1390,15 @@ def generate_user_dictionary(output_path=None, source_weights=None):
     Generate a merged user dictionary from SKK-format files in the user dictionaries directory.
 
     Reads SKK-format text files from ~/.config/ibus-pskk/dictionaries/ and merges them
-    into a single JSON file. The count for each candidate is weighted by the source file's weight.
+    into a single JSON file. The value for each candidate is the weighted occurrence count.
+
+    SKK format: reading /candidate1/candidate2/.../
+    Example: あい /愛/相/
+
+    Output JSON format: {reading: {candidate: count}}
+    Example: {"あい": {"愛": 3, "相": 2}}
+
+    Higher count = appears in more files = should be ranked higher.
 
     Args:
         output_path: Path for the output JSON file.
@@ -1519,16 +1490,9 @@ def generate_user_dictionary(output_path=None, source_weights=None):
         stats['files_processed'] += 1
         logger.debug(f'Processed user dictionary: {filename} with weight {weight}')
 
-    # Second pass: convert weighted counts to costs using formula
-    # cost = max(-10000 * weighted_count, -1e6)
-    # Lower cost = better (more frequent entries get more negative costs)
-    # All user dictionary entries are treated as nouns (名)
-    merged_dictionary = {}
-    for reading, candidates in occurrence_counts.items():
-        merged_dictionary[reading] = {}
-        for candidate, weighted_count in candidates.items():
-            cost = max(-10000 * weighted_count, -1e6)
-            merged_dictionary[reading][candidate] = {"POS": "名", "cost": cost}
+    # Output format: {reading: {candidate: weighted_count}}
+    # Higher count = appears in more files = should be ranked higher
+    merged_dictionary = occurrence_counts
 
     # Calculate stats
     stats['total_readings'] = len(merged_dictionary)
@@ -1657,7 +1621,7 @@ def generate_extended_dictionary(config=None, source_paths=None):
     logger.info(f'Extended dict generation: {stats["yomi_kanji_mappings"]} yomi→kanji mappings from {stats["files_processed"]} source files')
 
     # ── Step 3: Load system_dictionary.json and user_dictionary.json ──
-    combined_dict = {}  # {reading: {candidate: {"POS": str, "cost": float}}}
+    combined_dict = {}  # {reading: {candidate: count}}
 
     for dict_filename in ['system_dictionary.json', 'user_dictionary.json']:
         dict_path = os.path.join(config_dir, dict_filename)
@@ -1673,18 +1637,19 @@ def generate_extended_dictionary(config=None, source_paths=None):
                 if reading not in combined_dict:
                     combined_dict[reading] = {}
                 for candidate, entry in candidates.items():
-                    # Entry should be {"POS": str, "cost": float}
-                    if not isinstance(entry, dict):
-                        # Handle legacy format (bare cost value)
-                        entry = {"POS": "名", "cost": entry if isinstance(entry, (int, float)) else 0}
-                    # Keep the lower cost when merging (lower = better)
-                    if candidate not in combined_dict[reading]:
-                        combined_dict[reading][candidate] = entry
+                    # Entry format: count (int) - higher count = better
+                    # For legacy format {"POS": ..., "cost": ...}, convert to count
+                    if isinstance(entry, dict):
+                        count = -entry.get("cost", 0)  # Negate cost to get count
                     else:
-                        existing_cost = combined_dict[reading][candidate].get("cost", 0)
-                        new_cost = entry.get("cost", 0)
-                        if new_cost < existing_cost:
-                            combined_dict[reading][candidate] = entry
+                        count = entry if isinstance(entry, (int, float)) else 1
+                    # Keep the higher count when merging (higher = better)
+                    if candidate not in combined_dict[reading]:
+                        combined_dict[reading][candidate] = count
+                    else:
+                        existing_count = combined_dict[reading][candidate]
+                        if count > existing_count:
+                            combined_dict[reading][candidate] = count
         except Exception as e:
             logger.warning(f'Failed to load {dict_path} for ext-dict generation: {e}')
 
@@ -1692,7 +1657,7 @@ def generate_extended_dictionary(config=None, source_paths=None):
     logger.info(f'Extended dict generation: {len(combined_dict)} entries from system/user dictionaries')
 
     # ── Step 4: Substring matching and replacement ──
-    extended_dict = {}  # {new_reading: {candidate: {"POS": str, "cost": float}}}
+    extended_dict = {}  # {new_reading: {candidate: count}}
 
     for reading, candidates in combined_dict.items():
         for yomi, kanji_set in yomi_to_kanji.items():
@@ -1719,7 +1684,7 @@ def generate_extended_dictionary(config=None, source_paths=None):
                     # Skip single-character candidates — those are already
                     # directly produceable via kanchoku and would be noise.
                     matching_candidates = {
-                        c: entry for c, entry in candidates.items() if kanji in c and len(c) > 1
+                        c: count for c, count in candidates.items() if kanji in c and len(c) > 1
                     }
                     if not matching_candidates:
                         continue
@@ -1730,15 +1695,14 @@ def generate_extended_dictionary(config=None, source_paths=None):
                     # Merge into extended dictionary
                     if new_reading not in extended_dict:
                         extended_dict[new_reading] = {}
-                    for candidate, entry in matching_candidates.items():
-                        # Keep entry with lower cost (lower = better)
+                    for candidate, count in matching_candidates.items():
+                        # Keep entry with higher count (higher = better)
                         if candidate not in extended_dict[new_reading]:
-                            extended_dict[new_reading][candidate] = entry
+                            extended_dict[new_reading][candidate] = count
                         else:
-                            existing_cost = extended_dict[new_reading][candidate].get("cost", 0)
-                            new_cost = entry.get("cost", 0)
-                            if new_cost < existing_cost:
-                                extended_dict[new_reading][candidate] = entry
+                            existing_count = extended_dict[new_reading][candidate]
+                            if count > existing_count:
+                                extended_dict[new_reading][candidate] = count
 
     # Calculate output stats
     stats['total_readings'] = len(extended_dict)

@@ -110,19 +110,22 @@ class HenkanProcessor:
                         self._dictionary[reading] = {}
 
                     for candidate, entry in candidates.items():
-                        # Entry should be {"POS": str, "cost": float}
-                        if not isinstance(entry, dict):
-                            # Handle legacy format (bare cost value)
-                            entry = {"POS": "名", "cost": entry if isinstance(entry, (int, float)) else 0}
+                        # Entry format: count (int) - higher count = better candidate
+                        # For legacy format {"POS": ..., "cost": ...}, convert to count
+                        if isinstance(entry, dict):
+                            # Legacy format - convert cost to count (negate so lower cost = higher count)
+                            count = -entry.get("cost", 0)
+                        else:
+                            # New format - entry is the count directly
+                            count = entry if isinstance(entry, (int, float)) else 1
 
                         if candidate in self._dictionary[reading]:
-                            # Keep entry with lower cost (better candidate)
-                            existing_cost = self._dictionary[reading][candidate].get("cost", 0)
-                            new_cost = entry.get("cost", 0)
-                            if new_cost < existing_cost:
-                                self._dictionary[reading][candidate] = entry
+                            # Keep entry with higher count (better candidate)
+                            existing_count = self._dictionary[reading][candidate]
+                            if count > existing_count:
+                                self._dictionary[reading][candidate] = count
                         else:
-                            self._dictionary[reading][candidate] = entry
+                            self._dictionary[reading][candidate] = count
                         entries_added += 1
 
                 self._dictionary_count += 1
@@ -170,18 +173,17 @@ class HenkanProcessor:
             # Whole-word dictionary match found
             self._has_whole_word_match = True
             candidates_dict = self._dictionary[reading]
-            # Sort by cost (ascending) - lower cost = better candidate
+            # Sort by count (descending) - higher count = better candidate
             sorted_candidates = sorted(
                 candidates_dict.items(),
-                key=lambda x: x[1].get("cost", 0),
-                reverse=False
+                key=lambda x: x[1],
+                reverse=True
             )
-            for surface, entry in sorted_candidates:
+            for surface, count in sorted_candidates:
                 self._candidates.append({
                     'surface': surface,
                     'reading': reading,
-                    'cost': entry.get("cost", 0),
-                    'POS': entry.get("POS", "")
+                    'count': count
                 })
             logger.debug(f'HenkanProcessor.convert("{reading}") → {len(self._candidates)} candidates')
         else:
@@ -407,25 +409,25 @@ class HenkanProcessor:
 
         if bunsetsu_text in self._dictionary:
             candidates_dict = self._dictionary[bunsetsu_text]
-            # Sort by cost (ascending) - lower cost = better candidate
+            # Sort by count (descending) - higher count = better candidate
             sorted_candidates = sorted(
                 candidates_dict.items(),
-                key=lambda x: x[1].get("cost", 0),
-                reverse=False
+                key=lambda x: x[1],
+                reverse=True
             )
-            for surface, entry in sorted_candidates:
+            for surface, count in sorted_candidates:
                 candidates.append({
                     'surface': surface,
                     'reading': bunsetsu_text,
-                    'cost': entry.get("cost", 0),
-                    'POS': entry.get("POS", "")
+                    'count': count
                 })
         else:
             # No dictionary match - return original text
             candidates.append({
                 'surface': bunsetsu_text,
                 'reading': bunsetsu_text,
-                'cost': 0
+                'count': 0,
+                'passthrough': True
             })
 
         return candidates
