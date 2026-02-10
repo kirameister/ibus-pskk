@@ -7,6 +7,11 @@ ibus_component_dir := "/usr/share/ibus/component"
 gschema_dir := "/usr/share/glib-2.0/schemas"
 icon_dir := "/usr/local/share/icons/hicolor"
 
+# SKK Dictionary download settings
+skk_dict_dir := "data/skk_dict"
+skk_dict_base_url := "https://raw.githubusercontent.com/skk-dev/dict/master"
+skk_dict_files := "SKK-JISYO.L SKK-JISYO.M SKK-JISYO.ML SKK-JISYO.S"
+
 
 # Default recipe (runs when you just type 'just')
 default:
@@ -55,16 +60,16 @@ install-files:
     cp data/layouts/* {{install_root}}/layouts/
     mkdir -p {{install_root}}/kanchoku_layouts
     cp data/kanchoku_layouts/* {{install_root}}/kanchoku_layouts/
-    # Copy UniDic files
+    # Copy skk_dict files
     mkdir -p {{install_root}}/dictionaries
-    mkdir -p {{install_root}}/dictionaries/UniDic
-    cp data/UniDic/*.csv {{install_root}}/dictionaries/UniDic/
+    mkdir -p {{install_root}}/dictionaries/skk_dict
+    cp data/skk_dict/* {{install_root}}/dictionaries/skk_dict/
     # XML file copy
     cp data/pskk.xml {{ibus_component_dir}}/
     chmod 644 {{ibus_component_dir}}/pskk.xml
 
 # Full installation
-install: install-deps install-files install-schema install-icons setup-user-config
+install: install-deps download-skk-dicts install-files install-schema install-icons setup-user-config
     chmod 755 {{install_root}}/lib/*
     @echo "Installation complete!"
     @echo "Run 'ibus restart' to activate the IME"
@@ -105,6 +110,35 @@ clean:
     rm -rf build dist *.egg-info
     rm -f src/paths.py
     find . -type d -name __pycache__ -exec rm -rf {} +
+
+# Download SKK dictionaries from GitHub (skips if files already exist)
+# Downloads EUC-JP encoded files and converts them to UTF-8
+download-skk-dicts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p {{skk_dict_dir}}
+    for dict_file in {{skk_dict_files}}; do
+        target_path="{{skk_dict_dir}}/${dict_file}"
+        if [ -f "$target_path" ]; then
+            echo "✓ ${dict_file} already exists, skipping"
+        else
+            echo "↓ Downloading ${dict_file}..."
+            # Download to temporary file first
+            tmp_file=$(mktemp)
+            curl -fSL "{{skk_dict_base_url}}/${dict_file}" -o "$tmp_file"
+            # Convert from EUC-JP to UTF-8
+            echo "  Converting EUC-JP → UTF-8..."
+            iconv -f EUC-JP -t UTF-8 "$tmp_file" > "$target_path"
+            rm -f "$tmp_file"
+            echo "  Saved to ${target_path}"
+        fi
+    done
+    echo "SKK dictionary download complete!"
+
+# Force re-download SKK dictionaries (removes existing files first)
+download-skk-dicts-force:
+    rm -f {{skk_dict_dir}}/SKK-JISYO.*
+    just download-skk-dicts
 
 # Run tests
 test:
