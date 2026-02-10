@@ -5,8 +5,6 @@ import os
 from gi.repository import GLib
 import logging
 
-import katsuyou
-
 logger = logging.getLogger(__name__)
 
 
@@ -54,34 +52,6 @@ def katakana_to_hiragana(text):
         else:
             result.append(c)
     return ''.join(result)
-
-
-def normalize_pos(pos: str) -> str:
-    """Normalize part-of-speech to a single character code.
-
-    Maps detailed POS values from UniDic to simplified categories:
-    - 動詞 (verb) → "動"
-    - 名詞 (noun) → "名"
-    - 形容詞 (i-adjective) → "形"
-    - All others → "他"
-
-    Args:
-        pos: The original POS string from UniDic (e.g., "動詞", "名詞", "助詞")
-
-    Returns:
-        Single character POS code: "動", "名", "形", or "他"
-    """
-    if not pos:
-        return "他"
-
-    if pos.startswith("動詞") or pos == "動":
-        return "動"
-    elif pos.startswith("名詞") or pos == "名":
-        return "名"
-    elif pos.startswith("形容詞") or pos == "形":
-        return "形"
-    else:
-        return "他"
 
 
 def tokenize_line(line):
