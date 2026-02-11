@@ -96,33 +96,6 @@ JODOUSHI_MAX_LEN = max(len(w) for w in JODOUSHI)
 # ─── Feature extraction ──────────────────────────────────────────────
 # Note: char_type, tokenize_line, add_features_per_line are imported from util
 
-def parse_training_line(line):
-    """Parse a space-delimited line into characters and BI tags.
-
-    IMPORTANT: Training data must be in hiragana (yomi/reading), not kanji,
-    because the model will be applied to hiragana input at inference time.
-
-    Example: "きょうは てんきが よい"
-      → chars: ['き', 'ょ', 'う', 'は', 'て', 'ん', 'き', 'が', 'よ', 'い']
-      → tags:  ['B',  'I',  'I',  'I',  'B',  'I',  'I',  'I',  'B',  'I']
-
-    Each space marks a bunsetsu boundary. The first character of each
-    bunsetsu is tagged 'B' (begin), all others are tagged 'I' (inside).
-    """
-    line = line.strip()
-    if not line:
-        return [], []
-
-    bunsetsu_list = line.split()
-    chars = []
-    tags = []
-    for bunsetsu in bunsetsu_list:
-        for i, c in enumerate(bunsetsu):
-            chars.append(c)
-            tags.append('B' if i == 0 else 'I')
-    return chars, tags
-
-
 def parse_annotated_line(line):
     """Parse an annotated line into characters and 4-class labels.
 
@@ -248,35 +221,6 @@ def extract_char_features(chars, i, dictionary_readings=None):
                 break
 
     return features
-
-
-def extract_features(chars, dictionary_readings=None):
-    """Extract CRF features for an entire character sequence."""
-    return [extract_char_features(chars, i, dictionary_readings)
-            for i in range(len(chars))]
-
-
-# ─── Dictionary reading loader ────────────────────────────────────────
-
-def load_dictionary_readings():
-    """Load all readings (keys) from system/user dictionaries as a set."""
-    readings = set()
-    config_dir = util.get_user_config_dir()
-    for filename in ['system_dictionary.json', 'user_dictionary.json']:
-        path = os.path.join(config_dir, filename)
-        if not os.path.exists(path):
-            continue
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            readings.update(data.keys())
-            logger.info(f'Loaded {len(data)} readings from {filename}')
-        except Exception as e:
-            logger.warning(f'Failed to load {path}: {e}')
-    return readings
-
-
-# Note: Use util.get_crf_model_path() for the canonical model path
 
 
 # ─── GTK Panel ────────────────────────────────────────────────────────

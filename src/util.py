@@ -685,13 +685,6 @@ def get_version():
     return '0.0.1'
 
 
-def get_prefix():
-    '''
-    It is usually /usr/local/
-    '''
-    return '/usr/local'
-
-
 def get_datadir():
     '''
     Return the path to the data directory under user-independent (central)
@@ -714,10 +707,6 @@ def get_default_config_path():
     return os.path.join(get_datadir(), 'config.json')
 
 
-def get_libexecdir():
-    return '/usr/local/libexec'
-
-
 def get_localedir():
     return '/usr/local/share/locale'
 
@@ -735,10 +724,6 @@ def get_homedir():
     Return the path to the $HOME directory.
     '''
     return GLib.get_home_dir()
-
-
-def get_user_config_dir_relative_to_home():
-    return get_user_config_dir().replace(get_homedir(), '$' + '{HOME}')
 
 
 def get_config_data():
