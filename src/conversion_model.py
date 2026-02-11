@@ -840,7 +840,7 @@ class ConversionModelPanel(Gtk.Window):
         corpus_info = Gtk.Label()
         corpus_info.set_markup(
             "<small>Space-delimited bunsetsu in <b>hiragana</b>, one sentence per line.\n"
-            "Example: \"きょうは てんきが よい\"\n"
+            "Example: \"きょう _は_ てんき _が_ よい\"\n"
             "(Use hiragana because the model predicts boundaries on yomi input.)</small>"
         )
         corpus_info.set_xalign(0)
