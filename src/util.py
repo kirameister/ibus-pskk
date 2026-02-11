@@ -315,16 +315,18 @@ def add_feature_dict_entry_ct_end(tokens, materials):
     return [str(int(math.log2(lookup.get(t, 0) + 1))) for t in tokens]
 
 
-def add_features_per_line(line, dict_materials=None):
+def add_features_per_line(line_or_tokens, dict_materials=None):
     """Extract features for each token in a line.
 
     This is a wrapper function that:
-    1. Tokenizes the line (handling mixed ASCII/non-ASCII)
+    1. Tokenizes the line (or uses pre-tokenized list)
     2. Calls various feature sub-functions
     3. Combines all features into a list of dicts (one per token)
 
     Args:
-        line: Input string (underscores should already be stripped)
+        line_or_tokens: Either:
+            - Input string (will be tokenized using tokenize_line)
+            - Pre-tokenized list of tokens (used directly)
         dict_materials: Optional dict from load_crf_feature_materials().
                         If provided, dictionary-derived features are included.
                         If None, they are skipped (graceful fallback).
@@ -337,7 +339,11 @@ def add_features_per_line(line, dict_materials=None):
             ...
         ]
     """
-    tokens = tokenize_line(line)
+    # Accept either string or pre-tokenized list
+    if isinstance(line_or_tokens, list):
+        tokens = line_or_tokens
+    else:
+        tokens = tokenize_line(line_or_tokens)
     n = len(tokens)
 
     if n == 0:

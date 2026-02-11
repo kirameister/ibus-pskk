@@ -97,11 +97,16 @@ JODOUSHI_MAX_LEN = max(len(w) for w in JODOUSHI)
 # Note: char_type, tokenize_line, add_features_per_line are imported from util
 
 def parse_annotated_line(line):
-    """Parse an annotated line into characters and 4-class labels.
+    """Parse an annotated line into tokens and 4-class labels.
 
     Annotation format: Space-delimited bunsetsu with underscore markers.
     Bunsetsu starting or ending with '_' are Passthrough (no dictionary lookup).
     Bunsetsu without '_' are Lookup (send to dictionary for conversion).
+
+    IMPORTANT: Uses util.tokenize_line() for tokenization to ensure consistency
+    with feature extraction. This means:
+    - Non-ASCII characters: each character is a token
+    - ASCII words: consecutive letters/digits form a single token
 
     Labels:
         B-L = Beginning of Lookup bunsetsu (needs kana→kanji conversion)
@@ -110,18 +115,18 @@ def parse_annotated_line(line):
         I-P = Inside of Passthrough bunsetsu
 
     Example: "きょう _は_ てんき _が_ よい"
-      → chars: ['き', 'ょ', 'う', 'は', 'て', 'ん', 'き', 'が', 'よ', 'い']
-      → tags:  ['B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L']
+      → tokens: ['き', 'ょ', 'う', 'は', 'て', 'ん', 'き', 'が', 'よ', 'い']
+      → tags:   ['B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L']
 
-    Multi-char passthrough example: "いく _から_"
-      → chars: ['い', 'く', 'か', 'ら']
-      → tags:  ['B-L', 'I-L', 'B-P', 'I-P']
+    Example with ASCII: "hello _は_ world"
+      → tokens: ['hello', 'は', 'world']  (ASCII words merged)
+      → tags:   ['B-L', 'B-P', 'B-L']
 
     Args:
         line: Annotated line with space-delimited bunsetsu
 
     Returns:
-        Tuple of (chars, tags) where chars is list of characters
+        Tuple of (tokens, tags) where tokens is list of tokens
         and tags is list of labels (B-L, I-L, B-P, I-P)
     """
     line = line.strip()
@@ -129,7 +134,7 @@ def parse_annotated_line(line):
         return [], []
 
     bunsetsu_list = line.split()
-    chars = []
+    tokens = []
     tags = []
 
     for bunsetsu in bunsetsu_list:
@@ -146,11 +151,14 @@ def parse_annotated_line(line):
         # Determine label suffix based on type
         suffix = 'P' if is_passthrough else 'L'
 
-        for i, c in enumerate(text):
-            chars.append(c)
+        # Use tokenize_line for consistent tokenization with feature extraction
+        bunsetsu_tokens = util.tokenize_line(text)
+
+        for i, token in enumerate(bunsetsu_tokens):
+            tokens.append(token)
             tags.append(f'B-{suffix}' if i == 0 else f'I-{suffix}')
 
-    return chars, tags
+    return tokens, tags
 
 
 def extract_char_features(chars, i, dictionary_readings=None):
@@ -927,31 +935,39 @@ class ConversionModelPanel(Gtk.Window):
         self._log(f"Parsed {len(self._sentences):,} sentences")
 
         # Calculate stats
-        total_chars = sum(len(chars) for chars, tags in self._sentences)
+        total_tokens = sum(len(tokens) for tokens, tags in self._sentences)
         total_bunsetsu = sum(
             sum(1 for tag in tags if tag.startswith('B-'))
-            for chars, tags in self._sentences
+            for tokens, tags in self._sentences
         )
         lookup_bunsetsu = sum(
             sum(1 for tag in tags if tag == 'B-L')
-            for chars, tags in self._sentences
+            for tokens, tags in self._sentences
         )
         passthrough_bunsetsu = sum(
             sum(1 for tag in tags if tag == 'B-P')
-            for chars, tags in self._sentences
+            for tokens, tags in self._sentences
         )
 
         self._log(f"  Bunsetsu: {total_bunsetsu:,} ({lookup_bunsetsu:,} lookup, {passthrough_bunsetsu:,} passthrough)")
-        self._log(f"  Characters: {total_chars:,}")
+        self._log(f"  Tokens: {total_tokens:,}")
         self._log("")
 
         # ── Extract features ──
         self._log("Extracting features...")
         self._features = []
-        for chars, tags in self._sentences:
-            # Join chars to form the line for tokenization
-            line_text = ''.join(chars)
-            features = util.add_features_per_line(line_text, self._crf_feature_materials)
+        for sent_idx, (tokens, tags) in enumerate(self._sentences):
+            # Pass tokens directly (already tokenized by parse_annotated_line)
+            features = util.add_features_per_line(tokens, self._crf_feature_materials)
+
+            # Validate that feature count matches label count
+            if len(features) != len(tags):
+                self._log(f"WARNING: Length mismatch at sentence {sent_idx + 1}:")
+                self._log(f"  Features: {len(features)}, Labels: {len(tags)}")
+                self._log(f"  Tokens: {tokens}")
+                self._log(f"  Tags: {tags}")
+                self._log("")
+
             self._features.append(features)
 
         self._log(f"Feature extraction complete")
@@ -968,10 +984,10 @@ class ConversionModelPanel(Gtk.Window):
                     f.write(f'# Sentence {sent_idx + 1}\n')
 
                     # Write each token with its tag and features
-                    for char, tag, feat_dict in zip(chars, tags, features):
+                    for token, tag, feat_dict in zip(chars, tags, features):
                         # Convert feature dict to tab-separated string
                         feat_str = '\t'.join(f'{k}={v}' for k, v in feat_dict.items())
-                        f.write(f'{char}\t{tag}\t{feat_str}\n')
+                        f.write(f'{token}\t{tag}\t{feat_str}\n')
 
             self._log(f"Training data saved to: {tsv_path}")
         except Exception as e:
@@ -982,7 +998,7 @@ class ConversionModelPanel(Gtk.Window):
             f"<b>{len(self._sentences):,}</b> sentences, "
             f"<b>{total_bunsetsu:,}</b> bunsetsu "
             f"(<b>{lookup_bunsetsu:,}</b> lookup, <b>{passthrough_bunsetsu:,}</b> passthrough), "
-            f"<b>{total_chars:,}</b> characters\n"
+            f"<b>{total_tokens:,}</b> tokens\n"
             f"<small>Features extracted. Click 'Train' to train the model.</small>"
         )
 
@@ -1022,7 +1038,7 @@ class ConversionModelPanel(Gtk.Window):
         # X_train: list of feature sequences (each is a list of feature dicts)
         # y_train: list of tag sequences
         X_train = self._features
-        y_train = [tags for chars, tags in self._sentences]
+        y_train = [tags for tokens, tags in self._sentences]
 
         total_tokens = sum(len(seq) for seq in X_train)
         self._log(f"Total tokens: {total_tokens:,}")
