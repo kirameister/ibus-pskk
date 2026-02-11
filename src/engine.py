@@ -1508,8 +1508,12 @@ class EnginePSKK(IBus.Engine):
         Trigger kana-kanji conversion on the current preedit (yomi).
 
         Called when space is tapped in BUNSETSU_ACTIVE state.
-        Uses HenkanProcessor to look up candidates and either:
-        - Dictionary match: show lookup table for selection
+        Uses HenkanProcessor to look up candidates and converts the preedit
+        to the first candidate. The lookup table is NOT shown on this first
+        conversion - it only appears on the 2nd space press (via _cycle_candidate).
+
+        Behavior:
+        - Dictionary match: update preedit with 1st candidate (lookup table hidden)
         - No match: automatically enter bunsetsu mode with CRF prediction
         """
         if not self._preedit_string:
@@ -1552,14 +1556,10 @@ class EnginePSKK(IBus.Engine):
             self._preedit_string = candidates[0]['surface']
             self._update_preedit()
 
-            if len(candidates) == 1:
-                # Single candidate: don't show lookup table
-                self.hide_lookup_table()
-                logger.debug(f'_trigger_conversion: single candidate "{candidates[0]["surface"]}"')
-            else:
-                # Multiple candidates: show lookup table
-                self.update_lookup_table(self._lookup_table, True)
-                logger.debug(f'_trigger_conversion: {len(candidates)} candidates, showing lookup table')
+            # Don't show lookup table on first conversion
+            # Lookup table will be shown on 2nd space (in _cycle_candidate)
+            self.hide_lookup_table()
+            logger.debug(f'_trigger_conversion: {len(candidates)} candidate(s), lookup table hidden')
 
     def _cycle_candidate(self):
         """
