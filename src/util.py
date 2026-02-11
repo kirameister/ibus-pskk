@@ -5,6 +5,8 @@ import os
 from gi.repository import GLib
 import logging
 
+import katsuyou
+
 logger = logging.getLogger(__name__)
 
 
@@ -1256,10 +1258,16 @@ def generate_system_dictionary(output_path=None, source_weights=None):
 
     Returns:
         tuple: (success: bool, output_path: str or None, stats: dict)
-               stats contains 'files_processed', 'total_readings', 'total_candidates'
+               stats contains 'files_processed', 'total_readings', 'total_candidates',
+               'okurigana_entries_expanded'
     """
     sys_dict_dir = get_skk_dicts_dir()
-    stats = {'files_processed': 0, 'total_readings': 0, 'total_candidates': 0}
+    stats = {
+        'files_processed': 0,
+        'total_readings': 0,
+        'total_candidates': 0,
+        'okurigana_entries_expanded': 0,
+    }
 
     # Determine output path (system_dictionary.json goes in config dir)
     if output_path is None:
@@ -1314,23 +1322,50 @@ def generate_system_dictionary(output_path=None, source_weights=None):
             if not reading or not candidates:
                 continue
 
-            # Initialize tracking for this reading if needed
-            if reading not in seen_in_this_file:
-                seen_in_this_file[reading] = set()
+            # Check if this is an okurigana entry (reading ends with alphabet)
+            if katsuyou.is_skk_okurigana_entry(reading):
+                # Expand okurigana entry into all conjugated forms
+                for candidate in candidates:
+                    expanded = katsuyou.expand_skk_okurigana(
+                        reading, candidate, weight_multiplier
+                    )
+                    if expanded:
+                        stats['okurigana_entries_expanded'] += 1
+                        for conj_reading, conj_surface, count in expanded:
+                            # Track to avoid double-counting
+                            if conj_reading not in seen_in_this_file:
+                                seen_in_this_file[conj_reading] = set()
+                            if conj_surface in seen_in_this_file[conj_reading]:
+                                continue
+                            seen_in_this_file[conj_reading].add(conj_surface)
 
-            # Initialize merged entry if needed
-            if reading not in merged_dictionary:
-                merged_dictionary[reading] = {}
+                            # Add to merged dictionary
+                            if conj_reading not in merged_dictionary:
+                                merged_dictionary[conj_reading] = {}
+                            if conj_surface in merged_dictionary[conj_reading]:
+                                merged_dictionary[conj_reading][conj_surface] += count
+                            else:
+                                merged_dictionary[conj_reading][conj_surface] = count
+                                entries_added += 1
+            else:
+                # Regular entry (no okurigana expansion needed)
+                # Initialize tracking for this reading if needed
+                if reading not in seen_in_this_file:
+                    seen_in_this_file[reading] = set()
 
-            # Add candidates, incrementing by weight (only once per file)
-            for candidate in candidates:
-                if candidate not in seen_in_this_file[reading]:
-                    seen_in_this_file[reading].add(candidate)
-                    if candidate in merged_dictionary[reading]:
-                        merged_dictionary[reading][candidate] += weight_multiplier
-                    else:
-                        merged_dictionary[reading][candidate] = weight_multiplier
-                        entries_added += 1
+                # Initialize merged entry if needed
+                if reading not in merged_dictionary:
+                    merged_dictionary[reading] = {}
+
+                # Add candidates, incrementing by weight (only once per file)
+                for candidate in candidates:
+                    if candidate not in seen_in_this_file[reading]:
+                        seen_in_this_file[reading].add(candidate)
+                        if candidate in merged_dictionary[reading]:
+                            merged_dictionary[reading][candidate] += weight_multiplier
+                        else:
+                            merged_dictionary[reading][candidate] = weight_multiplier
+                            entries_added += 1
 
         stats['files_processed'] += 1
         logger.debug(f'Processed {os.path.basename(file_path)}: {entries_added} new entries')
@@ -1348,7 +1383,8 @@ def generate_system_dictionary(output_path=None, source_weights=None):
             json.dump(merged_dictionary, f, ensure_ascii=False, indent=2)
         logger.info(f'Generated system dictionary: {output_path}')
         logger.info(f'Stats: {stats["files_processed"]} files, {stats["total_readings"]} readings, '
-                   f'{stats["total_candidates"]} candidates')
+                   f'{stats["total_candidates"]} candidates, '
+                   f'{stats["okurigana_entries_expanded"]} okurigana entries expanded')
         return True, output_path, stats
     except Exception as e:
         logger.error(f'Failed to write system dictionary: {e}')
