@@ -165,11 +165,36 @@ def extract_nouns_from_mecab(mecab_output: str) -> list:
     return nouns
 
 
-def postprocess_mecab_output(mecab_output: str, sentence: str) -> str:
-    """Post-process MeCab output.
+def apply_sentence_transformations(sentence: str) -> str:
+    """Apply transformations to a processed sentence.
 
-    Currently returns the MeCab output as-is.
-    Noun extraction is handled separately by extract_nouns_from_mecab().
+    This function applies regex-based transformations to simplify
+    the yomi/POS1/POS2 format. Currently strips POS tags, keeping only yomi.
+
+    This is a separate function to allow future expansion of
+    post-processing logic.
+
+    Args:
+        sentence: Sentence in "yomi/POS1/POS2 yomi/POS1/POS2 ..." format
+
+    Returns:
+        Transformed sentence
+    """
+    # Remove POS tags, keeping only yomi
+    # Pattern matches: word/POS1/POS2 followed by space or end of string
+    result = re.sub(r'(\S+)/\S+/\S+(?=[ ]|$)', r'\1', sentence)
+    return result
+
+
+def postprocess_mecab_output(mecab_output: str, sentence: str) -> str:
+    """Post-process MeCab output into yomi/POS1/POS2 format.
+
+    Transforms MeCab output from:
+        surface\tPOS1,POS2,...,yomi,...
+    To:
+        yomi/POS1/POS2 yomi/POS1/POS2 ...
+
+    Then applies sentence transformations (currently strips POS tags).
 
     Args:
         mecab_output: Raw MeCab output
@@ -178,7 +203,47 @@ def postprocess_mecab_output(mecab_output: str, sentence: str) -> str:
     Returns:
         Processed output string
     """
-    return mecab_output
+    tokens = []
+
+    for line in mecab_output.split('\n'):
+        # Skip empty lines
+        if not line:
+            continue
+
+        # EOS marks end of sentence - finalize and return
+        if line == 'EOS':
+            break
+
+        # Split by tab: surface \t features
+        parts = line.split('\t')
+        if len(parts) != 2:
+            continue
+
+        surface = parts[0]
+        features = parts[1].split(',')
+
+        # Get POS1 (index 0) and POS2 (index 1)
+        pos1 = features[0] if len(features) > 0 else '*'
+        pos2 = features[1] if len(features) > 1 else '*'
+
+        # Get yomi from 8th field (index 7)
+        if len(features) >= 8 and features[7] != '*':
+            yomi = katakana_to_hiragana(features[7])
+        else:
+            # Fallback to surface if yomi not available
+            yomi = surface
+
+        # Create token in format: yomi/POS1/POS2
+        token = f"{yomi}/{pos1}/{pos2}"
+        tokens.append(token)
+
+    # Join tokens with spaces
+    joined = ' '.join(tokens)
+
+    # Apply sentence transformations
+    result = apply_sentence_transformations(joined)
+
+    return result
 
 
 def format_skk_entry(yomi: str, surface: str) -> str:
