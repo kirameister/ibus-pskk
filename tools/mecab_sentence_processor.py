@@ -6,13 +6,21 @@ This script processes a text file through MeCab morphological analyzer,
 sentence by sentence.
 
 Usage:
+    # Process a file
     python mecab_sentence_processor.py input.txt
     python mecab_sentence_processor.py /path/to/document.txt
 
-Output:
+    # Test a single sentence
+    python mecab_sentence_processor.py -t "今日は天気がいい"
+    python mecab_sentence_processor.py -t "今日は天気がいい" -v  # verbose
+
+Output (file mode):
     Creates two files in the same directory as the input file:
     - FILENAME_mecab_processed.txt: Full MeCab output for each sentence
     - FILENAME_extracted_vocab.txt: Extracted nouns in SKK dictionary format
+
+Output (test mode):
+    Prints processed sentence to stdout
 
 Requirements:
     - MeCab command-line tool must be installed and available in PATH
@@ -180,6 +188,8 @@ def apply_sentence_transformations(sentence: str) -> str:
     Returns:
         Transformed sentence
     """
+    # Consider joshi 助詞 as a special-case => marker
+    sentence = re.sub(r'(\S+/助詞/\S+(?=[ ]|$))', r'_\1', sentence)
     # Remove POS tags, keeping only yomi
     # Pattern matches: word/POS1/POS2 followed by space or end of string
     result = re.sub(r'(\S+)/\S+/\S+(?=[ ]|$)', r'\1', sentence)
@@ -342,17 +352,91 @@ def process_file(input_path: str) -> tuple:
     return mecab_output_path, vocab_output_path
 
 
+def test_sentence(sentence: str, verbose: bool = False):
+    """Test processing on a single sentence.
+
+    Runs the sentence through MeCab and displays the processing pipeline
+    results to stdout.
+
+    Args:
+        sentence: Input sentence to test
+        verbose: If True, show intermediate steps
+    """
+    print(f"Input: {sentence}")
+    print()
+
+    # Run MeCab
+    mecab_output = run_mecab(sentence)
+
+    if verbose:
+        print("=== Raw MeCab output ===")
+        print(mecab_output)
+
+    # Build intermediate yomi/POS1/POS2 format (before transformation)
+    tokens = []
+    for line in mecab_output.split('\n'):
+        if not line or line == 'EOS':
+            continue
+        parts = line.split('\t')
+        if len(parts) != 2:
+            continue
+        surface = parts[0]
+        features = parts[1].split(',')
+        pos1 = features[0] if len(features) > 0 else '*'
+        pos2 = features[1] if len(features) > 1 else '*'
+        if len(features) >= 8 and features[7] != '*':
+            yomi = katakana_to_hiragana(features[7])
+        else:
+            yomi = surface
+        tokens.append(f"{yomi}/{pos1}/{pos2}")
+
+    intermediate = ' '.join(tokens)
+
+    if verbose:
+        print("=== Intermediate (yomi/POS1/POS2) ===")
+        print(intermediate)
+        print()
+
+    # Apply transformations
+    processed = postprocess_mecab_output(mecab_output, sentence)
+
+    print("=== Processed output ===")
+    print(processed)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Process a text file through MeCab sentence by sentence.'
     )
     parser.add_argument(
         'input_file',
+        nargs='?',
+        default=None,
         help='Path to input text file'
+    )
+    parser.add_argument(
+        '-t', '--test',
+        metavar='SENTENCE',
+        help='Test mode: process a single sentence and print result to stdout'
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Verbose output (show intermediate processing steps in test mode)'
     )
     args = parser.parse_args()
 
-    # Validate input file exists
+    # Test mode
+    if args.test:
+        test_sentence(args.test, verbose=args.verbose)
+        return
+
+    # File processing mode
+    if not args.input_file:
+        parser.print_help()
+        print("\nError: Either input_file or --test is required.", file=sys.stderr)
+        sys.exit(1)
+
     if not os.path.isfile(args.input_file):
         print(f"Error: File not found: {args.input_file}", file=sys.stderr)
         sys.exit(1)

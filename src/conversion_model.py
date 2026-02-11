@@ -50,7 +50,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
-import json
+import re
 import os
 import logging
 logger = logging.getLogger(__name__)
@@ -914,6 +914,8 @@ class ConversionModelPanel(Gtk.Window):
         self._log("Parsing annotations...")
         self._sentences = []
         for line in self._raw_lines:
+            if re.search('^#', line):
+                continue
             chars, tags = parse_annotated_line(line)
             if chars:
                 self._sentences.append((chars, tags))
