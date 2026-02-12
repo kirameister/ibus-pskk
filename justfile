@@ -45,7 +45,6 @@ install-icons:
 
 # Install IME files and data
 install-files:
-    mkdir -p {{install_root}}/models
     mkdir -p {{install_root}}/lib
     cp -r src/* {{install_root}}/lib/
     # Generate paths.py with installation paths
@@ -58,7 +57,6 @@ install-files:
     # Copy default config file
     cp data/default_user_config.json {{install_root}}/config.json
     chmod 644 {{install_root}}/config.json
-    #cp -r models/* {{install_root}}/models/ ## FIXME
     # Copy layout files
     mkdir -p {{install_root}}/layouts
     cp data/layouts/* {{install_root}}/layouts/
@@ -196,7 +194,6 @@ setup-user-config:
 ### │   ├── settings_panel.py         # GTK settings UI
 ### │   ├── conversion_model.py      # Conversion model panel (Test/Train)
 ### │   └── paths.py                  # Auto-generated installation paths
-### ├── models/                       # ML models (future use)
 ### ├── data/                         # Installation data
 ### │   ├── pskk.xml                  # IBus component definition
 ### │   ├── default_user_config.json # Default configuration
