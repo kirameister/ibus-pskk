@@ -240,6 +240,68 @@ def add_feature_bigram_right(tokens):
     return [f'{t} {r}' for t, r in zip(tokens, right)]
 
 
+def add_feature_trigram_left(tokens):
+    """Add left trigram feature: two left neighbors plus the current token.
+
+    Each element is a space-separated string of the two left neighbors
+    and the current token. Uses 'BOS' for positions before the start.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+
+    Returns:
+        List of strings (same length as tokens)
+
+    Example:
+        add_feature_trigram_left(['あ', 'い', 'う', 'え'])
+        → ['BOS BOS あ', 'BOS あ い', 'あ い う', 'い う え']
+    """
+    if not tokens:
+        return []
+    # Prepend two BOS markers
+    left2 = ['BOS', 'BOS'] + list(tokens[:-2]) if len(tokens) > 2 else ['BOS'] * len(tokens)
+    left1 = ['BOS'] + list(tokens[:-1])
+
+    # Handle edge cases for short sequences
+    if len(tokens) == 1:
+        return ['BOS BOS ' + tokens[0]]
+    elif len(tokens) == 2:
+        return ['BOS BOS ' + tokens[0], 'BOS ' + tokens[0] + ' ' + tokens[1]]
+
+    return [f'{l2} {l1} {t}' for l2, l1, t in zip(left2, left1, tokens)]
+
+
+def add_feature_trigram_right(tokens):
+    """Add right trigram feature: current token plus two right neighbors.
+
+    Each element is a space-separated string of the current token and
+    the two right neighbors. Uses 'EOS' for positions after the end.
+
+    Args:
+        tokens: List of tokens from tokenize_line()
+
+    Returns:
+        List of strings (same length as tokens)
+
+    Example:
+        add_feature_trigram_right(['あ', 'い', 'う', 'え'])
+        → ['あ い う', 'い う え', 'う え EOS', 'え EOS EOS']
+    """
+    if not tokens:
+        return []
+    # Append two EOS markers
+    right1 = list(tokens[1:]) + ['EOS']
+    right2 = list(tokens[2:]) + ['EOS', 'EOS'] if len(tokens) > 2 else ['EOS'] * len(tokens)
+
+    # Handle edge cases for short sequences
+    if len(tokens) == 1:
+        return [tokens[0] + ' EOS EOS']
+    elif len(tokens) == 2:
+        return [tokens[0] + ' ' + tokens[1] + ' EOS', tokens[1] + ' EOS EOS']
+
+    return [f'{t} {r1} {r2}' for t, r1, r2 in zip(tokens, right1, right2)]
+
+
 def add_feature_dict_max_kl_start(tokens, materials):
     """Add feature: max dictionary yomi key length starting with this token.
 
@@ -379,6 +441,16 @@ def add_features_per_line(line_or_tokens, dict_materials=None):
     bigram_right_values = add_feature_bigram_right(tokens)
     for i, val in enumerate(bigram_right_values):
         features[i]['bigram_right'] = val
+
+    # Left trigram feature: "left2 left1 current"
+    trigram_left_values = add_feature_trigram_left(tokens)
+    for i, val in enumerate(trigram_left_values):
+        features[i]['trigram_left'] = val
+
+    # Right trigram feature: "current right1 right2"
+    trigram_right_values = add_feature_trigram_right(tokens)
+    for i, val in enumerate(trigram_right_values):
+        features[i]['trigram_right'] = val
 
     # Character type feature: 'hira' or 'non-hira'
     ctype_values = add_feature_ctype(tokens)
