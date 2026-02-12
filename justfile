@@ -66,6 +66,9 @@ install-files:
     mkdir -p {{install_root}}/dictionaries
     mkdir -p {{install_root}}/dictionaries/skk_dict
     cp data/skk_dict/* {{install_root}}/dictionaries/skk_dict/
+    # Copy wagahai-ha-nekodearu txt file
+    mkdir -p {{install_root}}/data
+    cp data/crf_training/* {{install_root}}/data/
     # XML file copy
     cp data/pskk.xml {{ibus_component_dir}}/
     chmod 644 {{ibus_component_dir}}/pskk.xml
