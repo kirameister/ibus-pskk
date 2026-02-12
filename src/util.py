@@ -1005,7 +1005,12 @@ def get_dictionary_files(config=None):
     else:
         logger.debug(f'Extended dictionary not found: {ext_dict_path}')
 
-    logger.info(f'Dictionary files to use: {len(dictionary_files)} file(s)')
+    # Log with appropriate level based on whether dictionaries were found
+    if dictionary_files:
+        logger.info(f'Dictionary files to use: {len(dictionary_files)} file(s)')
+    else:
+        logger.warning(f'No dictionary files found in {config_dir} - '
+                      f'run "just generate-dictionaries" to create them')
     return dictionary_files
 
 

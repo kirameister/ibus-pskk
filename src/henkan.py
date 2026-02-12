@@ -4,6 +4,7 @@
 import json
 import logging
 import os
+import threading
 
 import util
 
@@ -36,11 +37,20 @@ class HenkanProcessor:
         """
         Initialize the HenkanProcessor.
 
+        Dictionary loading happens in a background thread to avoid blocking
+        the main thread. Use is_ready() to check if loading is complete.
+        Before loading completes, convert() returns passthrough (input as-is).
+
         Args:
             dictionary_files: List of paths to dictionary JSON files.
                              Files are loaded in order; later files can
                              add new entries or increase counts for existing ones.
         """
+        # ─── Thread Safety ───
+        # Lock for thread-safe access to _dictionary during background loading
+        self._lock = threading.Lock()
+        self._ready = False  # Set to True when background loading completes
+
         # Merged dictionary: {reading: {candidate: {"POS": str, "cost": float}}}
         self._dictionary = {}
         self._candidates = []    # Current conversion candidates (whole-word mode)
@@ -49,8 +59,8 @@ class HenkanProcessor:
 
         # CRF tagger for bunsetsu prediction (lazy loaded)
         self._tagger = None
-        # Pre-computed dictionary features for CRF (loaded once)
-        self._crf_feature_materials = util.load_crf_feature_materials()
+        # Pre-computed dictionary features for CRF (loaded in background)
+        self._crf_feature_materials = {}
 
         # ─── Bunsetsu Mode State ───
         # Bunsetsu mode allows multi-bunsetsu conversion when:
@@ -72,8 +82,51 @@ class HenkanProcessor:
         self._bunsetsu_selected_indices = []
         self._selected_bunsetsu_index = 0  # Which bunsetsu is selected for navigation
 
+        # Start background loading thread
         if dictionary_files:
-            self._load_dictionaries(dictionary_files)
+            self._dictionary_files = dictionary_files
+            thread = threading.Thread(target=self._background_load, daemon=True)
+            thread.start()
+        else:
+            self._dictionary_files = []
+            self._ready = True  # No files to load, immediately ready
+
+    def _background_load(self):
+        """
+        Background thread: load dictionaries and CRF feature materials.
+
+        This runs in a separate thread to avoid blocking the main UI thread.
+        Sets _ready = True when complete.
+        """
+        try:
+            # Load CRF feature materials (reads JSON file)
+            materials = util.load_crf_feature_materials()
+
+            # Load dictionaries (reads multiple JSON files)
+            self._load_dictionaries(self._dictionary_files)
+
+            # Atomic assignment of materials after dictionaries are loaded
+            with self._lock:
+                self._crf_feature_materials = materials
+                self._ready = True
+
+            logger.info('HenkanProcessor background loading complete')
+
+        except Exception as e:
+            logger.error(f'HenkanProcessor background loading failed: {e}')
+            # Mark as ready anyway so we don't block forever
+            with self._lock:
+                self._ready = True
+
+    def is_ready(self):
+        """
+        Check if background loading is complete.
+
+        Returns:
+            bool: True if dictionaries are loaded and ready for conversion
+        """
+        with self._lock:
+            return self._ready
 
     def _load_dictionaries(self, dictionary_files):
         """
@@ -83,10 +136,16 @@ class HenkanProcessor:
             {"reading": {"candidate1": {"POS": "品詞", "cost": cost1}, ...}}
 
         When merging, the entry with lower cost is kept for duplicate candidates.
+        If no files exist or all fail to load, the dictionary remains empty
+        and conversions will fall back to passthrough mode.
 
         Args:
-            dictionary_files: List of paths to dictionary JSON files
+            dictionary_files: List of paths to dictionary JSON files (may be empty)
         """
+        if not dictionary_files:
+            logger.info('No dictionary files provided - conversion will use passthrough mode')
+            return
+
         for file_path in dictionary_files:
             if not os.path.exists(file_path):
                 logger.warning(f'Dictionary file not found: {file_path}')
@@ -136,8 +195,12 @@ class HenkanProcessor:
             except Exception as e:
                 logger.error(f'Failed to load dictionary: {file_path} - {e}')
 
-        logger.info(f'HenkanProcessor initialized with {self._dictionary_count} dictionaries, '
-                   f'{len(self._dictionary)} readings')
+        # Summary logging with appropriate level
+        if self._dictionary_count == 0:
+            logger.warning('No dictionaries loaded - conversion will use passthrough mode')
+        else:
+            logger.info(f'HenkanProcessor initialized with {self._dictionary_count} dictionaries, '
+                       f'{len(self._dictionary)} readings')
 
     def convert(self, reading):
         """
@@ -146,6 +209,9 @@ class HenkanProcessor:
         If a dictionary match exists for the full reading, returns those candidates
         (whole-word mode). If no match exists, automatically falls back to
         bunsetsu-based conversion using CRF prediction.
+
+        If background loading is not complete, returns the reading as-is
+        (passthrough mode) to avoid blocking.
 
         Args:
             reading: The kana string to convert (e.g., "へんかん")
@@ -169,10 +235,26 @@ class HenkanProcessor:
         self._bunsetsu_selected_indices = []
         self._selected_bunsetsu_index = 0
 
-        if reading in self._dictionary:
+        # Check if background loading is complete
+        if not self.is_ready():
+            # Not ready yet - return passthrough
+            logger.debug(f'HenkanProcessor.convert("{reading}") → not ready, passthrough')
+            self._candidates.append({
+                'surface': reading,
+                'reading': reading,
+                'cost': 0,
+                'passthrough': True
+            })
+            return self._candidates
+
+        # Lock protects dictionary access (though is_ready() already ensures loading is complete)
+        with self._lock:
+            has_match = reading in self._dictionary
+            candidates_dict = self._dictionary.get(reading, {}).copy() if has_match else {}
+
+        if has_match:
             # Whole-word dictionary match found
             self._has_whole_word_match = True
-            candidates_dict = self._dictionary[reading]
             # Sort by count (descending) - higher count = better candidate
             sorted_candidates = sorted(
                 candidates_dict.items(),
@@ -311,12 +393,19 @@ class HenkanProcessor:
                   - 'dictionary_count': Number of loaded dictionary files
                   - 'reading_count': Total number of unique readings
                   - 'candidate_count': Total number of candidate entries
+                  - 'ready': Whether background loading is complete
         """
-        candidate_count = sum(len(candidates) for candidates in self._dictionary.values())
+        with self._lock:
+            ready = self._ready
+            reading_count = len(self._dictionary)
+            candidate_count = sum(len(candidates) for candidates in self._dictionary.values())
+            dict_count = self._dictionary_count
+
         return {
-            'dictionary_count': self._dictionary_count,
-            'reading_count': len(self._dictionary),
-            'candidate_count': candidate_count
+            'dictionary_count': dict_count,
+            'reading_count': reading_count,
+            'candidate_count': candidate_count,
+            'ready': ready
         }
 
     # ─── CRF Bunsetsu Prediction ──────────────────────────────────────────
@@ -407,8 +496,12 @@ class HenkanProcessor:
         """
         candidates = []
 
-        if bunsetsu_text in self._dictionary:
-            candidates_dict = self._dictionary[bunsetsu_text]
+        # Lock protects dictionary access
+        with self._lock:
+            has_match = bunsetsu_text in self._dictionary
+            candidates_dict = self._dictionary.get(bunsetsu_text, {}).copy() if has_match else {}
+
+        if has_match:
             # Sort by count (descending) - higher count = better candidate
             sorted_candidates = sorted(
                 candidates_dict.items(),
