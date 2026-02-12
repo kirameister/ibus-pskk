@@ -25,15 +25,22 @@ Install the following system packages before running `just install`:
 
 `just install`を実行する前に、以下のシステムパッケージをインストールしてください：
 
-### Arch Linux:
+### Debian/Ubuntu:
+
+1. Run the following commands in the terminal:
 ```
-  sudo pacman -S python python-pip ibus gtk3 glib2 python-gobject
+  sudo apt install just python3-venv pip curl
+  git clone https://github.com/kirameister/ibus-pskk.git
+  cd ibus-pskk
+  sudo just install
 ```
 
-### Debian/Ubuntu:
-```
-  sudo apt install python3 python3-pip python3-venv ibus libgtk-3-0 python3-gi gir1.2-ibus-1.0 libglib2.0-dev libgtk-3-dev
-```
+2. Under the `settings`, select `keyboard, and click "Add Input Source". In the dialog, select "Japanese" and "Japanese (PSKK)". 
+
+3. Restart the machine.
+
+
+
 
 ### Fedora:
 ```
