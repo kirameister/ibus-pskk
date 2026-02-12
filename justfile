@@ -176,8 +176,13 @@ setup-user-config:
     # Copy layout files (always overwrite to get latest versions)
     cp data/layouts/*.json "$USER_CONFIG_DIR/layouts/"
     cp data/kanchoku_layouts/*.json "$USER_CONFIG_DIR/kanchoku_layouts/"
-    # Copy the trained CRF file
-    cp data/crf_training/bunsetsu.crfsuite "$USER_CONFIG_DIR/"
+    # Copy the trained CRF file (only if not already present, to preserve user-trained models)
+    if [ ! -f "$USER_CONFIG_DIR/bunsetsu.crfsuite" ]; then \
+        cp data/crf_training/bunsetsu.crfsuite "$USER_CONFIG_DIR/"; \
+        echo "Installed default CRF model"; \
+    else \
+        echo "CRF model already exists, skipping (use 'just update-crf-model' to force update)"; \
+    fi
     # Fix ownership if run with sudo
     if [ -n "${SUDO_USER:-}" ]; then \
         chown -R "$SUDO_USER:$SUDO_USER" "$USER_CONFIG_DIR"; \
