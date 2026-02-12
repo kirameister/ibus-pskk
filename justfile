@@ -68,7 +68,7 @@ install-files:
     cp data/skk_dict/* {{install_root}}/dictionaries/skk_dict/
     # Copy wagahai-ha-nekodearu txt file
     mkdir -p {{install_root}}/data
-    cp data/crf_training/* {{install_root}}/data/
+    cp data/crf_training/*.txt {{install_root}}/data/
     # XML file copy
     cp data/pskk.xml {{ibus_component_dir}}/
     chmod 644 {{ibus_component_dir}}/pskk.xml
@@ -176,6 +176,8 @@ setup-user-config:
     # Copy layout files (always overwrite to get latest versions)
     cp data/layouts/*.json "$USER_CONFIG_DIR/layouts/"
     cp data/kanchoku_layouts/*.json "$USER_CONFIG_DIR/kanchoku_layouts/"
+    # Copy the trained CRF file
+    cp data/crf_training/bunsetsu.crfsuite "$USER_CONFIG_DIR/"
     # Fix ownership if run with sudo
     if [ -n "${SUDO_USER:-}" ]; then \
         chown -R "$SUDO_USER:$SUDO_USER" "$USER_CONFIG_DIR"; \
