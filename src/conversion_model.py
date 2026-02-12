@@ -52,6 +52,7 @@ gi.require_version('Gdk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
 import re
 import os
+import time
 import logging
 logger = logging.getLogger(__name__)
 
@@ -955,6 +956,7 @@ class ConversionModelPanel(Gtk.Window):
 
         # ── Extract features ──
         self._log("Extracting features...")
+        feature_start_time = time.time()
         self._features = []
         for sent_idx, (tokens, tags) in enumerate(self._sentences):
             # Pass tokens directly (already tokenized by parse_annotated_line)
@@ -970,7 +972,8 @@ class ConversionModelPanel(Gtk.Window):
 
             self._features.append(features)
 
-        self._log(f"Feature extraction complete")
+        feature_elapsed = time.time() - feature_start_time
+        self._log(f"Feature extraction complete ({feature_elapsed:.2f}s)")
         self._log("")
 
         # ── Dump to TSV (always, as intermediate file) ──
@@ -1060,9 +1063,11 @@ class ConversionModelPanel(Gtk.Window):
             'feature.possible_transitions': True,
         })
 
+        train_start_time = time.time()
         trainer.train(model_path)
+        train_elapsed = time.time() - train_start_time
 
-        self._log("Training complete.")
+        self._log(f"Training complete ({train_elapsed:.2f}s)")
         self._log(f"Model saved to: {model_path}")
         self._log("")
 
@@ -1078,6 +1083,7 @@ class ConversionModelPanel(Gtk.Window):
         self._log(f"  Model file size: {model_size:,} bytes")
         self._log(f"  Sentences:       {len(self._sentences):,}")
         self._log(f"  Tokens:          {total_tokens:,}")
+        self._log(f"  Training time:   {train_elapsed:.2f}s")
         self._log("")
         self._log("Done.")
 
