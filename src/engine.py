@@ -951,6 +951,7 @@ class EnginePSKK(IBus.Engine):
         if self._matches_key_binding(key_name, state, binding):
             logger.debug(f'enable_hiragana_key matched: {binding}')
             self._mode = 'あ'
+            self._update_input_mode()  # Update IBus icon
             self._handled_config_keys.add(key_name)
             return True
 
@@ -987,6 +988,7 @@ class EnginePSKK(IBus.Engine):
                 self._commit_string()
 
             self._mode = 'A'
+            self._update_input_mode()  # Update IBus icon
             self._handled_config_keys.add(key_name)
             return True
 
