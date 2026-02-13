@@ -1281,7 +1281,12 @@ class EnginePSKK(IBus.Engine):
         elif self._marker_state == MarkerState.KANCHOKU_SECOND_PRESSED:
             # Kanchoku was completed, just clean up
             pass
-        # else: FIRST_PRESSED - incomplete sequence (key still held), just reset
+        elif self._marker_state == MarkerState.FIRST_PRESSED:
+            # First key is still held when marker released - this is bunsetsu mode
+            # (User typed quickly: space down → key down → space up → key up)
+            # Treat this the same as FIRST_RELEASED - activate bunsetsu mode
+            logger.debug('Marker released while first key held: treating as bunsetsu')
+            self._handle_marker_release_decision()
 
         self._marker_state = MarkerState.IDLE
         self._marker_first_key = None
