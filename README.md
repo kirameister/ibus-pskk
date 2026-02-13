@@ -28,6 +28,7 @@ Install the following system packages before running `just install`:
 ### Debian/Ubuntu:
 
 1. Run the following commands in the terminal:
+1. ターミナルにて以下のコマンドを入力する:
 ```
   sudo apt install just python3-venv pip curl
   git clone https://github.com/kirameister/ibus-pskk.git
@@ -36,10 +37,10 @@ Install the following system packages before running `just install`:
 ```
 
 2. Under the `settings`, select `keyboard, and click "Add Input Source". In the dialog, select "Japanese" and "Japanese (PSKK)". 
+2. `設定` にて `キーボード` を選択し、`入力ソースを追加` をクリックする。ダイアログにて「日本語」を選択し、「日本語 (PSKK)」を選択する。
 
 3. Restart the machine.
-
-
+3. コンピューターを再起動する。
 
 
 ### Fedora:
