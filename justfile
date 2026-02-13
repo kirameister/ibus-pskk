@@ -166,6 +166,7 @@ setup-user-config:
     # Create directories
     mkdir -p "$USER_CONFIG_DIR/layouts"
     mkdir -p "$USER_CONFIG_DIR/kanchoku_layouts"
+    mkdir -p "$USER_CONFIG_DIR/dictionaries"
     # Copy default config if not exists
     if [ ! -f "$USER_CONFIG_DIR/config.json" ]; then \
         cp data/default_user_config.json "$USER_CONFIG_DIR/config.json"; \
