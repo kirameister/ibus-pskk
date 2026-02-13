@@ -39,26 +39,8 @@ Install the following system packages before running `just install`:
 
 3. Restart the machine. -- コンピューターを再起動する。
 
+Notes: 
+* 
+* 
 
-### Fedora:
-```
-  sudo dnf install python3 python3-pip ibus gtk3 glib2-devel python3-gobject gtk3-devel
-```
-
-Third-party components
-======================
-
-This product includes UniDic.
-
-UniDic is a Japanese morphological dictionary developed by
-the National Institute for Japanese Language and Linguistics (NINJAL).
-
-Copyright (c) National Institute for Japanese Language and Linguistics (NINJAL)
-
-UniDic is distributed under a triple license:
-  • BSD License
-  • GNU General Public License v2
-  • GNU Lesser General Public License v2.1
-
-This product uses UniDic under the terms of the BSD License.
 
