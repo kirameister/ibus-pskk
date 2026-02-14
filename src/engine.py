@@ -1401,6 +1401,14 @@ class EnginePSKK(IBus.Engine):
                 self._process_simultaneous_input(keyval, is_pressed)
                 self._marker_state = MarkerState.FIRST_PRESSED
                 logger.debug(f'First key pressed: "{key_char}" → FIRST_PRESSED')
+            else:
+                # Key release while waiting for first key - this can happen when user
+                # releases a key from previous input after pressing marker (space).
+                # Process the release to finalize the character in simultaneous processor.
+                logger.debug(f'Key released in MARKER_HELD (prior input): "{key_char}"')
+                self._process_simultaneous_input(keyval, is_pressed)
+                # Update saved preedit to include the finalized character
+                self._preedit_before_marker = self._preedit_string
             return True
 
         elif self._marker_state == MarkerState.FIRST_PRESSED:
