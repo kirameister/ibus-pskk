@@ -620,18 +620,6 @@ class SettingsPanel(Gtk.Window):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
         
-        # Learning settings
-        learning_frame = Gtk.Frame(label="Learning System")
-        learning_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        learning_box.set_border_width(10)
-        learning_frame.add(learning_box)
-        
-        self.learning_enabled_check = Gtk.CheckButton(
-            label="Enable learning (Remember frequently used candidates)")
-        learning_box.pack_start(self.learning_enabled_check, False, False, 0)
-        
-        box.pack_start(learning_frame, False, False, 0)
-        
         # Conversion keys
         keys_frame = Gtk.Frame(label="Conversion Key Bindings")
         keys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -1221,8 +1209,6 @@ class SettingsPanel(Gtk.Window):
         self.kanchoku_marker_button.set_label(self.kanchoku_marker_value or "Not Set")
 
         # Conversion tab
-        self.learning_enabled_check.set_active(self.config.get("enable_learning", True))
-
         conv_keys = self.config.get("conversion_keys") or {}
         if not isinstance(conv_keys, dict):
             conv_keys = {}
@@ -1399,8 +1385,6 @@ class SettingsPanel(Gtk.Window):
         self.config["kanchoku_bunsetsu_marker"] = self.kanchoku_marker_value or ""
 
         # Conversion tab
-        self.config["enable_learning"] = self.learning_enabled_check.get_active()
-
         self.config["conversion_keys"] = {
             "to_katakana": self.to_katakana_value or "",
             "to_hiragana": self.to_hiragana_value or "",
