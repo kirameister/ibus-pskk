@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # henkan.py - Kana to Kanji conversion (変換) processor
 
-import json
 import logging
 import os
 import threading
+
+import orjson
 
 import util
 
@@ -152,8 +153,8 @@ class HenkanProcessor:
                 continue
 
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+                with open(file_path, 'rb') as f:
+                    data = orjson.loads(f.read())
 
                 if not isinstance(data, dict):
                     logger.warning(f'Invalid dictionary format (expected dict): {file_path}')
@@ -190,7 +191,7 @@ class HenkanProcessor:
                 self._dictionary_count += 1
                 logger.info(f'Loaded dictionary: {file_path} ({entries_added} candidate entries)')
 
-            except json.JSONDecodeError as e:
+            except orjson.JSONDecodeError as e:
                 logger.error(f'Failed to parse dictionary JSON: {file_path} - {e}')
             except Exception as e:
                 logger.error(f'Failed to load dictionary: {file_path} - {e}')
