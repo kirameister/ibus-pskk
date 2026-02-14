@@ -1133,13 +1133,22 @@ class EnginePSKK(IBus.Engine):
             logger.warning(f'Unknown conversion type: {conversion_type}')
             return
 
-        # Exit bunsetsu/conversion mode when doing character conversion
+        # Exit bunsetsu/conversion/forced-preedit mode when doing character conversion
         # (user explicitly wants katakana/hiragana/ascii/zenkaku, not kanji)
         if self._in_conversion:
             self._in_conversion = False
             self._henkan_processor.reset()
             self.hide_lookup_table()
             logger.debug(f'Exited conversion mode for {conversion_type}')
+
+        # Also exit bunsetsu/forced-preedit modes - user is done with these modes
+        # after explicitly converting to katakana/hiragana/etc.
+        if self._bunsetsu_active:
+            self._bunsetsu_active = False
+            logger.debug(f'Exited bunsetsu mode for {conversion_type}')
+        if self._in_forced_preedit:
+            self._in_forced_preedit = False
+            logger.debug(f'Exited forced preedit mode for {conversion_type}')
 
         # Mark as converted so the next character input auto-commits this preedit.
         # Escape/Enter/arrow keys ignore this flag and treat it as normal IDLE preedit.
