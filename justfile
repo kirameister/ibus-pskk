@@ -184,6 +184,27 @@ setup-user-config:
     else \
         echo "CRF model already exists, skipping (use 'just update-crf-model' to force update)"; \
     fi
+    # Create an empty JSON file called system_dictionary.json
+    if [ ! -f "$USER_CONFIG_DIR/system_dictionary.json" ]; then \
+        echo '{}' > $USER_CONFIG_DIR/system_dictionary.json
+        echo "Created empty system_dictionary.json"; \
+    else \
+        echo "system_dictionary.json already exists, skipping"; \
+    fi
+    # Create an empty JSON file called imported_user_dictionary.json
+    if [ ! -f "$USER_CONFIG_DIR/imported_user_dictionary.json" ]; then \
+        echo '{}' > $USER_CONFIG_DIR/imported_user_dictionary.json
+        echo "Created empty imported_user_dictionary.json"; \
+    else \
+        echo "imported_user_dictionary.json already exists, skipping"; \
+    fi
+    # Create an empty JSON file called user_dictionary.json
+    if [ ! -f "$USER_CONFIG_DIR/user_dictionary.json" ]; then \
+        echo '{}' > $USER_CONFIG_DIR/user_dictionary.json
+        echo "Created empty user_dictionary.json"; \
+    else \
+        echo "user_dictionary.json already exists, skipping"; \
+    fi
     # Fix ownership if run with sudo
     if [ -n "${SUDO_USER:-}" ]; then \
         chown -R "$SUDO_USER:$SUDO_USER" "$USER_CONFIG_DIR"; \
