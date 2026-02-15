@@ -1,6 +1,7 @@
 import util
 import settings_panel
 import conversion_model
+import user_dictionary_editor
 from simultaneous_processor import SimultaneousInputProcessor
 from kanchoku import KanchokuProcessor
 from henkan import HenkanProcessor
@@ -204,6 +205,7 @@ class EnginePSKK(IBus.Engine):
         self._about_dialog = None
         self._settings_panel = None
         self._conversion_model_panel = None
+        self._user_dictionary_editor = None
         self._q = queue.Queue()
 
 
@@ -291,6 +293,17 @@ class EnginePSKK(IBus.Engine):
             state=IBus.PropState.UNCHECKED,
             sub_props=None)
         self._prop_list.append(settings_prop)
+        user_dict_prop = IBus.Property(
+            key='UserDictionary',
+            prop_type=IBus.PropType.NORMAL,
+            label=IBus.Text.new_from_string("User Dictionary Editor..."),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.UNCHECKED,
+            sub_props=None)
+        self._prop_list.append(user_dict_prop)
         conversion_model_prop = IBus.Property(
             key='ConversionModel',
             prop_type=IBus.PropType.NORMAL,
@@ -503,12 +516,27 @@ class EnginePSKK(IBus.Engine):
 
         return False  # Don't repeat this idle callback
 
+    def _show_user_dictionary_editor(self):
+        if self._user_dictionary_editor:
+            self._user_dictionary_editor.present()
+            return False  # Don't repeat this idle callback
+
+        editor = user_dictionary_editor.open_editor()
+        editor.connect("destroy", self.user_dictionary_editor_closed_callback)
+        self._user_dictionary_editor = editor
+
+        return False  # Don't repeat this idle callback
+
 
     def do_property_activate(self, prop_name, state):
         logger.info(f'property_activate({prop_name}, {state})')
         if prop_name == 'Settings':
             # Schedule settings panel creation on the main loop
             GLib.idle_add(self._show_settings_panel)
+            return
+        elif prop_name == 'UserDictionary':
+            # Schedule user dictionary editor creation on the main loop
+            GLib.idle_add(self._show_user_dictionary_editor)
             return
         elif prop_name == 'ConversionModel':
             # Schedule conversion model panel creation on the main loop
@@ -537,6 +565,9 @@ class EnginePSKK(IBus.Engine):
 
     def conversion_model_panel_closed_callback(self, panel):
         self._conversion_model_panel = None
+
+    def user_dictionary_editor_closed_callback(self, editor):
+        self._user_dictionary_editor = None
 
     def _update_input_mode(self):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))

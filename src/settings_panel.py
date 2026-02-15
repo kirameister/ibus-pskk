@@ -11,6 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import util
+import user_dictionary_editor
 
 
 class SettingsPanel(Gtk.Window):
@@ -821,6 +822,10 @@ class SettingsPanel(Gtk.Window):
         convert_user_btn = Gtk.Button(label="Convert")
         convert_user_btn.connect("clicked", self.on_convert_user_dicts)
         user_btn_box.pack_start(convert_user_btn, False, False, 0)
+
+        user_entries_btn = Gtk.Button(label="User Dictionary Entries")
+        user_entries_btn.connect("clicked", self.on_open_user_dictionary_editor)
+        user_btn_box.pack_start(user_entries_btn, False, False, 0)
 
         user_box.pack_start(user_btn_box, False, False, 0)
 
@@ -1724,6 +1729,12 @@ class SettingsPanel(Gtk.Window):
         result_dialog.run()
         result_dialog.destroy()
 
+    def on_open_user_dictionary_editor(self, button):
+        """Open the user dictionary editor window."""
+        editor = user_dictionary_editor.open_editor()
+        # Make the editor modal to this settings window
+        editor.set_transient_for(self)
+        editor.set_modal(True)
 
     # Ext-dictionary management methods
     def on_ext_sys_dict_toggled(self, widget, path):
