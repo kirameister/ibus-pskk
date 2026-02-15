@@ -763,6 +763,13 @@ class EnginePSKK(IBus.Engine):
                     self._commit_string()
                 return False
 
+            # Tab key: commit preedit before passing through to avoid
+            # preedit text appearing in both old and new focused fields
+            if keyval in (IBus.KEY_Tab, IBus.KEY_ISO_Left_Tab):
+                if self._preedit_string:
+                    self._commit_string()
+                return False
+
             # Escape / Delete - cancel conversion or clear preedit
             if keyval == IBus.KEY_Escape or keyval == IBus.KEY_Delete:
                 if self._in_conversion:
