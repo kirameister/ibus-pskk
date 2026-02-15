@@ -580,23 +580,23 @@ class TestGetDictionaryFiles:
         assert len(result) == 1
         assert result[0] == system_dict_path
 
-    def test_includes_user_dictionary_when_exists(self, temp_dirs, sample_dictionary):
-        """Test that user_dictionary.json is included when it exists"""
+    def test_includes_imported_user_dictionary_when_exists(self, temp_dirs, sample_dictionary):
+        """Test that imported_user_dictionary.json is included when it exists"""
         os.makedirs(temp_dirs['config_dir'], exist_ok=True)
 
-        # Create user dictionary in config_dir
-        user_dict_path = os.path.join(temp_dirs['config_dir'], 'user_dictionary.json')
-        with open(user_dict_path, 'w', encoding='utf-8') as f:
+        # Create imported user dictionary in config_dir
+        imported_dict_path = os.path.join(temp_dirs['config_dir'], 'imported_user_dictionary.json')
+        with open(imported_dict_path, 'w', encoding='utf-8') as f:
             json.dump(sample_dictionary, f)
 
         with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files()
 
         assert len(result) == 1
-        assert result[0] == user_dict_path
+        assert result[0] == imported_dict_path
 
     def test_system_dictionary_comes_first(self, temp_dirs, sample_dictionary):
-        """Test that system dictionary appears before user dictionary"""
+        """Test that system dictionary appears before imported user dictionary"""
         os.makedirs(temp_dirs['config_dir'], exist_ok=True)
 
         # Create system dictionary
@@ -604,17 +604,17 @@ class TestGetDictionaryFiles:
         with open(system_dict_path, 'w', encoding='utf-8') as f:
             json.dump(sample_dictionary, f)
 
-        # Create user dictionary
-        user_dict_path = os.path.join(temp_dirs['config_dir'], 'user_dictionary.json')
-        with open(user_dict_path, 'w', encoding='utf-8') as f:
+        # Create imported user dictionary
+        imported_dict_path = os.path.join(temp_dirs['config_dir'], 'imported_user_dictionary.json')
+        with open(imported_dict_path, 'w', encoding='utf-8') as f:
             json.dump(sample_dictionary, f)
 
         with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files()
 
         assert len(result) == 2
-        assert result[0] == system_dict_path  # System dictionary first
-        assert result[1] == user_dict_path    # User dictionary second
+        assert result[0] == system_dict_path    # System dictionary first
+        assert result[1] == imported_dict_path  # Imported user dictionary second
 
     def test_includes_extended_dictionary_when_exists(self, temp_dirs, sample_dictionary):
         """Test that extended_dictionary.json is included when it exists"""
@@ -647,42 +647,44 @@ class TestGetDictionaryFiles:
         assert len(result) == 1
         assert result[0] == system_dict_path
 
-    def test_returns_all_three_dictionaries(self, temp_dirs, sample_dictionary):
-        """Test that all three dictionary types are returned in order"""
+    def test_returns_all_four_dictionaries(self, temp_dirs, sample_dictionary):
+        """Test that all four dictionary types are returned in order"""
         os.makedirs(temp_dirs['config_dir'], exist_ok=True)
 
-        # Create all three dictionaries
+        # Create all four dictionaries
         system_dict_path = os.path.join(temp_dirs['config_dir'], 'system_dictionary.json')
+        imported_dict_path = os.path.join(temp_dirs['config_dir'], 'imported_user_dictionary.json')
         user_dict_path = os.path.join(temp_dirs['config_dir'], 'user_dictionary.json')
         ext_dict_path = os.path.join(temp_dirs['config_dir'], 'extended_dictionary.json')
 
-        for path in [system_dict_path, user_dict_path, ext_dict_path]:
+        for path in [system_dict_path, imported_dict_path, user_dict_path, ext_dict_path]:
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(sample_dictionary, f)
 
         with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files()
 
-        assert len(result) == 3
-        assert result[0] == system_dict_path   # System first
-        assert result[1] == user_dict_path     # User second
-        assert result[2] == ext_dict_path      # Extended third
+        assert len(result) == 4
+        assert result[0] == system_dict_path    # System first
+        assert result[1] == imported_dict_path  # Imported user second
+        assert result[2] == user_dict_path      # User third
+        assert result[3] == ext_dict_path       # Extended fourth
 
     def test_skips_nonexistent_dictionaries(self, temp_dirs, sample_dictionary):
         """Test that missing dictionaries are simply skipped"""
         os.makedirs(temp_dirs['config_dir'], exist_ok=True)
 
-        # Only create user dictionary
-        user_dict_path = os.path.join(temp_dirs['config_dir'], 'user_dictionary.json')
-        with open(user_dict_path, 'w', encoding='utf-8') as f:
+        # Only create imported user dictionary
+        imported_dict_path = os.path.join(temp_dirs['config_dir'], 'imported_user_dictionary.json')
+        with open(imported_dict_path, 'w', encoding='utf-8') as f:
             json.dump(sample_dictionary, f)
 
         with patch('util.get_user_config_dir', return_value=temp_dirs['config_dir']):
             result = util.get_dictionary_files()
 
-        # Should only include the user dictionary
+        # Should only include the imported user dictionary
         assert len(result) == 1
-        assert result[0] == user_dict_path
+        assert result[0] == imported_dict_path
 
 
 if __name__ == "__main__":

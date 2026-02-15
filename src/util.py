@@ -968,7 +968,8 @@ def get_dictionary_files(config=None):
 
     The returned list contains:
     1. system_dictionary.json (generated from system SKK dictionaries)
-    2. user_dictionary.json (generated from user SKK files in dictionaries/)
+    2. imported_user_dictionary.json (generated from user SKK files in dictionaries/)
+    3. user_dictionary.json (user's own registered entries via clipboard/settings)
 
     Args:
         config: Configuration dictionary. If None, will be loaded via get_config_data().
@@ -989,7 +990,15 @@ def get_dictionary_files(config=None):
     else:
         logger.debug(f'System dictionary not found: {system_dict_path}')
 
-    # 2. Check for user_dictionary.json
+    # 2. Check for imported_user_dictionary.json (converted from SKK files)
+    imported_dict_path = os.path.join(config_dir, 'imported_user_dictionary.json')
+    if os.path.exists(imported_dict_path):
+        dictionary_files.append(imported_dict_path)
+        logger.debug(f'Found imported user dictionary: {imported_dict_path}')
+    else:
+        logger.debug(f'Imported user dictionary not found: {imported_dict_path}')
+
+    # 3. Check for user_dictionary.json (user's own registered entries)
     user_dict_path = os.path.join(config_dir, 'user_dictionary.json')
     if os.path.exists(user_dict_path):
         dictionary_files.append(user_dict_path)
@@ -1476,7 +1485,7 @@ def generate_user_dictionary(output_path=None, source_weights=None):
 
     Args:
         output_path: Path for the output JSON file.
-                    If None, defaults to ~/.config/ibus-pskk/user_dictionary.json
+                    If None, defaults to ~/.config/ibus-pskk/imported_user_dictionary.json
         source_weights: Dict mapping filenames to integer weights.
                        If None, all .txt files in dictionaries/ are used with weight 1.
 
@@ -1494,11 +1503,11 @@ def generate_user_dictionary(output_path=None, source_weights=None):
         logger.info(f'Created user dictionaries directory: {user_dict_dir}')
         return True, None, stats  # Success but no files to process
 
-    # Determine output path (user_dictionary.json goes in config dir)
+    # Determine output path (imported_user_dictionary.json goes in config dir)
     if output_path is None:
         config_dir = get_user_config_dir()
         os.makedirs(config_dir, exist_ok=True)
-        output_path = os.path.join(config_dir, 'user_dictionary.json')
+        output_path = os.path.join(config_dir, 'imported_user_dictionary.json')
 
     # If no weights specified, scan all .txt files with weight 1
     if source_weights is None:
@@ -1597,7 +1606,7 @@ def generate_extended_dictionary(config=None, source_paths=None):
       1. Read the kanchoku layout → set of kanji produceable by kanchoku.
       2. Read the specified source dictionaries (SKK-format) → build
          yomi→single-kanji mappings, keeping only kanji that are in the kanchoku set.
-      3. Load the already-generated system_dictionary.json and user_dictionary.json.
+      3. Load the already-generated system_dictionary.json and imported_user_dictionary.json.
       4. For each entry in the combined dictionaries, check whether the reading
          contains a yomi from step 2 as a substring.  When a match is found AND
          the corresponding kanji appears in at least one candidate, create a new
@@ -1694,10 +1703,10 @@ def generate_extended_dictionary(config=None, source_paths=None):
     stats['yomi_kanji_mappings'] = sum(len(v) for v in yomi_to_kanji.values())
     logger.info(f'Extended dict generation: {stats["yomi_kanji_mappings"]} yomi→kanji mappings from {stats["files_processed"]} source files')
 
-    # ── Step 3: Load system_dictionary.json and user_dictionary.json ──
+    # ── Step 3: Load system_dictionary.json and imported_user_dictionary.json ──
     combined_dict = {}  # {reading: {candidate: count}}
 
-    for dict_filename in ['system_dictionary.json', 'user_dictionary.json']:
+    for dict_filename in ['system_dictionary.json', 'imported_user_dictionary.json']:
         dict_path = os.path.join(config_dir, dict_filename)
         if not os.path.exists(dict_path):
             logger.debug(f'Dictionary not found for ext-dict generation: {dict_path}')

@@ -775,7 +775,7 @@ class SettingsPanel(Gtk.Window):
         user_info_label = Gtk.Label()
         user_info_label.set_markup(
             "<small>Place SKK-format .txt files in <b>~/.config/ibus-pskk/dictionaries/</b>\n"
-            "Then click 'Convert' to generate user_dictionary.json</small>"
+            "Then click 'Convert' to generate imported_user_dictionary.json</small>"
         )
         user_info_label.set_xalign(0)
         user_box.pack_start(user_info_label, False, False, 0)
@@ -1652,7 +1652,7 @@ class SettingsPanel(Gtk.Window):
         logger.info(f"Refreshed user dictionaries from {user_dict_dir}")
 
     def on_convert_user_dicts(self, button):
-        """Convert user SKK dictionary files to merged user_dictionary.json"""
+        """Convert user SKK dictionary files to merged imported_user_dictionary.json"""
         # Collect enabled user dictionaries with their weights (empty dict = clear dictionary)
         source_weights = {row[1]: row[2] for row in self.user_dict_store if row[0]}
 
