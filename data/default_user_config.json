@@ -64,5 +64,7 @@
 
     "bunsetsu_prediction_cycle_key": "Shift+space",
     "bunsetsu_prediction_cycle_key_": "Key used for cyclying through the bunsetsu-split candidates proivded by CRF",
-    "bunsetsu_prediction_cycle_key_ja": "CRF により予想された文節の区切り候補を切り替えるキー"
+    "bunsetsu_prediction_cycle_key_ja": "CRF により予想された文節の区切り候補を切り替えるキー",
+
+    "user_dictionary_editor_trigger": "Ctrl+Shift+R"
 }

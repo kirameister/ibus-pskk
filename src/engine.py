@@ -906,6 +906,10 @@ class EnginePSKK(IBus.Engine):
         if self._check_bunsetsu_prediction_key(key_name, state, is_pressed):
             return True
 
+        # Check user_dictionary_editor_trigger
+        if self._check_user_dictionary_editor_key(key_name, state, is_pressed):
+            return True
+
         return False
 
     def _parse_key_binding(self, binding_str):
@@ -1093,6 +1097,77 @@ class EnginePSKK(IBus.Engine):
             return True
 
         return False
+
+    def _check_user_dictionary_editor_key(self, key_name, state, is_pressed):
+        """
+        Check and handle user_dictionary_editor_trigger binding.
+
+        Opens the User Dictionary Editor with the current preedit as the reading.
+        Only activates when preedit is non-empty.
+        """
+        binding = self._config.get('user_dictionary_editor_trigger', '')
+        if not binding:
+            return False
+
+        # On release: consume if this key was handled on press
+        if not is_pressed:
+            if key_name in self._handled_config_keys:
+                self._handled_config_keys.discard(key_name)
+                return True
+            return False
+
+        # Only activate when preedit is non-empty
+        if not self._preedit_string:
+            return False
+
+        # On press: check if key matches the binding
+        if self._matches_key_binding(key_name, state, binding):
+            logger.debug(f'user_dictionary_editor_trigger matched: {binding}')
+            self._open_user_dictionary_editor_with_preedit()
+            self._handled_config_keys.add(key_name)
+            return True
+
+        return False
+
+    def _open_user_dictionary_editor_with_preedit(self):
+        """
+        Open the User Dictionary Editor with current preedit as the reading.
+
+        This is triggered by user_dictionary_editor_trigger keybinding.
+        Before opening:
+        1. Hide lookup table if in conversion mode
+        2. Clear preedit buffer and reset to IDLE mode
+        3. Launch editor with preedit pre-filled as reading
+        """
+        # Save the preedit value before clearing
+        reading = self._preedit_string
+        logger.debug(f'Opening user dictionary editor with reading: "{reading}"')
+
+        # Hide lookup table if visible (conversion mode)
+        if self._in_conversion:
+            self._lookup_table.clear()
+            self.hide_lookup_table()
+
+        # Reset to IDLE mode (clear all state flags)
+        self._reset_henkan_state()
+
+        # Launch editor with prefilled reading (on main loop)
+        GLib.idle_add(self._show_user_dictionary_editor_with_reading, reading)
+
+    def _show_user_dictionary_editor_with_reading(self, reading):
+        """Show user dictionary editor with pre-filled reading (idle callback)."""
+        if self._user_dictionary_editor:
+            # If already open, just bring to front and update reading
+            self._user_dictionary_editor.present()
+            self._user_dictionary_editor.reading_entry.set_text(reading)
+            self._user_dictionary_editor.reading_entry.grab_focus()
+            return False
+
+        editor = user_dictionary_editor.open_editor(prefill_reading=reading)
+        editor.connect("destroy", self.user_dictionary_editor_closed_callback)
+        self._user_dictionary_editor = editor
+
+        return False  # Don't repeat this idle callback
 
     def _cycle_bunsetsu_prediction(self):
         """
