@@ -408,6 +408,9 @@ class UserDictionaryEditor(Gtk.Window):
                                         data=self.data, path=self.dictionary_path)
 
         if success:
+            # Set search field to the reading so user can see the added entry
+            self.search_entry.set_text(reading)
+
             # Clear inputs
             self.reading_entry.set_text('')
             self.candidate_entry.set_text('')
@@ -477,7 +480,7 @@ class UserDictionaryEditor(Gtk.Window):
         dialog.destroy()
 
 
-def open_editor(prefill_reading=None, prefill_candidate=None):
+def open_editor(prefill_reading=None, prefill_candidate=None, check_clipboard=True):
     """
     Open the dictionary editor window.
 
@@ -486,10 +489,20 @@ def open_editor(prefill_reading=None, prefill_candidate=None):
     Args:
         prefill_reading: Optional reading to pre-fill
         prefill_candidate: Optional candidate to pre-fill (e.g., from clipboard)
+        check_clipboard: If True and prefill_candidate is None, check clipboard
+                        for candidate text (default: True)
 
     Returns:
         UserDictionaryEditor: The editor window instance
     """
+    # Auto-fill candidate from clipboard if not provided
+    if prefill_candidate is None and check_clipboard:
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        clipboard_text = clipboard.wait_for_text()
+        if clipboard_text and clipboard_text.strip():
+            prefill_candidate = clipboard_text.strip()
+            logger.info(f'Pre-filled candidate from clipboard: "{prefill_candidate}"')
+
     editor = UserDictionaryEditor(
         prefill_reading=prefill_reading,
         prefill_candidate=prefill_candidate
