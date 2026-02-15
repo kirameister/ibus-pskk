@@ -134,6 +134,66 @@ class SettingsPanel(Gtk.Window):
             self.bunsetsu_cycle_key_value = result
             self.bunsetsu_cycle_key_button.set_label(result if result else "Not Set")
 
+    def on_user_dict_editor_key_button_clicked(self, button):
+        """Show key capture dialog for user dictionary editor launch key.
+
+        This keybinding requires Ctrl+Shift+<key> format to prevent accidental activation.
+        """
+        while True:
+            result = self.show_key_capture_dialog("User Dictionary Editor Key", self.user_dict_editor_key_value)
+
+            # User cancelled or cleared the binding
+            if result is None:
+                return
+            if result == "":
+                self.user_dict_editor_key_value = result
+                self.user_dict_editor_key_button.set_label("Not Set")
+                return
+
+            # Validate: must be Ctrl+Shift+<key>
+            if self._validate_ctrl_shift_key(result):
+                self.user_dict_editor_key_value = result
+                self.user_dict_editor_key_button.set_label(result)
+                return
+            else:
+                # Show warning and loop back to dialog
+                dialog = Gtk.MessageDialog(
+                    transient_for=self,
+                    flags=0,
+                    message_type=Gtk.MessageType.WARNING,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Invalid Key Binding"
+                )
+                dialog.format_secondary_text(
+                    "The User Dictionary Editor keybinding must use both Ctrl and Shift modifiers.\n\n"
+                    f"Expected format: Ctrl+Shift+<key>\n"
+                    f"You entered: {result}\n\n"
+                    "Please try again."
+                )
+                dialog.run()
+                dialog.destroy()
+                # Loop continues, dialog will be shown again
+
+    def _validate_ctrl_shift_key(self, binding):
+        """Validate that a keybinding is in Ctrl+Shift+<key> format.
+
+        Args:
+            binding: Key binding string (e.g., "Ctrl+Shift+R")
+
+        Returns:
+            bool: True if valid (contains both Ctrl and Shift), False otherwise
+        """
+        if not binding:
+            return False
+
+        parts = binding.split('+')
+        has_ctrl = 'Control' in parts
+        has_shift = 'Shift' in parts
+        # Must have at least 3 parts: Ctrl, Shift, and a key
+        has_key = len(parts) >= 3
+
+        return has_ctrl and has_shift and has_key
+
     def show_key_capture_dialog(self, title, current_value):
         """Show dialog to capture key press
 
@@ -400,7 +460,8 @@ class SettingsPanel(Gtk.Window):
         notebook.append_page(self.create_general_tab(), Gtk.Label(label="General"))
         notebook.append_page(self.create_input_tab(), Gtk.Label(label="Input"))
         notebook.append_page(self.create_conversion_tab(), Gtk.Label(label="Conversion"))
-        notebook.append_page(self.create_dictionaries_tab(), Gtk.Label(label="Dictionaries"))
+        notebook.append_page(self.create_system_dictionary_tab(), Gtk.Label(label="System Dictionary"))
+        notebook.append_page(self.create_user_dictionary_tab(), Gtk.Label(label="User Dictionary"))
         notebook.append_page(self.create_ext_dictionary_tab(), Gtk.Label(label="Ext-Dictionary"))
         notebook.append_page(self.create_murenso_tab(), Gtk.Label(label="無連想配列"))
         
@@ -701,16 +762,10 @@ class SettingsPanel(Gtk.Window):
         return box
 
 
-    def create_dictionaries_tab(self):
-        """Create Dictionaries tab"""
+    def create_system_dictionary_tab(self):
+        """Create System Dictionary tab"""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
-
-        # System dictionaries
-        sys_frame = Gtk.Frame(label="System Dictionaries")
-        sys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        sys_box.set_border_width(10)
-        sys_frame.add(sys_box)
 
         # Info label
         sys_info_label = Gtk.Label()
@@ -719,11 +774,11 @@ class SettingsPanel(Gtk.Window):
             "Check the box to enable a dictionary for conversion.</small>"
         )
         sys_info_label.set_xalign(0)
-        sys_box.pack_start(sys_info_label, False, False, 0)
+        box.pack_start(sys_info_label, False, False, 0)
 
         # System dictionary list with checkboxes
         scroll = Gtk.ScrolledWindow()
-        scroll.set_min_content_height(150)
+        scroll.set_min_content_height(250)
         # Store: (enabled: bool, filename: str, full_path: str, weight: int)
         self.sys_dict_store = Gtk.ListStore(bool, str, str, int)
         self.sys_dict_view = Gtk.TreeView(model=self.sys_dict_store)
@@ -750,7 +805,7 @@ class SettingsPanel(Gtk.Window):
         self.sys_dict_view.append_column(weight_column)
 
         scroll.add(self.sys_dict_view)
-        sys_box.pack_start(scroll, True, True, 0)
+        box.pack_start(scroll, True, True, 0)
 
         # System dictionary buttons
         sys_btn_box = Gtk.Box(spacing=6)
@@ -762,15 +817,14 @@ class SettingsPanel(Gtk.Window):
         convert_btn.connect("clicked", self.on_convert_system_dicts)
         sys_btn_box.pack_start(convert_btn, False, False, 0)
 
-        sys_box.pack_start(sys_btn_box, False, False, 0)
+        box.pack_start(sys_btn_box, False, False, 0)
 
-        box.pack_start(sys_frame, True, True, 0)
+        return box
 
-        # User dictionaries
-        user_frame = Gtk.Frame(label="User Dictionaries")
-        user_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        user_box.set_border_width(10)
-        user_frame.add(user_box)
+    def create_user_dictionary_tab(self):
+        """Create User Dictionary tab"""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_border_width(10)
 
         # Info label
         user_info_label = Gtk.Label()
@@ -779,11 +833,11 @@ class SettingsPanel(Gtk.Window):
             "Then click 'Convert' to generate imported_user_dictionary.json</small>"
         )
         user_info_label.set_xalign(0)
-        user_box.pack_start(user_info_label, False, False, 0)
+        box.pack_start(user_info_label, False, False, 0)
 
         # User dictionary list (shows .txt files in dictionaries/)
         user_scroll = Gtk.ScrolledWindow()
-        user_scroll.set_min_content_height(100)
+        user_scroll.set_min_content_height(200)
         # Store: (enabled: bool, filename: str, weight: int)
         self.user_dict_store = Gtk.ListStore(bool, str, int)
         self.user_dict_view = Gtk.TreeView(model=self.user_dict_store)
@@ -810,7 +864,7 @@ class SettingsPanel(Gtk.Window):
         self.user_dict_view.append_column(user_weight_column)
 
         user_scroll.add(self.user_dict_view)
-        user_box.pack_start(user_scroll, True, True, 0)
+        box.pack_start(user_scroll, True, True, 0)
 
         # User dict buttons
         user_btn_box = Gtk.Box(spacing=6)
@@ -827,9 +881,17 @@ class SettingsPanel(Gtk.Window):
         user_entries_btn.connect("clicked", self.on_open_user_dictionary_editor)
         user_btn_box.pack_start(user_entries_btn, False, False, 0)
 
-        user_box.pack_start(user_btn_box, False, False, 0)
+        box.pack_start(user_btn_box, False, False, 0)
 
-        box.pack_start(user_frame, True, True, 0)
+        # Keybinding for launching User Dictionary Editor
+        keybind_box = Gtk.Box(spacing=6)
+        keybind_label = Gtk.Label(label="Editor Launch Key Binding:")
+        keybind_box.pack_start(keybind_label, False, False, 0)
+        self.user_dict_editor_key_button = Gtk.Button(label="Not Set")
+        self.user_dict_editor_key_button.connect("clicked", self.on_user_dict_editor_key_button_clicked)
+        keybind_box.pack_start(self.user_dict_editor_key_button, False, False, 0)
+        self.user_dict_editor_key_value = None
+        box.pack_start(keybind_box, False, False, 0)
 
         return box
 
@@ -1238,6 +1300,11 @@ class SettingsPanel(Gtk.Window):
                                                          default_config.get("bunsetsu_prediction_cycle_key", ""))
         self.bunsetsu_cycle_key_button.set_label(self.bunsetsu_cycle_key_value or "Not Set")
 
+        # User Dictionary Editor keybinding
+        self.user_dict_editor_key_value = self.config.get("user_dictionary_editor_trigger",
+                                                           default_config.get("user_dictionary_editor_trigger", "Ctrl+Shift+R"))
+        self.user_dict_editor_key_button.set_label(self.user_dict_editor_key_value or "Not Set")
+
         # Dictionaries tab
         dictionaries = self.config.get("dictionaries") or {}
         if not isinstance(dictionaries, dict):
@@ -1399,6 +1466,9 @@ class SettingsPanel(Gtk.Window):
 
         # Bunsetsu Prediction settings
         self.config["bunsetsu_prediction_cycle_key"] = self.bunsetsu_cycle_key_value or ""
+
+        # User Dictionary Editor keybinding
+        self.config["user_dictionary_editor_trigger"] = self.user_dict_editor_key_value or ""
 
         # Dictionaries tab
         # For both system and user dictionaries, save as {path: weight} for enabled entries only
