@@ -29,18 +29,18 @@ Install the following system packages before running `just install`:
 
 1. Run the following commands in the terminal -- ターミナルにて以下のコマンドを入力する:
 ```
-  sudo apt install just python3-venv pip curl
+  sudo apt install just python3-venv pip curl git
   git clone https://github.com/kirameister/ibus-pskk.git
   cd ibus-pskk
   sudo just install
 ```
 
-2. Under the `settings`, select `keyboard`, and click "Add Input Source". In the dialog, select "Japanese" and "Japanese (PSKK)".  -- `設定` にて `キーボード` を選択し、`入力ソースを追加` をクリックする。ダイアログにて「日本語」を選択し、「日本語 (PSKK)」を選択する。
+2. (In case you've installed non-Japanese languages) Under the `settings`, select `Regino & Languages`, and select `Manage installed languages`. In the popup, click `Install/Remove Languages` button, and install "Japanese". After installation, you'd need to restart the machine. 
 
-3. Restart the machine. -- コンピューターを再起動する。
+3. Under the `settings`, select `keyboard`, and click "Add Input Source". In the dialog, select "Japanese" and "Japanese (PSKK)".  -- `設定` にて `キーボード` を選択し、`入力ソースを追加` をクリックする。ダイアログにて「日本語」を選択し、「日本語 (PSKK)」を選択する。
 
-Notes: 
-* 
-* 
+4. Restart the machine. -- コンピューターを再起動する。
 
-
+Notes:
+* CRF のモデルをトレーニングすることもできますが、その場合、Mecab をインストールする必要があります。
+* (デフォルトの) CRF モデルはインストール時にインスストールされます。
