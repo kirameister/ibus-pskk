@@ -302,7 +302,11 @@ class UserDictionaryEditor(Gtk.Window):
         col_candidate.set_min_width(100)
         self.tree.append_column(col_candidate)
 
-        col_count = Gtk.TreeViewColumn("Count", renderer, text=2)
+        # Count column is editable
+        count_renderer = Gtk.CellRendererText()
+        count_renderer.set_property('editable', True)
+        count_renderer.connect('edited', self._on_count_edited)
+        col_count = Gtk.TreeViewColumn("Count", count_renderer, text=2)
         col_count.set_sort_column_id(2)
         col_count.set_min_width(60)
         self.tree.append_column(col_count)
@@ -461,6 +465,39 @@ class UserDictionaryEditor(Gtk.Window):
 
         self._refresh_list()
         self.modified = True
+
+    def _on_count_edited(self, renderer, path, new_text):
+        """Handle count cell edit."""
+        # Validate: must be a positive integer
+        try:
+            new_count = int(new_text)
+            if new_count < 1:
+                self._show_error("Count must be at least 1.")
+                return
+        except ValueError:
+            self._show_error("Please enter a valid number.")
+            return
+
+        # Get the row from the filter model, then convert to store path
+        filter_iter = self.filter.get_iter(path)
+        store_iter = self.filter.convert_iter_to_child_iter(filter_iter)
+
+        # Get reading and candidate from store
+        reading = self.store.get_value(store_iter, 0)
+        candidate = self.store.get_value(store_iter, 1)
+
+        # Update the data structure
+        if reading in self.data and candidate in self.data[reading]:
+            self.data[reading][candidate] = new_count
+
+            # Save to file
+            if save_user_dictionary(self.data, self.dictionary_path):
+                # Update the store (display)
+                self.store.set_value(store_iter, 2, new_count)
+                self.modified = True
+                logger.info(f'Updated count: {reading} → {candidate} = {new_count}')
+            else:
+                self._show_error("Failed to save changes.")
 
     def _on_close(self, widget, event):
         """Handle window close."""
