@@ -1506,8 +1506,27 @@ class EnginePSKK(IBus.Engine):
                     self._in_conversion = False
                     self._lookup_table.clear()
                     self.hide_lookup_table()
+                elif self._bunsetsu_active:
+                    # BUNSETSU/FORCED_PREEDIT state: perform implicit conversion immediately
+                    # so the converted text is committed without visual gap
+                    yomi = self._preedit_string
+                    if yomi:
+                        candidates = self._henkan_processor.convert(yomi)
+                        if candidates:
+                            surface = candidates[0]['surface']
+                            logger.debug(f'Immediate implicit conversion: "{yomi}" → "{surface}"')
+                            self.commit_text(IBus.Text.new_from_string(surface))
+                        else:
+                            logger.debug(f'No candidates, committing yomi: "{yomi}"')
+                            self.commit_text(IBus.Text.new_from_string(yomi))
+                    # Clear preedit for fresh start with new bunsetsu
+                    self._preedit_string = ''
+                    self._preedit_hiragana = ''
+                    self._preedit_ascii = ''
+                    self._preedit_before_marker = ''  # Clear to prevent double commit in release handler
+                    self._bunsetsu_active = False
                 else:
-                    # Normal case: save current preedit
+                    # IDLE state: save current preedit (will be committed on release if needed)
                     self._preedit_before_marker = self._preedit_string
 
                 # Let simultaneous processor handle this key (tentative output)
