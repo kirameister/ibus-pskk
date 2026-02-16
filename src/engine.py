@@ -1427,6 +1427,21 @@ class EnginePSKK(IBus.Engine):
         new_bunsetsu_hiragana = self._preedit_hiragana
         new_bunsetsu_ascii = self._preedit_ascii
 
+        # For forced-preedit mode, the old content wasn't cleared at key press
+        # (to keep kanchoku working), so we need to strip it here.
+        # Note: Kanchoku letters exist only in _preedit_string, not in _preedit_hiragana
+        # or _preedit_ascii. This is by design - converting to katakana/ascii/zenkaku
+        # will exclude kanchoku letters since those conversions use the respective buffers.
+        if self._in_forced_preedit and self._preedit_before_marker:
+            old_preedit = self._preedit_before_marker
+            if new_bunsetsu_preedit.startswith(old_preedit):
+                new_bunsetsu_preedit = new_bunsetsu_preedit[len(old_preedit):]
+                # The stripped content is the new hiragana typed during space+key
+                new_bunsetsu_hiragana = new_bunsetsu_preedit
+                # For ascii, take last N chars where N = length of new hiragana
+                new_len = len(new_bunsetsu_preedit)
+                new_bunsetsu_ascii = new_bunsetsu_ascii[-new_len:] if new_len > 0 else ''
+
         # Commit previous bunsetsu content via implicit conversion
         if self._bunsetsu_active or self._in_forced_preedit:
             # In BUNSETSU_ACTIVE or FORCED_PREEDIT: perform implicit conversion on the saved yomi
@@ -1526,13 +1541,10 @@ class EnginePSKK(IBus.Engine):
                     self._preedit_before_marker = ''  # Clear to prevent double commit in release handler
                     self._bunsetsu_active = False
                 elif self._in_forced_preedit:
-                    # FORCED_PREEDIT state: save preedit for conversion on release,
-                    # but clear buffers to prevent old content from being prepended to new bunsetsu.
-                    # Conversion happens on marker release (not immediately) to allow kanchoku.
+                    # FORCED_PREEDIT state: save preedit for conversion on release.
+                    # DO NOT clear buffers here - kanchoku needs the preedit to stay visible.
+                    # The old content will be stripped in _handle_marker_release_decision().
                     self._preedit_before_marker = self._preedit_string
-                    self._preedit_string = ''
-                    self._preedit_hiragana = ''
-                    self._preedit_ascii = ''
                 else:
                     # IDLE state: save current preedit (will be committed on release if needed)
                     self._preedit_before_marker = self._preedit_string
