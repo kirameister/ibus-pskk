@@ -1507,7 +1507,7 @@ class EnginePSKK(IBus.Engine):
                     self._lookup_table.clear()
                     self.hide_lookup_table()
                 elif self._bunsetsu_active:
-                    # BUNSETSU/FORCED_PREEDIT state: perform implicit conversion immediately
+                    # BUNSETSU state: perform implicit conversion immediately
                     # so the converted text is committed without visual gap
                     yomi = self._preedit_string
                     if yomi:
@@ -1525,6 +1525,14 @@ class EnginePSKK(IBus.Engine):
                     self._preedit_ascii = ''
                     self._preedit_before_marker = ''  # Clear to prevent double commit in release handler
                     self._bunsetsu_active = False
+                elif self._in_forced_preedit:
+                    # FORCED_PREEDIT state: save preedit for conversion on release,
+                    # but clear buffers to prevent old content from being prepended to new bunsetsu.
+                    # Conversion happens on marker release (not immediately) to allow kanchoku.
+                    self._preedit_before_marker = self._preedit_string
+                    self._preedit_string = ''
+                    self._preedit_hiragana = ''
+                    self._preedit_ascii = ''
                 else:
                     # IDLE state: save current preedit (will be committed on release if needed)
                     self._preedit_before_marker = self._preedit_string
