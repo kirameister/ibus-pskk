@@ -174,7 +174,6 @@ class EnginePSKK(IBus.Engine):
         self._preedit_string = ''    # Display buffer (can be hiragana, katakana, ascii, or zenkaku)
         self._preedit_hiragana = ''  # Source of truth: hiragana output from simul_processor
         self._preedit_ascii = ''     # Source of truth: raw ASCII input characters
-        self._conversion_disabled = False  # Set True after backspace; disables Ctrl+K/J/L conversions
         self._converted = False  # Set True after Ctrl+K/J/L; next char input auto-commits
         self._previous_text = ''
 
@@ -790,21 +789,20 @@ class EnginePSKK(IBus.Engine):
                     self._cancel_conversion()
                     return True
                 elif self._preedit_string:
-                    # Delete last character from preedit
-                    # _preedit_hiragana is in 1:1 correspondence with _preedit_string,
-                    # so trim both to keep conversion yomi in sync.
-                    # Disable Ctrl+K/J/L conversions after backspace because we can't
-                    # reliably track the many-to-one mapping from keystrokes to hiragana
-                    # in _preedit_ascii. User must ESC and retype, or commit and start fresh.
+                    # Delete last character from all preedit buffers.
+                    # Each buffer is trimmed by 1 character independently:
+                    # - _preedit_string: display buffer (hiragana/katakana/etc.)
+                    # - _preedit_hiragana: source for to_katakana/to_hiragana
+                    # - _preedit_ascii: source for to_ascii/to_zenkaku
+                    #
+                    # The ASCII buffer uses a "mental model" approach: users who want
+                    # ASCII output think in terms of keystrokes, not hiragana. So we
+                    # simply remove the last keystroke, trusting that the user knows
+                    # what they typed and what they're deleting.
                     self._preedit_string = self._preedit_string[:-1]
                     self._preedit_hiragana = self._preedit_hiragana[:-1]
-                    # Disable conversion after backspace because we can't reliably track
-                    # the many-to-one mapping from keystrokes to hiragana in _preedit_ascii.
-                    # However, re-enable if preedit is now empty (fresh start for next input).
-                    if self._preedit_string:
-                        self._conversion_disabled = True
-                    else:
-                        self._conversion_disabled = False
+                    if self._preedit_ascii:
+                        self._preedit_ascii = self._preedit_ascii[:-1]
                     self._update_preedit()
                     return True
                 return False
@@ -1213,19 +1211,14 @@ class EnginePSKK(IBus.Engine):
         - _preedit_hiragana: for to_katakana and to_hiragana
         - _preedit_ascii: for to_ascii and to_zenkaku
 
-        Note: All conversions are disabled after backspace is used, because we can't
-        reliably track the many-to-one mapping from keystrokes to hiragana.
-        User must ESC and retype, or commit and start fresh to re-enable.
+        Note: Each buffer is trimmed independently on backspace. The ASCII buffer
+        follows a "mental model" approach where each backspace removes one keystroke,
+        so conversions remain available even after deletions.
 
         Args:
             conversion_type: One of 'to_katakana', 'to_hiragana', 'to_ascii', 'to_zenkaku'
         """
         if not self._preedit_string:
-            return
-
-        # All conversions disabled after backspace
-        if self._conversion_disabled:
-            logger.debug(f'Conversion {conversion_type} skipped: disabled after backspace')
             return
 
         original = self._preedit_string
@@ -1395,8 +1388,6 @@ class EnginePSKK(IBus.Engine):
                 logger.debug('Space tap in IDLE: committing preedit + space')
                 self._commit_string()
                 self.commit_text(IBus.Text.new_from_string(' '))
-                # Ensure conversion is re-enabled for next input (fresh start)
-                self._conversion_disabled = False
         elif self._marker_state == MarkerState.FIRST_RELEASED:
             # Decision point: was this bunsetsu or forced preedit?
             self._handle_marker_release_decision()
@@ -1853,7 +1844,6 @@ class EnginePSKK(IBus.Engine):
         self._bunsetsu_active = False
         self._in_conversion = False
         self._in_forced_preedit = False
-        self._conversion_disabled = False  # Re-enable Ctrl+K/J/L conversions
         self._converted = False
         self._conversion_yomi = ''
         self._preedit_string = ''
@@ -1882,7 +1872,6 @@ class EnginePSKK(IBus.Engine):
             self._preedit_string = ""
             self._preedit_hiragana = ""
             self._preedit_ascii = ""
-            self._conversion_disabled = False  # Re-enable Ctrl+K/J/L for next input
             self._converted = False
             self._update_preedit()
             self.commit_text(IBus.Text.new_from_string(text_to_commit))
