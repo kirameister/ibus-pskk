@@ -1,3 +1,329 @@
+"""
+engine.py - Main IBus Engine for ibus-pskk Japanese Input Method
+ibus-pskk 日本語入力メソッド用 IBus エンジン本体
+
+================================================================================
+OVERVIEW / 概要
+================================================================================
+
+This is the main engine module for ibus-pskk, implementing the IBus.Engine
+interface. It handles all keyboard input, manages input modes, and coordinates
+multiple sub-processors for Japanese text input.
+
+これは ibus-pskk のメインエンジンモジュールで、IBus.Engine インターフェースを
+実装する。全てのキーボード入力を処理し、入力モードを管理し、日本語テキスト入力の
+ための複数のサブプロセッサを調整する。
+
+================================================================================
+INPUT MODES / 入力モード
+================================================================================
+
+The engine supports two top-level input modes:
+エンジンは2つのトップレベル入力モードをサポートする：
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MODE 'A' (Alphanumeric / 英数字モード)                                      │
+│  ─────────────────────────────────────                                      │
+│  All keystrokes pass through to the application unchanged.                  │
+│  全てのキー入力がそのままアプリケーションに渡される。                          │
+│                                                                             │
+│  Use case: Typing English text, programming, etc.                           │
+│  用途：英語テキストの入力、プログラミングなど                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MODE 'あ' (Hiragana / ひらがなモード)                                       │
+│  ─────────────────────────────────────                                      │
+│  Keystrokes are processed through the Japanese input pipeline.              │
+│  キー入力は日本語入力パイプラインで処理される。                                │
+│                                                                             │
+│  This mode has multiple internal states (see STATE MACHINE below).          │
+│  このモードには複数の内部状態がある（下記のSTATE MACHINEを参照）。             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+STATE MACHINE IN HIRAGANA MODE / ひらがなモード内の状態機械
+================================================================================
+
+Within Hiragana mode ('あ'), there are multiple internal states that control
+how text is processed and displayed:
+
+ひらがなモード内では、テキストの処理と表示を制御する複数の内部状態がある：
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           STATE DIAGRAM / 状態図                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│    ┌──────────┐                                                             │
+│    │   IDLE   │  ← Initial state / 初期状態                                 │
+│    │ (通常入力)│    No special mode active / 特別なモードなし                │
+│    └────┬─────┘                                                             │
+│         │                                                                   │
+│         │ space+key                                                         │
+│         ▼                                                                   │
+│    ┌──────────┐    space tap    ┌────────────┐                             │
+│    │ BUNSETSU │ ──────────────► │ CONVERTING │                             │
+│    │ (文節入力)│                 │  (変換中)   │                             │
+│    └────┬─────┘ ◄────────────── └─────┬──────┘                             │
+│         │        ESC/Backspace        │ Enter/continue typing               │
+│         │                             │ Enter/続けて入力                     │
+│         │ space+key                   ▼                                     │
+│         │                        [Commit text]                              │
+│         ▼                        [テキスト確定]                              │
+│    ┌──────────┐                                                             │
+│    │  FORCED  │  ← For kanchoku+kana combinations                           │
+│    │ PREEDIT  │    漢直＋かな組み合わせ用                                    │
+│    │(強制入力)│                                                             │
+│    └──────────┘                                                             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+STATE DESCRIPTIONS / 状態の説明:
+────────────────────────────────
+
+1. IDLE STATE (通常入力状態)
+   ─────────────────────────
+   - _bunsetsu_active = False
+   - _in_conversion = False
+   - _in_forced_preedit = False
+
+   In this state, typed characters appear as hiragana but are NOT marked
+   for kana-kanji conversion. The preedit is displayed with minimal styling
+   (stealth mode) to appear as if already committed.
+
+   この状態では、入力した文字はひらがなとして表示されるが、かな漢字変換の
+   対象としてマークされない。プリエディットは最小限のスタイルで表示され
+   （ステルスモード）、既に確定したかのように見える。
+
+   Transitions / 遷移:
+   - space+key → BUNSETSU (marks boundary and activates bunsetsu mode)
+                 文節境界をマークして文節モードに入る
+   - Enter → Commit preedit, stay in IDLE
+             プリエディットを確定、IDLEのまま
+
+2. BUNSETSU STATE (文節入力状態)
+   ──────────────────────────────
+   - _bunsetsu_active = True
+   - _in_conversion = False
+
+   Bunsetsu (文節) means "phrase unit" in Japanese. In this state, the
+   preedit is marked as a candidate for kana-kanji conversion. Visual
+   styling (underline) indicates the text is pending conversion.
+
+   文節とは日本語の句単位を意味する。この状態では、プリエディットがかな漢字
+   変換の候補としてマークされる。視覚的なスタイル（下線）がテキストが変換
+   待ちであることを示す。
+
+   Transitions / 遷移:
+   - space (tap) → CONVERTING (triggers dictionary lookup)
+                   辞書検索を実行して変換状態へ
+   - space+key → Implicit conversion + new bunsetsu
+                 暗黙変換＋新しい文節開始
+   - Enter → Commit preedit as-is, return to IDLE
+             プリエディットをそのまま確定、IDLEへ戻る
+
+3. CONVERTING STATE (変換中状態)
+   ─────────────────────────────
+   - _in_conversion = True
+
+   Conversion candidates are displayed in a lookup table. User can cycle
+   through candidates with space or arrow keys.
+
+   変換候補がルックアップテーブルに表示される。ユーザーはスペースまたは
+   矢印キーで候補を切り替えられる。
+
+   Transitions / 遷移:
+   - space (tap) → Cycle to next candidate / 次の候補へ
+   - Enter/typing → Confirm candidate, return to IDLE or continue
+                    候補を確定、IDLEへ戻るか続けて入力
+   - ESC/Backspace → Cancel, return to BUNSETSU with original yomi
+                     キャンセル、元の読みでBUNSETSUへ戻る
+
+4. FORCED PREEDIT STATE (強制プリエディット状態)
+   ─────────────────────────────────────────────
+   - _in_forced_preedit = True
+
+   A special mode that allows combining kanchoku kanji with hiragana in
+   the same preedit for conversion. This is useful when the user wants
+   to type a word that contains kanji produceable by kanchoku.
+
+   漢直漢字とひらがなを同じプリエディット内で組み合わせて変換できる特殊
+   モード。漢直で入力可能な漢字を含む単語を入力したい場合に便利。
+
+   Example use case / 使用例:
+   - User wants to type "企業" (きぎょう)
+     ユーザーが「企業」を入力したい
+   - In forced preedit, user types kanchoku for "企" then kana for "ぎょう"
+     強制プリエディットで「企」を漢直、「ぎょう」をかなで入力
+   - Result: "企ぎょう" can be converted to "企業"
+     結果：「企ぎょう」を「企業」に変換可能
+
+================================================================================
+MARKER KEY STATE MACHINE / マーカーキー状態機械
+================================================================================
+
+The marker key (typically Space) enables three different behaviors depending
+on the subsequent key sequence. This is controlled by a separate state machine:
+
+マーカーキー（通常はスペース）は、後続のキーシーケンスに応じて3つの異なる
+動作を可能にする。これは独立した状態機械で制御される：
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    MarkerState Transitions / 遷移図                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  IDLE ──(space↓)──► MARKER_HELD ──(key1↓)──► FIRST_PRESSED                 │
+│    ▲                     │                         │                        │
+│    │                     │ (space↑ with no input)  │ (key1↑)                │
+│    │                     ▼                         ▼                        │
+│    │              [Space tap action]         FIRST_RELEASED                 │
+│    │              - IDLE: commit+space       /          \                   │
+│    │              - BUNSETSU: convert       /            \                  │
+│    │              - CONVERTING: cycle      /              \                 │
+│    │                                      /                \                │
+│    │                            (key2↓)  /                  \ (space↑)      │
+│    │                                    ▼                    ▼              │
+│    │                        KANCHOKU_SECOND_PRESSED    [Decision]           │
+│    │                               │                    - Bunsetsu mode     │
+│    │                               │ (keys↑, space↑)   - Forced preedit    │
+│    └───────────────────────────────┴─────────────────────────┘              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+THREE MARKER KEY BEHAVIORS / マーカーキーの3つの動作:
+────────────────────────────────────────────────────────
+
+1. KANCHOKU (漢直 - Direct Kanji Input)
+   Sequence: space↓ → key1↓↑ → key2↓↑ → space↑
+   Result: Kanji is looked up from (key1, key2) and output
+   シーケンス：space↓ → key1↓↑ → key2↓↑ → space↑
+   結果：(key1, key2) から漢字を検索して出力
+
+2. BUNSETSU (文節 - Phrase Boundary)
+   Sequence: space↓ → key1↓↑ → space↑
+   Condition: key1 can start a bunsetsu (normal characters)
+   Result: Mark bunsetsu boundary, key1 becomes start of new bunsetsu
+   シーケンス：space↓ → key1↓↑ → space↑
+   条件：key1 が文節を開始できる（通常の文字）
+   結果：文節境界をマーク、key1 が新しい文節の開始になる
+
+3. FORCED PREEDIT (強制プリエディット)
+   Sequence: space↓ → trigger_key↓↑ → space↑
+   Condition: key1 is the forced_preedit_trigger_key (default: 'f')
+   Result: Enter forced preedit mode for kanchoku+kana mixing
+   シーケンス：space↓ → trigger_key↓↑ → space↑
+   条件：key1 が forced_preedit_trigger_key（デフォルト：'f'）
+   結果：漢直＋かな混在用の強制プリエディットモードに入る
+
+================================================================================
+PREEDIT BUFFERS / プリエディットバッファ
+================================================================================
+
+The engine maintains three synchronized buffers for the preedit:
+エンジンはプリエディット用に3つの同期されたバッファを維持する：
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  _preedit_string   : Display buffer (what user sees)                        │
+│                      表示バッファ（ユーザーに見えるもの）                      │
+│                      Can be: hiragana, katakana, kanji, ASCII, zenkaku      │
+│                      内容：ひらがな、カタカナ、漢字、ASCII、全角              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  _preedit_hiragana : Source for to_katakana / to_hiragana conversions       │
+│                      カタカナ/ひらがな変換用のソース                          │
+│                      Always hiragana (kanchoku kanji NOT included)          │
+│                      常にひらがな（漢直漢字は含まない）                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  _preedit_ascii    : Source for to_ascii / to_zenkaku conversions           │
+│                      ASCII/全角変換用のソース                                 │
+│                      Raw ASCII keystrokes                                   │
+│                      生のASCIIキーストローク                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Design Note / 設計上の注意:
+In forced preedit mode, kanchoku kanji exist ONLY in _preedit_string.
+Converting to katakana/ASCII will lose kanchoku kanji - this is by design.
+
+強制プリエディットモードでは、漢直漢字は _preedit_string にのみ存在する。
+カタカナ/ASCIIへの変換で漢直漢字は失われる - これは意図的な設計。
+
+================================================================================
+KEY PROCESSING PIPELINE / キー処理パイプライン
+================================================================================
+
+When a key event arrives, it flows through this pipeline:
+キーイベントが到着すると、このパイプラインを通る：
+
+  do_process_key_event()
+         │
+         ├─► Check enable_hiragana_key (mode toggle) / モード切替キー確認
+         │
+         ├─► If mode 'A': pass through / 英数モードならパススルー
+         │
+         └─► _process_key_event()
+                   │
+                   ├─► Kanchoku/Bunsetsu marker handling / 漢直/文節マーカー処理
+                   │   (highest priority / 最優先)
+                   │
+                   ├─► Config-driven key bindings / 設定キーバインディング
+                   │   (conversions, editor launch, etc.)
+                   │   （変換、エディタ起動など）
+                   │
+                   ├─► Combo keys (Ctrl+X, etc.) → pass through
+                   │   コンボキー → パススルー
+                   │
+                   ├─► Special keys (Enter, Backspace, ESC, arrows)
+                   │   特殊キー（Enter、Backspace、ESC、矢印）
+                   │
+                   └─► Regular character input → SimultaneousInputProcessor
+                       通常の文字入力 → 同時打鍵プロセッサ
+
+================================================================================
+SUB-PROCESSORS / サブプロセッサ
+================================================================================
+
+The engine delegates specific tasks to specialized processors:
+エンジンは特定のタスクを専門のプロセッサに委譲する：
+
+1. SimultaneousInputProcessor (simultaneous_processor.py)
+   ───────────────────────────────────────────────────────
+   Converts raw keystrokes to hiragana using the layout table.
+   Supports simultaneous key input (e.g., 'k'+'a' pressed together → 'か').
+
+   生のキーストロークをレイアウトテーブルを使ってひらがなに変換。
+   同時打鍵入力をサポート（例：'k'+'a'同時押し→'か'）。
+
+2. KanchokuProcessor (kanchoku.py)
+   ────────────────────────────────
+   Handles direct kanji input via two-key combinations.
+   Example: space+j+k → '漢'
+
+   2キーの組み合わせによる直接漢字入力を処理。
+   例：space+j+k→'漢'
+
+3. HenkanProcessor (henkan.py)
+   ───────────────────────────
+   Handles kana-kanji conversion using dictionary lookup.
+   Supports bunsetsu-based conversion with CRF boundary prediction.
+
+   辞書検索を使ったかな漢字変換を処理。
+   CRF境界予測による文節単位の変換をサポート。
+
+================================================================================
+REFERENCES / 参考資料
+================================================================================
+
+IBus documentation:
+http://lazka.github.io/pgi-docs/IBus-1.0/index.html
+
+GTK documentation:
+http://lazka.github.io/pgi-docs/Gtk-4.0/index.html
+
+GLib documentation:
+http://lazka.github.io/pgi-docs/GLib-2.0/index.html
+
+================================================================================
+"""
+
 import util
 import settings_panel
 import conversion_model
@@ -16,9 +342,6 @@ import gi
 gi.require_version('IBus', '1.0')
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, IBus, GLib
-# http://lazka.github.io/pgi-docs/IBus-1.0/index.html?fbclid=IwY2xjawG9hapleHRuA2FlbQIxMAABHXaZwlJVVZEl9rr2SWsvIy2x85xW-XJuu32OZYxQ3gxF-E__9kWOUqGNzA_aem_2zw0hES6WqJcXPds_9CEdA
-# http://lazka.github.io/pgi-docs/Gtk-4.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHVsKSY24bv9C75Mweq54yhLsePdGA25YfLnwMwCx7vEq03oV61qn_qEntg_aem_3k1P3ltIMb17cBH0fdPr4w
-# http://lazka.github.io/pgi-docs/GLib-2.0/index.html?fbclid=IwY2xjawG9hatleHRuA2FlbQIxMAABHXaZwlJVVZEl9rr2SWsvIy2x85xW-XJuu32OZYxQ3gxF-E__9kWOUqGNzA_aem_2zw0hES6WqJcXPds_9CEdA
 
 logger = logging.getLogger(__name__)
 
@@ -1298,21 +1621,70 @@ class EnginePSKK(IBus.Engine):
 
     def _handle_kanchoku_bunsetsu_marker(self, key_name, keyval, state, is_pressed):
         """
-        Handle kanchoku_bunsetsu_marker key and related sequences.
+        Handle kanchoku_bunsetsu_marker key (Space) and related sequences.
+        漢直・文節マーカーキー（スペース）と関連シーケンスの処理
 
-        This implements a state machine that distinguishes between:
-        - Kanchoku: marker held → key1↓↑ → key2↓↑ → produces kanji
-        - Bunsetsu: marker held → key1↓↑ → marker↑ → marks boundary (valid bunsetsu start)
-        - Forced preedit: marker held → key1↓↑ → marker↑ → enter mode (if key is forced_preedit_trigger)
+        ─────────────────────────────────────────────────────────────────────────
+        PURPOSE / 目的
+        ─────────────────────────────────────────────────────────────────────────
+        This is the core entry point for the marker key state machine. The marker
+        key (typically Space) enables three different behaviors depending on
+        what keys are pressed while it's held down:
+
+        これはマーカーキー状態機械の中核エントリーポイントである。マーカーキー
+        （通常はスペース）は、押し続けている間にどのキーが押されるかによって
+        3つの異なる動作を可能にする：
+
+        ─────────────────────────────────────────────────────────────────────────
+        THREE BEHAVIORS / 3つの動作
+        ─────────────────────────────────────────────────────────────────────────
+
+        Case A: KANCHOKU (漢直 - Direct Kanji Input)
+        ─────────────────────────────────────────────
+        Sequence: marker↓ → key1↓↑ → key2↓↑ → marker↑
+        Result:   Lookup kanji from (key1, key2) pair, output to preedit
+        シーケンス：marker↓ → key1↓↑ → key2↓↑ → marker↑
+        結果：(key1, key2)ペアから漢字を検索し、プリエディットに出力
+
+        Case B: BUNSETSU (文節 - Phrase Boundary)
+        ─────────────────────────────────────────
+        Sequence: marker↓ → key1↓↑ → marker↑
+        Condition: key1 can start a bunsetsu (normal characters)
+        Result:   Mark bunsetsu boundary, key1 becomes start of new bunsetsu
+        シーケンス：marker↓ → key1↓↑ → marker↑
+        条件：key1が文節を開始できる（通常文字）
+        結果：文節境界をマーク、key1が新しい文節の開始になる
+
+        Case C: FORCED PREEDIT (強制プリエディット)
+        ────────────────────────────────────────────
+        Sequence: marker↓ → trigger_key↓↑ → marker↑
+        Condition: key1 == forced_preedit_trigger_key (default: 'f')
+        Result:   Enter forced preedit mode for kanchoku+kana mixing
+        シーケンス：marker↓ → trigger_key↓↑ → marker↑
+        条件：key1 == forced_preedit_trigger_key（デフォルト：'f'）
+        結果：漢直＋かな混在用の強制プリエディットモードに入る
+
+        ─────────────────────────────────────────────────────────────────────────
+        STATE MACHINE / 状態機械
+        ─────────────────────────────────────────────────────────────────────────
+        IDLE → (marker↓) → MARKER_HELD → (key1↓) → FIRST_PRESSED
+                                                       ↓ (key1↑)
+                                              FIRST_RELEASED
+                                               /           \\
+                                    (key2↓)  /             \\ (marker↑)
+                                            ↓               ↓
+                           KANCHOKU_SECOND_PRESSED    [Decision]
+                                   ↓                  Case B or C
+                           (keys↑, marker↑) → IDLE
 
         Args:
-            key_name: The key name from IBus.keyval_name()
-            keyval: The key value
-            state: Modifier state bitmask from IBus
-            is_pressed: True if key press, False if key release
+            key_name: IBus.keyval_name()から取得したキー名
+            keyval: キー値
+            state: IBusからの修飾キー状態ビットマスク
+            is_pressed: キー押下ならTrue、離上ならFalse
 
         Returns:
-            bool: True if the key was consumed, False otherwise
+            bool: キーが消費された場合True、そうでなければFalse
         """
         marker_binding = self._config.get('kanchoku_bunsetsu_marker', '')
         if not marker_binding:
@@ -1333,12 +1705,54 @@ class EnginePSKK(IBus.Engine):
     def _handle_marker_key_event(self, is_pressed):
         """
         Handle press/release of the marker key itself.
+        マーカーキー自体の押下/離上を処理
 
-        On press: Commit existing preedit, enter MARKER_HELD state
-        On release: Determine if this was bunsetsu marking or forced preedit trigger
+        ─────────────────────────────────────────────────────────────────────────
+        ON PRESS / 押下時
+        ─────────────────────────────────────────────────────────────────────────
+        Behavior depends on current henkan state:
+        動作は現在の変換状態に依存する：
+
+        ┌────────────────┬───────────────────────────────────────────────────────┐
+        │ State / 状態    │ Behavior / 動作                                       │
+        ├────────────────┼───────────────────────────────────────────────────────┤
+        │ CONVERTING     │ Save candidate, wait for tap vs space+key判定         │
+        │ 変換中          │ 候補を保存、タップ vs space+key を待つ                 │
+        ├────────────────┼───────────────────────────────────────────────────────┤
+        │ BUNSETSU       │ Save yomi for potential implicit conversion           │
+        │ 文節入力        │ 暗黙変換用に読みを保存                                 │
+        ├────────────────┼───────────────────────────────────────────────────────┤
+        │ FORCED_PREEDIT │ Save preedit (may contain kanchoku kanji)             │
+        │ 強制入力        │ プリエディットを保存（漢直漢字を含む可能性あり）        │
+        ├────────────────┼───────────────────────────────────────────────────────┤
+        │ IDLE           │ Commit any existing preedit, start fresh              │
+        │ 通常           │ 既存のプリエディットを確定、新規開始                    │
+        └────────────────┴───────────────────────────────────────────────────────┘
+
+        ─────────────────────────────────────────────────────────────────────────
+        ON RELEASE / 離上時
+        ─────────────────────────────────────────────────────────────────────────
+        Depends on state at release time:
+        離上時の状態による：
+
+        ┌────────────────────┬─────────────────────────────────────────────────────┐
+        │ State / 状態        │ Action / 動作                                       │
+        ├────────────────────┼─────────────────────────────────────────────────────┤
+        │ MARKER_HELD        │ Space tap: commit+space or cycle candidate          │
+        │ (no key pressed)   │ スペースタップ: 確定+空白 または候補切替             │
+        ├────────────────────┼─────────────────────────────────────────────────────┤
+        │ FIRST_RELEASED     │ Decision: bunsetsu or forced preedit                │
+        │ (key1 was pressed) │ 判定: 文節 または 強制プリエディット                 │
+        ├────────────────────┼─────────────────────────────────────────────────────┤
+        │ KANCHOKU_SECOND_   │ Kanchoku completed, just cleanup                    │
+        │ PRESSED            │ 漢直完了、クリーンアップのみ                         │
+        ├────────────────────┼─────────────────────────────────────────────────────┤
+        │ FIRST_PRESSED      │ Key still held: treat as bunsetsu                   │
+        │ (key1 still held)  │ キーがまだ押されている: 文節として扱う               │
+        └────────────────────┴─────────────────────────────────────────────────────┘
 
         Returns:
-            bool: True (marker key is always consumed)
+            bool: True (マーカーキーは常に消費される)
         """
         if is_pressed:
             # Behavior on marker press depends on current henkan state
@@ -1408,19 +1822,60 @@ class EnginePSKK(IBus.Engine):
 
     def _handle_marker_release_decision(self):
         """
-        Handle the decision when marker is released after first key was pressed and released.
+        Handle the decision when marker is released after first key was pressed.
+        最初のキーが押された後にマーカーが離された時の判定処理
 
-        If there's a pending commit (from CONVERTING state):
-        - Commit the saved candidate first
-        - Then proceed with the normal bunsetsu/forced-preedit/kanchoku logic
+        ─────────────────────────────────────────────────────────────────────────
+        CONTEXT / コンテキスト
+        ─────────────────────────────────────────────────────────────────────────
+        This is called when the user did: space↓ → key1↓↑ → space↑
+        The function decides between Case B (bunsetsu) and Case C (forced preedit).
+        (Case A / kanchoku is already handled before this point if key2 was pressed)
 
-        If in BUNSETSU_ACTIVE state:
-        - Perform implicit conversion and commit first candidate
-        - Then proceed with new bunsetsu
+        この関数は以下のシーケンスで呼ばれる: space↓ → key1↓↑ → space↑
+        Case B（文節）と Case C（強制プリエディット）を判定する。
+        （Case A / 漢直は key2 が押された時点で既に処理済み）
 
-        Check if first key was the forced_preedit_trigger_key:
-        - If yes: Enter forced preedit mode (Case C)
-        - If no: This was bunsetsu marking (Case B)
+        ─────────────────────────────────────────────────────────────────────────
+        PROCESSING STEPS / 処理ステップ
+        ─────────────────────────────────────────────────────────────────────────
+
+        Step 1: Handle forced-preedit stripping / 強制プリエディットのストリッピング
+        ─────────────────────────────────────────────────────────────────────────
+        In forced-preedit mode, the old content wasn't cleared at key press
+        (to keep kanchoku visible). We strip the old content here.
+
+        強制プリエディットモードでは、漢直を表示し続けるために
+        キー押下時に古いコンテンツがクリアされていない。ここでストリップする。
+
+        IMPORTANT DESIGN NOTE / 重要な設計上の注意:
+        Kanchoku kanji exist ONLY in _preedit_string, NOT in _preedit_hiragana
+        or _preedit_ascii. Converting to katakana/ASCII will lose kanchoku kanji.
+        This is by design - users understand that kanchoku bypasses the buffer system.
+
+        漢直漢字は _preedit_string にのみ存在し、_preedit_hiragana や
+        _preedit_ascii には存在しない。カタカナ/ASCIIへの変換で漢直漢字は失われる。
+        これは意図的な設計 - ユーザーは漢直がバッファシステムをバイパスすることを理解している。
+
+        Step 2: Implicit conversion / 暗黙変換
+        ─────────────────────────────────────────────────────────────────────────
+        If in BUNSETSU or FORCED_PREEDIT mode, convert the saved yomi and commit
+        the first candidate. This is "implicit conversion" - the user doesn't
+        need to explicitly press space to convert; simply starting a new bunsetsu
+        with space+key triggers conversion of the previous bunsetsu.
+
+        BUNSETSU または FORCED_PREEDIT モードの場合、保存された読みを変換し
+        最初の候補を確定する。これが「暗黙変換」- ユーザーは明示的にスペースを
+        押して変換する必要がない。単に space+key で新しい文節を開始するだけで
+        前の文節が変換される。
+
+        Step 3: Decision / 判定
+        ─────────────────────────────────────────────────────────────────────────
+        - If key1 == forced_preedit_trigger_key → Enter forced preedit (Case C)
+        - Otherwise → Start new bunsetsu (Case B)
+
+        - key1 == forced_preedit_trigger_key → 強制プリエディットに入る（Case C）
+        - それ以外 → 新しい文節を開始（Case B）
         """
         # Save the new bunsetsu content that was typed during space+key
         new_bunsetsu_preedit = self._preedit_string
@@ -1489,12 +1944,65 @@ class EnginePSKK(IBus.Engine):
 
     def _handle_key_while_marker_held(self, key_name, keyval, is_pressed):
         """
-        Handle key events while marker is held.
+        Handle key events while marker (Space) is held.
+        マーカー（スペース）が押されている間のキーイベントを処理
 
-        This processes the state machine transitions for kanchoku/bunsetsu sequences.
+        ─────────────────────────────────────────────────────────────────────────
+        STATE MACHINE LOGIC / 状態機械ロジック
+        ─────────────────────────────────────────────────────────────────────────
+
+        ┌─────────────────────┐
+        │     MARKER_HELD     │ Space is held, waiting for first key
+        │    （マーカー保持）   │ スペースが押されている、最初のキーを待つ
+        └──────────┬──────────┘
+                   │ key1↓
+                   ▼
+        ┌─────────────────────┐
+        │    FIRST_PRESSED    │ First key pressed, waiting for release
+        │   （1キー目押下）    │ 1キー目押下、離上を待つ
+        └──────────┬──────────┘
+                   │ key1↑ (all keys released)
+                   ▼
+        ┌─────────────────────┐
+        │   FIRST_RELEASED    │ Decision point: key2↓→kanchoku, space↑→bunsetsu
+        │   （1キー目離上）    │ 判定点: key2↓→漢直, space↑→文節
+        └──────────┬──────────┘
+                   │ key2↓
+                   ▼
+        ┌─────────────────────┐
+        │ KANCHOKU_SECOND_    │ Kanchoku confirmed, output kanji
+        │ PRESSED（漢直確定）  │ 漢直確定、漢字を出力
+        └─────────────────────┘
+
+        ─────────────────────────────────────────────────────────────────────────
+        SPECIAL HANDLING BY STATE / 状態別の特殊処理
+        ─────────────────────────────────────────────────────────────────────────
+
+        MARKER_HELD + key1↓:
+        ────────────────────
+        • If CONVERTING: Commit current candidate immediately (space+key confirms)
+          変換中: 現在の候補を即座に確定（space+key で確定）
+        • If BUNSETSU: Perform implicit conversion immediately (no visual gap)
+          文節入力: 暗黙変換を即座に実行（視覚的な隙間なし）
+        • If FORCED_PREEDIT: Keep preedit visible (kanchoku needs to see it)
+          強制入力: プリエディットを表示し続ける（漢直が必要とする）
+        • If IDLE: Save preedit for potential restoration
+          通常: 潜在的な復元のためにプリエディットを保存
+
+        FIRST_RELEASED + key2↓:
+        ────────────────────────
+        • Kanchoku blocking rule: In normal bunsetsu mode, kanchoku is BLOCKED.
+          漢直ブロッキングルール: 通常文節モードでは漢直はブロックされる。
+        • Only in forced-preedit mode can kanchoku be used within preedit.
+          強制プリエディットモードでのみ、プリエディット内で漢直が使用可能。
+
+        Args:
+            key_name: IBus.keyval_name()から取得したキー名
+            keyval: キー値
+            is_pressed: キー押下ならTrue、離上ならFalse
 
         Returns:
-            bool: True if key was consumed, False otherwise
+            bool: キーが消費された場合True、そうでなければFalse
         """
         # Only process printable ASCII characters
         if keyval < 0x20 or keyval > 0x7e:
@@ -1622,9 +2130,38 @@ class EnginePSKK(IBus.Engine):
     def _process_simultaneous_input(self, keyval, is_pressed):
         """
         Process a key through the simultaneous input processor.
+        同時打鍵プロセッサを通してキーを処理
 
-        This is used during marker-held sequences to get tentative output
-        that may be kept (bunsetsu) or discarded (kanchoku).
+        ─────────────────────────────────────────────────────────────────────────
+        PURPOSE / 目的
+        ─────────────────────────────────────────────────────────────────────────
+        During marker-held sequences (space+key), we need to provide immediate
+        visual feedback to the user. This function passes the key through the
+        simultaneous input processor to generate "tentative output".
+
+        マーカー保持シーケンス（space+key）中、ユーザーに即座の視覚的フィードバックを
+        提供する必要がある。この関数はキーを同時打鍵プロセッサに渡して
+        「仮出力」を生成する。
+
+        ─────────────────────────────────────────────────────────────────────────
+        TENTATIVE OUTPUT / 仮出力
+        ─────────────────────────────────────────────────────────────────────────
+        The output is "tentative" because:
+        出力が「仮」である理由:
+
+        • If this becomes a BUNSETSU (space+key1+space↑):
+          - The tentative output is KEPT as the start of the new bunsetsu
+          - 仮出力は新しい文節の開始として保持される
+
+        • If this becomes KANCHOKU (space+key1+key2):
+          - The tentative output is DISCARDED and replaced with kanji
+          - 仮出力は破棄され、漢字で置き換えられる
+
+        Example / 例:
+        - User types: space↓ → 'i'↓
+        - Tentative output: "い"
+        - If 'j'↓ follows: discard "い", output kanchoku kanji for ('i','j')
+        - If space↑ follows: keep "い" as bunsetsu start
         """
         if keyval < 0x20 or keyval > 0x7e:
             return
@@ -1647,9 +2184,35 @@ class EnginePSKK(IBus.Engine):
     def _mark_bunsetsu_boundary(self):
         """
         Mark the start of a bunsetsu (phrase) for kana-kanji conversion.
+        文節（句）の開始をかな漢字変換用にマーク
 
-        This activates bunsetsu mode where the preedit content becomes
-        the yomi (reading) for conversion when space is tapped.
+        ─────────────────────────────────────────────────────────────────────────
+        WHAT IS BUNSETSU? / 文節とは？
+        ─────────────────────────────────────────────────────────────────────────
+        A bunsetsu (文節) is a minimal meaningful phrase unit in Japanese,
+        typically consisting of a content word (名詞, 動詞, etc.) plus any
+        attached particles (助詞) or auxiliary verbs (助動詞).
+
+        文節とは日本語における最小の意味のある句単位で、通常は内容語
+        （名詞、動詞など）に付属する助詞や助動詞を含む。
+
+        Examples / 例:
+        • "今日は" (きょうは) - noun + particle
+        • "食べました" (たべました) - verb + auxiliary verb
+        • "美しい" (うつくしい) - adjective
+
+        ─────────────────────────────────────────────────────────────────────────
+        EFFECT / 効果
+        ─────────────────────────────────────────────────────────────────────────
+        Sets _bunsetsu_active = True, which:
+        _bunsetsu_active = True を設定、これにより:
+
+        1. Changes preedit styling (underline to indicate pending conversion)
+           プリエディットのスタイル変更（下線で変換待ちを示す）
+        2. Enables conversion via space tap
+           スペースタップで変換を有効化
+        3. Enables implicit conversion via space+key
+           space+key で暗黙変換を有効化
         """
         self._bunsetsu_active = True
         self._conversion_yomi = ''  # Will be populated from preedit when conversion triggers
@@ -1657,10 +2220,39 @@ class EnginePSKK(IBus.Engine):
 
     def _emit_kanchoku_output(self, kanji):
         """
-        Output a kanji from kanchoku input.
+        Output a kanji from kanchoku (direct kanji) input.
+        漢直（直接漢字入力）からの漢字を出力
 
-        In normal mode: Add to preedit
-        In forced preedit mode: Add to preedit (for later kana-kanji conversion)
+        ─────────────────────────────────────────────────────────────────────────
+        WHAT IS KANCHOKU? / 漢直とは？
+        ─────────────────────────────────────────────────────────────────────────
+        Kanchoku (漢直) is a direct kanji input method where each kanji is
+        mapped to a two-key combination. The user holds the marker key (Space)
+        and types two keys to produce a kanji directly, bypassing kana input.
+
+        漢直とは各漢字が2キーの組み合わせにマッピングされる直接漢字入力方式。
+        ユーザーはマーカーキー（スペース）を押しながら2キーを打つことで、
+        かな入力をバイパスして直接漢字を生成する。
+
+        Example / 例: space+j+k → "漢"
+
+        ─────────────────────────────────────────────────────────────────────────
+        BUFFER BEHAVIOR / バッファの動作
+        ─────────────────────────────────────────────────────────────────────────
+        IMPORTANT: Kanchoku kanji are added ONLY to _preedit_string.
+        They are NOT added to _preedit_hiragana or _preedit_ascii.
+
+        重要: 漢直漢字は _preedit_string にのみ追加される。
+        _preedit_hiragana や _preedit_ascii には追加されない。
+
+        This means:
+        これは以下を意味する:
+        • Converting to katakana (Ctrl+K) will lose kanchoku kanji
+          カタカナ変換（Ctrl+K）で漢直漢字は失われる
+        • Converting to ASCII (Ctrl+J) will lose kanchoku kanji
+          ASCII変換（Ctrl+J）で漢直漢字は失われる
+        • This is by design - users understand kanchoku bypasses conversion
+          これは意図的 - ユーザーは漢直が変換をバイパスすることを理解している
         """
         logger.debug(f'Kanchoku output: "{kanji}"')
         self._preedit_string += kanji
@@ -1673,15 +2265,55 @@ class EnginePSKK(IBus.Engine):
     def _trigger_conversion(self):
         """
         Trigger kana-kanji conversion on the current preedit (yomi).
+        現在のプリエディット（読み）のかな漢字変換を実行
 
-        Called when space is tapped in BUNSETSU_ACTIVE state.
-        Uses HenkanProcessor to look up candidates and converts the preedit
-        to the first candidate. The lookup table is NOT shown on this first
-        conversion - it only appears on the 2nd space press (via _cycle_candidate).
+        ─────────────────────────────────────────────────────────────────────────
+        WHEN CALLED / 呼び出しタイミング
+        ─────────────────────────────────────────────────────────────────────────
+        Called when space is tapped in BUNSETSU_ACTIVE or FORCED_PREEDIT state.
+        Uses HenkanProcessor to look up candidates and convert the preedit
+        to the first (highest priority) candidate.
 
-        Behavior:
-        - Dictionary match: update preedit with 1st candidate (lookup table hidden)
-        - No match: automatically enter bunsetsu mode with CRF prediction
+        BUNSETSU_ACTIVE または FORCED_PREEDIT 状態でスペースをタップした時に呼ばれる。
+        HenkanProcessor を使って候補を検索し、プリエディットを最初の
+        （最高優先度の）候補に変換する。
+
+        ─────────────────────────────────────────────────────────────────────────
+        CONVERSION MODES / 変換モード
+        ─────────────────────────────────────────────────────────────────────────
+
+        Whole-word mode (単語変換モード):
+        ────────────────────────────────
+        When a dictionary match is found for the entire yomi.
+        読み全体に対して辞書マッチが見つかった場合。
+
+        Example / 例: "かんじ" → [漢字, 感じ, 幹事, ...]
+                     First candidate displayed, lookup table hidden.
+                     最初の候補が表示され、ルックアップテーブルは非表示。
+
+        Bunsetsu mode (文節変換モード):
+        ───────────────────────────────
+        When no exact match exists, CRF predicts bunsetsu boundaries.
+        Each bunsetsu is converted independently with its own candidates.
+
+        完全一致がない場合、CRFが文節境界を予測する。
+        各文節は独立して変換され、それぞれの候補を持つ。
+
+        Example / 例: "きょうはいいてんきですね"
+                     → ["今日", "は", "いい", "天気", "です", "ね"]
+                     Each bunsetsu can be cycled independently.
+                     各文節は独立して切り替え可能。
+
+        ─────────────────────────────────────────────────────────────────────────
+        LOOKUP TABLE BEHAVIOR / ルックアップテーブルの動作
+        ─────────────────────────────────────────────────────────────────────────
+        The lookup table is NOT shown on first conversion (this differs from
+        traditional SKK/ATOK). It only appears on 2nd space press via _cycle_candidate.
+        This provides a cleaner UX for single-candidate words.
+
+        ルックアップテーブルは最初の変換では表示されない（従来のSKK/ATOKとは異なる）。
+        _cycle_candidate 経由で2回目のスペース押下時にのみ表示される。
+        これは単一候補の単語に対してよりクリーンなUXを提供する。
         """
         if not self._preedit_string:
             logger.debug('_trigger_conversion: empty preedit, nothing to convert')
@@ -1731,9 +2363,39 @@ class EnginePSKK(IBus.Engine):
     def _cycle_candidate(self):
         """
         Cycle to the next conversion candidate.
+        次の変換候補に切り替え
 
-        Called when space is tapped or Down arrow is pressed in CONVERTING state.
-        In bunsetsu mode, cycles candidates for the currently selected bunsetsu.
+        ─────────────────────────────────────────────────────────────────────────
+        WHEN CALLED / 呼び出しタイミング
+        ─────────────────────────────────────────────────────────────────────────
+        • Space tap in CONVERTING state (2nd+ space press)
+          変換中状態でのスペースタップ（2回目以降のスペース押下）
+        • Down arrow in CONVERTING state
+          変換中状態での下矢印キー
+
+        ─────────────────────────────────────────────────────────────────────────
+        BEHAVIOR BY MODE / モード別の動作
+        ─────────────────────────────────────────────────────────────────────────
+
+        Whole-word mode / 単語変換モード:
+        ─────────────────────────────────
+        Cycles through the lookup table sequentially:
+        [漢字] → [感じ] → [幹事] → [漢字] → ...
+        Shows lookup table after first cycle.
+
+        ルックアップテーブルを順に切り替え:
+        最初のサイクル後にルックアップテーブルを表示。
+
+        Bunsetsu mode / 文節変換モード:
+        ─────────────────────────────────
+        Cycles candidates for the CURRENTLY SELECTED bunsetsu only.
+        Other bunsetsu remain unchanged.
+
+        現在選択中の文節の候補のみを切り替え。
+        他の文節は変更されない。
+
+        Use Left/Right arrows to move between bunsetsu.
+        文節間の移動には左右矢印キーを使用。
         """
         if not self._in_conversion:
             return
@@ -1898,7 +2560,36 @@ class EnginePSKK(IBus.Engine):
     # =========================================================================
 
     def _commit_string(self):
-        """Commit preedit to the application and clear all buffers."""
+        """
+        Commit preedit to the application and clear all buffers.
+        プリエディットをアプリケーションに確定し、全バッファをクリア
+
+        ─────────────────────────────────────────────────────────────────────────
+        IMPORTANT: ORDER OF OPERATIONS / 重要: 操作順序
+        ─────────────────────────────────────────────────────────────────────────
+        The preedit display is cleared BEFORE calling commit_text(). This is
+        critical to avoid a race condition:
+
+        プリエディット表示は commit_text() 呼び出し前にクリアされる。
+        これは競合状態を避けるために重要:
+
+        1. commit_text() does not auto-clear COMMIT-mode preedit
+           commit_text() は COMMIT モードのプリエディットを自動クリアしない
+        2. A forwarded key event (return False) could arrive at the client
+           before the preedit-clear signal
+           転送されたキーイベント（return False）がプリエディットクリア
+           シグナルより前にクライアントに届く可能性がある
+        3. This could cause the client to auto-commit preedit (double output)
+           これによりクライアントがプリエディットを自動確定する可能性（二重出力）
+
+        ─────────────────────────────────────────────────────────────────────────
+        BUFFERS CLEARED / クリアされるバッファ
+        ─────────────────────────────────────────────────────────────────────────
+        • _preedit_string: Display buffer / 表示バッファ
+        • _preedit_hiragana: Hiragana source / ひらがなソース
+        • _preedit_ascii: ASCII source / ASCIIソース
+        • _converted: Conversion flag / 変換フラグ
+        """
         if self._preedit_string:
             logger.debug(f'Committing: "{self._preedit_string}"')
             # Save the text to commit before clearing buffers
@@ -1938,10 +2629,57 @@ class EnginePSKK(IBus.Engine):
             return None
 
     def _update_preedit(self):
-        """Update the preedit display in the application with configured colors.
+        """
+        Update the preedit display in the application.
+        アプリケーション内のプリエディット表示を更新
 
-        In bunsetsu mode, shows each bunsetsu with the selected one highlighted
-        using a double underline, while non-selected bunsetsu have single underline.
+        ─────────────────────────────────────────────────────────────────────────
+        WHAT IS PREEDIT? / プリエディットとは？
+        ─────────────────────────────────────────────────────────────────────────
+        The preedit is the text being composed before it's committed to the
+        application. In Japanese IMEs, this is typically hiragana that hasn't
+        been converted or is waiting for conversion.
+
+        プリエディットは、アプリケーションに確定される前に構成中のテキスト。
+        日本語IMEでは、通常、変換されていない、または変換待ちのひらがな。
+
+        ─────────────────────────────────────────────────────────────────────────
+        VISUAL STYLES BY STATE / 状態別の視覚スタイル
+        ─────────────────────────────────────────────────────────────────────────
+
+        ┌─────────────────┬───────────────────────────────────────────────────────┐
+        │ State / 状態     │ Styling / スタイル                                    │
+        ├─────────────────┼───────────────────────────────────────────────────────┤
+        │ IDLE (stealth)  │ No styling - appears as committed text                │
+        │ 通常（ステルス） │ スタイルなし - 確定済みテキストのように見える          │
+        ├─────────────────┼───────────────────────────────────────────────────────┤
+        │ BUNSETSU        │ Single underline + background color                   │
+        │ 文節入力         │ 単線下線 + 背景色                                     │
+        ├─────────────────┼───────────────────────────────────────────────────────┤
+        │ CONVERTING      │ Selected: double underline + background              │
+        │ (bunsetsu mode) │ Non-selected: single underline                        │
+        │ 変換中（文節）   │ 選択中: 二重下線 + 背景、非選択: 単線下線             │
+        ├─────────────────┼───────────────────────────────────────────────────────┤
+        │ CONVERTING      │ Single underline + foreground/background colors       │
+        │ (whole-word)    │                                                       │
+        │ 変換中（単語）   │ 単線下線 + 前景/背景色                                │
+        └─────────────────┴───────────────────────────────────────────────────────┘
+
+        ─────────────────────────────────────────────────────────────────────────
+        STEALTH MODE / ステルスモード
+        ─────────────────────────────────────────────────────────────────────────
+        In IDLE mode with logging level above DEBUG, the preedit has NO visual
+        styling (UNDERLINE_NONE). This makes the text appear as if it's already
+        committed, providing a less intrusive typing experience. This is called
+        "stealth preedit".
+
+        IDLEモードでログレベルがDEBUGより上の場合、プリエディットは視覚スタイル
+        なし（UNDERLINE_NONE）になる。これによりテキストは既に確定されたように
+        見え、より邪魔にならない入力体験を提供する。これを「ステルスプリエディット」
+        と呼ぶ。
+
+        In DEBUG mode, underline is always shown for development visibility.
+        DEBUGモードでは、開発時の可視性のため常に下線が表示される。
         """
         if self._preedit_string:
             preedit_text = IBus.Text.new_from_string(self._preedit_string)
