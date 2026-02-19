@@ -1,29 +1,172 @@
 #!/usr/bin/env python3
 """
-MeCab Sentence Processor
+mecab_sentence_processor.py - Process Japanese text through MeCab analyzer
+MeCab形態素解析器を使用して日本語テキストを処理
 
-This script processes a text file through MeCab morphological analyzer,
-sentence by sentence.
+================================================================================
+IMPORTANT: MECAB INSTALLATION REQUIRED / 重要: MECABのインストールが必要
+================================================================================
 
-Usage:
-    # Process a file
+This script requires MeCab to be installed on your system!
+このスクリプトはシステムにMeCabがインストールされている必要があります！
+
+INSTALLATION / インストール:
+─────────────────────────────
+
+Linux (Debian/Ubuntu):
+    sudo apt-get install mecab mecab-ipadic-utf8 libmecab-dev
+
+Linux (Arch):
+    sudo pacman -S mecab mecab-ipadic
+
+macOS (Homebrew):
+    brew install mecab mecab-ipadic
+
+Windows:
+    Download from: https://taku910.github.io/mecab/
+    Or use: pip install mecab-python3  (includes bundled MeCab)
+
+VERIFY INSTALLATION / インストール確認:
+────────────────────────────────────────
+    $ echo "今日は天気がいい" | mecab
+    今日    名詞,副詞可能,*,*,*,*,今日,キョウ,キョー
+    は      助詞,係助詞,*,*,*,*,は,ハ,ワ
+    天気    名詞,一般,*,*,*,*,天気,テンキ,テンキ
+    ...
+
+================================================================================
+WHAT IS MECAB? / MeCabとは？
+================================================================================
+
+MeCab is the de facto standard MORPHOLOGICAL ANALYZER for Japanese.
+MeCabは日本語の事実上の標準的な形態素解析器。
+
+WHAT IS MORPHOLOGICAL ANALYSIS? / 形態素解析とは？
+──────────────────────────────────────────────────
+
+In English, words are separated by spaces:
+英語では、単語はスペースで区切られている:
+
+    "I love sushi" → ["I", "love", "sushi"]  (trivial to split)
+
+In Japanese, there are NO SPACES between words:
+日本語では、単語間にスペースがない:
+
+    "私は寿司が好きです" → ???
+
+Morphological analysis FINDS THE WORD BOUNDARIES:
+形態素解析が単語境界を見つける:
+
+    "私は寿司が好きです"
+        ↓ MeCab
+    ["私", "は", "寿司", "が", "好き", "です"]
+      │     │     │      │     │      │
+      └─────┴─────┴──────┴─────┴──────┘
+      Each word identified with:
+      各単語に以下が識別される:
+        • Part of Speech (品詞)
+        • Reading (読み)
+        • Base form (原形)
+
+================================================================================
+WHY THIS SCRIPT? / このスクリプトの目的
+================================================================================
+
+This script processes Japanese text and extracts:
+このスクリプトは日本語テキストを処理し、以下を抽出:
+
+1. TOKENIZED SENTENCES with readings / 読み付きのトークン化された文
+   ─────────────────────────────────────────────────────────────────
+   Input:  今日は天気がいい
+   Output: きょう _は/助詞/係助詞 てんき _が/助詞/格助詞 いい
+
+   This format is useful for:
+   この形式は以下に有用:
+   • CRF training data (bunsetsu boundary prediction)
+     CRF訓練データ（文節境界予測）
+   • Analyzing word frequency patterns
+     単語頻度パターンの分析
+
+2. EXTRACTED VOCABULARY in SKK format / SKK形式で抽出された語彙
+   ─────────────────────────────────────────────────────────────────
+   Nouns are extracted with their readings:
+   名詞が読みとともに抽出される:
+
+       てんき /天気/
+       きょう /今日/
+
+   These can be added to IME dictionaries.
+   これらはIME辞書に追加できる。
+
+================================================================================
+MECAB OUTPUT FORMAT / MeCab出力形式
+================================================================================
+
+MeCab outputs one token per line in this format:
+MeCabは1行に1トークンをこの形式で出力:
+
+    表層形\t品詞,品詞細分類1,品詞細分類2,品詞細分類3,活用型,活用形,原形,読み,発音
+
+Example / 例:
+    天気\t名詞,一般,*,*,*,*,天気,テンキ,テンキ
+    │     │     │                    │
+    │     │     │                    └── Reading in katakana (カタカナの読み)
+    │     │     └── Subcategories (* = none)
+    │     └── Part of Speech (品詞)
+    └── Surface form (表層形)
+
+This script converts the reading from KATAKANA to HIRAGANA because:
+このスクリプトは読みをカタカナからひらがなに変換する理由:
+• IME input is typically in hiragana / IME入力は通常ひらがな
+• Dictionary lookups use hiragana / 辞書検索はひらがなを使用
+
+================================================================================
+STANDALONE SCRIPT / スタンドアロンスクリプト
+================================================================================
+
+This is a STANDALONE UTILITY for preparing training/testing data.
+It is NOT required for the IME to function.
+
+これは訓練/テストデータを準備するためのスタンドアロンユーティリティ。
+IMEの動作には不要。
+
+================================================================================
+USAGE / 使用方法
+================================================================================
+
+FILE PROCESSING MODE / ファイル処理モード:
+───────────────────────────────────────────
     python mecab_sentence_processor.py input.txt
-    python mecab_sentence_processor.py /path/to/document.txt
 
-    # Test a single sentence
+    Creates:
+    作成されるファイル:
+    • input_mecab_processed.txt  - Tokenized sentences with readings
+                                   読み付きトークン化された文
+    • input_extracted_vocab.txt  - Nouns in SKK dictionary format
+                                   SKK辞書形式の名詞
+
+TEST MODE / テストモード:
+─────────────────────────
+    # Quick test / クイックテスト
     python mecab_sentence_processor.py -t "今日は天気がいい"
-    python mecab_sentence_processor.py -t "今日は天気がいい" -v  # verbose
 
-Output (file mode):
-    Creates two files in the same directory as the input file:
-    - FILENAME_mecab_processed.txt: Full MeCab output for each sentence
-    - FILENAME_extracted_vocab.txt: Extracted nouns in SKK dictionary format
+    # Verbose (show all processing steps) / 詳細表示
+    python mecab_sentence_processor.py -t "今日は天気がいい" -v
 
-Output (test mode):
-    Prints processed sentence to stdout
+================================================================================
+TYPICAL WORKFLOW / 典型的なワークフロー
+================================================================================
 
-Requirements:
-    - MeCab command-line tool must be installed and available in PATH
+1. Get Japanese text (e.g., from Aozora Bunko)
+   日本語テキストを取得（例：青空文庫から）
+
+2. Run this script to tokenize and extract vocabulary
+   このスクリプトを実行してトークン化と語彙抽出
+
+3. Use output for CRF training or dictionary building
+   出力をCRF訓練または辞書構築に使用
+
+================================================================================
 """
 
 import argparse
@@ -34,13 +177,42 @@ import sys
 
 
 def katakana_to_hiragana(text: str) -> str:
-    """Convert katakana characters to hiragana.
+    """
+    Convert katakana characters to hiragana.
+    カタカナ文字をひらがなに変換
+
+    ─────────────────────────────────────────────────────────────────────────
+    WHY THIS CONVERSION? / なぜこの変換？
+    ─────────────────────────────────────────────────────────────────────────
+
+    MeCab outputs readings in KATAKANA (e.g., テンキ for 天気).
+    But IME dictionaries and user input use HIRAGANA (てんき).
+
+    MeCabは読みをカタカナで出力（例：天気→テンキ）。
+    しかしIME辞書とユーザー入力はひらがなを使用（てんき）。
+
+    ─────────────────────────────────────────────────────────────────────────
+    UNICODE TRICK / Unicodeのトリック
+    ─────────────────────────────────────────────────────────────────────────
+
+    In Unicode, hiragana and katakana are laid out in parallel:
+    Unicodeでは、ひらがなとカタカナは並行して配置されている:
+
+        Katakana: ァアィイ... (U+30A1 to U+30F6)
+        Hiragana: ぁあぃい... (U+3041 to U+3096)
+
+    The offset is exactly 0x60 (96), so conversion is simple subtraction!
+    オフセットはちょうど0x60（96）なので、変換は単純な減算！
+
+        カ (U+30AB) - 0x60 = か (U+304B)
 
     Args:
-        text: Input string (may contain katakana, hiragana, or other characters)
+        text: Input string (katakana, hiragana, or mixed)
+              入力文字列（カタカナ、ひらがな、または混在）
 
     Returns:
-        String with katakana converted to hiragana (other characters unchanged)
+        String with katakana → hiragana (other characters unchanged)
+        カタカナ→ひらがな変換済み文字列（他の文字は変更なし）
     """
     result = []
     for c in text:
@@ -56,18 +228,47 @@ def katakana_to_hiragana(text: str) -> str:
 
 
 def split_into_sentences(text: str) -> list:
-    """Split text into sentences using Japanese punctuation and newlines.
+    """
+    Split text into sentences using Japanese punctuation.
+    日本語の句読点を使用してテキストを文に分割
 
-    Splits on:
-    - Japanese sentence-ending punctuation: 。！？
-    - Full-width variants: ．！？
-    - Newlines
+    ─────────────────────────────────────────────────────────────────────────
+    JAPANESE SENTENCE BOUNDARIES / 日本語の文境界
+    ─────────────────────────────────────────────────────────────────────────
+
+    Unlike English (which uses . ? !), Japanese uses different punctuation:
+    英語（. ? ! を使用）と異なり、日本語は異なる句読点を使用:
+
+    • 。(maru) - Period / 句点
+    • ！(full-width !) - Exclamation / 感嘆符
+    • ？(full-width ?) - Question / 疑問符
+
+    This function splits on these AND newlines (paragraph breaks).
+    この関数はこれらと改行（段落区切り）で分割する。
+
+    ─────────────────────────────────────────────────────────────────────────
+    WHY SENTENCE-BY-SENTENCE? / なぜ文ごとに？
+    ─────────────────────────────────────────────────────────────────────────
+
+    Processing sentence-by-sentence is important because:
+    文ごとの処理が重要な理由:
+
+    1. MeCab performs better on shorter, coherent units
+       MeCabは短く一貫した単位でより良く機能する
+
+    2. Easier to debug and inspect output
+       デバッグと出力の検査が容易
+
+    3. Memory-efficient for large texts
+       大きなテキストでメモリ効率が良い
 
     Args:
-        text: Input text string
+        text: Input text (may be multiple paragraphs)
+              入力テキスト（複数の段落の可能性あり）
 
     Returns:
-        List of sentence strings (empty strings filtered out)
+        List of sentences (empty strings filtered out)
+        文のリスト（空文字列は除外）
     """
     # First split by newlines
     lines = text.split('\n')
@@ -88,16 +289,51 @@ def split_into_sentences(text: str) -> list:
 
 
 def run_mecab(sentence: str) -> str:
-    """Run MeCab on a single sentence.
+    """
+    Run MeCab on a single sentence via subprocess.
+    サブプロセス経由でMeCabを単一の文に対して実行
+
+    ─────────────────────────────────────────────────────────────────────────
+    HOW IT WORKS / 動作の仕組み
+    ─────────────────────────────────────────────────────────────────────────
+
+    This function:
+    この関数は:
+
+    1. Pipes the sentence to MeCab's stdin
+       文をMeCabのstdinにパイプ
+
+    2. Captures MeCab's stdout (the analysis)
+       MeCabのstdout（解析結果）をキャプチャ
+
+    3. Returns the raw output for further processing
+       さらなる処理のために生の出力を返す
+
+    Equivalent to shell command:
+    シェルコマンドと等価:
+
+        echo "今日は天気がいい" | mecab
+
+    ─────────────────────────────────────────────────────────────────────────
+    ERROR HANDLING / エラー処理
+    ─────────────────────────────────────────────────────────────────────────
+
+    If MeCab is not installed, this function prints helpful error
+    messages and exits. This is better than cryptic Python exceptions.
+
+    MeCabがインストールされていない場合、この関数は有用なエラー
+    メッセージを出力して終了する。これは不可解なPython例外より良い。
 
     Args:
-        sentence: Input sentence string
+        sentence: 入力文字列
 
     Returns:
-        MeCab output as string
+        MeCab output (one token per line, ending with "EOS")
+        MeCab出力（1行に1トークン、"EOS"で終了）
 
     Raises:
-        RuntimeError: If MeCab command fails
+        RuntimeError: If MeCab returns non-zero exit code
+                      MeCabが非ゼロの終了コードを返した場合
     """
     try:
         result = subprocess.run(
@@ -117,20 +353,51 @@ def run_mecab(sentence: str) -> str:
 
 
 def extract_nouns_from_mecab(mecab_output: str) -> list:
-    """Extract nouns with their readings from MeCab output.
+    """
+    Extract nouns with their readings from MeCab output.
+    MeCab出力から名詞とその読みを抽出
 
-    MeCab output format (IPA dictionary):
-        surface\tPOS,POS1,POS2,POS3,活用型,活用形,原形,読み,発音
+    ─────────────────────────────────────────────────────────────────────────
+    WHY EXTRACT NOUNS? / なぜ名詞を抽出？
+    ─────────────────────────────────────────────────────────────────────────
+
+    Nouns are the most valuable for IME dictionaries because:
+    名詞がIME辞書に最も価値がある理由:
+
+    • They carry the most semantic meaning / 最も意味的な意味を持つ
+    • They're the most likely to need kanji conversion / 漢字変換が最も必要
+    • Verbs/adjectives are better handled by conjugation rules
+      動詞/形容詞は活用ルールで処理する方が良い
+
+    ─────────────────────────────────────────────────────────────────────────
+    MECAB OUTPUT FORMAT / MeCab出力形式
+    ─────────────────────────────────────────────────────────────────────────
+
+    MeCab (with IPA dictionary) outputs:
+    MeCab（IPA辞書使用時）の出力:
+
         天気\t名詞,一般,*,*,*,*,天気,テンキ,テンキ
+        │     │    │          │    │
+        │     │    │          │    └── Reading (index 7) 読み
+        │     │    │          └── Base form (index 6) 原形
+        │     │    └── Subcategory 品詞細分類
+        │     └── POS = "名詞" (noun) 品詞
+        └── Surface form 表層形
 
-    Filters out:
-        - Entries where yomi == surface (e.g., "それ /それ/")
+    We extract entries where:
+    以下の条件を満たすエントリを抽出:
+    • POS (index 0) = "名詞" / 品詞が「名詞」
+    • Reading (index 7) exists and ≠ "*" / 読み（index 7）が存在し"*"でない
+    • Reading ≠ surface (to avoid useless "それ /それ/")
+      読み≠表層形（無用な「それ /それ/」を避けるため）
 
     Args:
-        mecab_output: Raw MeCab output string
+        mecab_output: Raw MeCab output (multi-line string)
+                      MeCab生出力（複数行文字列）
 
     Returns:
-        List of (yomi_hiragana, surface) tuples for nouns
+        List of (hiragana_reading, surface) tuples
+        (ひらがな読み, 表層形) タプルのリスト
     """
     nouns = []
 
@@ -174,19 +441,47 @@ def extract_nouns_from_mecab(mecab_output: str) -> list:
 
 
 def apply_sentence_transformations(sentence: str) -> str:
-    """Apply transformations to a processed sentence.
+    """
+    Apply transformations to a processed sentence.
+    処理された文に変換を適用
 
-    This function applies regex-based transformations to simplify
-    the yomi/POS1/POS2 format. Currently strips POS tags, keeping only yomi.
+    ─────────────────────────────────────────────────────────────────────────
+    PURPOSE / 目的
+    ─────────────────────────────────────────────────────────────────────────
 
-    This is a separate function to allow future expansion of
-    post-processing logic.
+    This function post-processes the yomi/POS1/POS2 format to create
+    output suitable for CRF training or other analysis.
+
+    この関数は yomi/POS1/POS2 形式を後処理し、CRF訓練やその他の分析に
+    適した出力を作成する。
+
+    ─────────────────────────────────────────────────────────────────────────
+    TRANSFORMATIONS / 変換
+    ─────────────────────────────────────────────────────────────────────────
+
+    1. MARK PARTICLES (助詞) with underscore prefix:
+       助詞をアンダースコア接頭辞でマーク:
+
+       は/助詞/係助詞 → _は/助詞/係助詞
+
+       Why? Particles often mark bunsetsu (phrase) boundaries.
+       なぜ？助詞はしばしば文節境界をマークする。
+
+    2. STRIP POS TAGS, keeping only readings:
+       品詞タグを除去し、読みのみを保持:
+
+       きょう/名詞/副詞可能 → きょう
+
+       This creates a simpler format for some training scenarios.
+       これにより一部の訓練シナリオ向けのよりシンプルな形式になる。
 
     Args:
-        sentence: Sentence in "yomi/POS1/POS2 yomi/POS1/POS2 ..." format
+        sentence: "yomi/POS1/POS2 yomi/POS1/POS2 ..." format
+                  「yomi/POS1/POS2 yomi/POS1/POS2 ...」形式
 
     Returns:
-        Transformed sentence
+        Transformed sentence (readings with particle markers)
+        変換された文（助詞マーカー付きの読み）
     """
     # Consider joshi 助詞 as a special-case => marker
     sentence = re.sub(r'(\S+/助詞/\S+(?=[ ]|$))', r'_\1', sentence)
@@ -197,21 +492,48 @@ def apply_sentence_transformations(sentence: str) -> str:
 
 
 def postprocess_mecab_output(mecab_output: str, sentence: str) -> str:
-    """Post-process MeCab output into yomi/POS1/POS2 format.
+    """
+    Post-process MeCab output into yomi/POS1/POS2 format.
+    MeCab出力を yomi/POS1/POS2 形式に後処理
 
-    Transforms MeCab output from:
-        surface\tPOS1,POS2,...,yomi,...
-    To:
-        yomi/POS1/POS2 yomi/POS1/POS2 ...
+    ─────────────────────────────────────────────────────────────────────────
+    TRANSFORMATION PIPELINE / 変換パイプライン
+    ─────────────────────────────────────────────────────────────────────────
 
-    Then applies sentence transformations (currently strips POS tags).
+    Step 1: Parse MeCab output / MeCab出力を解析
+    ─────────────────────────────────────────────
+        Input:  天気\t名詞,一般,*,*,*,*,天気,テンキ,テンキ
+        Output: てんき/名詞/一般
+
+    Step 2: Join tokens with spaces / トークンをスペースで結合
+    ─────────────────────────────────────────────────────────────
+        きょう/名詞/副詞可能 は/助詞/係助詞 てんき/名詞/一般 ...
+
+    Step 3: Apply transformations / 変換を適用
+    ──────────────────────────────────────────
+        きょう _は てんき ...
+
+    ─────────────────────────────────────────────────────────────────────────
+    OUTPUT USE CASES / 出力の用途
+    ─────────────────────────────────────────────────────────────────────────
+
+    The output format is designed for:
+    出力形式は以下の用途に設計:
+
+    • CRF training data for bunsetsu segmentation
+      文節分割のためのCRF訓練データ
+    • Analyzing sentence structure patterns
+      文構造パターンの分析
+    • Building N-gram models
+      N-gramモデルの構築
 
     Args:
-        mecab_output: Raw MeCab output
-        sentence: Original input sentence (for reference)
+        mecab_output: MeCab生出力
+        sentence: 元の入力文（参照用）
 
     Returns:
-        Processed output string
+        Processed output (space-separated readings with markers)
+        処理済み出力（スペース区切りの読みとマーカー）
     """
     tokens = []
 
@@ -257,28 +579,91 @@ def postprocess_mecab_output(mecab_output: str, sentence: str) -> str:
 
 
 def format_skk_entry(yomi: str, surface: str) -> str:
-    """Format a yomi-surface pair as SKK dictionary entry.
+    """
+    Format a yomi-surface pair as SKK dictionary entry.
+    読み-表層形ペアをSKK辞書エントリにフォーマット
 
-    SKK format: yomi /surface/
+    ─────────────────────────────────────────────────────────────────────────
+    SKK DICTIONARY FORMAT / SKK辞書形式
+    ─────────────────────────────────────────────────────────────────────────
+
+    SKK dictionaries use a simple, human-readable format:
+    SKK辞書はシンプルで人間が読める形式を使用:
+
+        yomi /candidate1/candidate2/.../
+
+    Example / 例:
+        てんき /天気/
+        きょう /今日/京/教/
+
+    This format is:
+    この形式は:
+    • Easy to grep/edit / grep/編集が容易
+    • Widely used in Japanese IME ecosystems
+      日本語IMEエコシステムで広く使用
+    • Compatible with SKK, PSKK, and other tools
+      SKK、PSKK、その他のツールと互換性あり
 
     Args:
-        yomi: Reading in hiragana
-        surface: Surface form (kanji/word)
+        yomi: ひらがなの読み
+        surface: 表層形（漢字/単語）
 
     Returns:
-        SKK-formatted dictionary line
+        SKK-formatted line: "yomi /surface/"
+        SKK形式の行: "yomi /surface/"
     """
     return f"{yomi} /{surface}/"
 
 
 def process_file(input_path: str) -> tuple:
-    """Process an entire text file through MeCab.
+    """
+    Process an entire text file through MeCab.
+    テキストファイル全体をMeCabで処理
+
+    ─────────────────────────────────────────────────────────────────────────
+    PROCESSING STEPS / 処理ステップ
+    ─────────────────────────────────────────────────────────────────────────
+
+    1. READ input file (tries multiple encodings)
+       入力ファイルを読み込み（複数のエンコーディングを試行）
+
+    2. SPLIT into sentences
+       文に分割
+
+    3. For each sentence / 各文に対して:
+       a. Run MeCab / MeCabを実行
+       b. Extract nouns / 名詞を抽出
+       c. Post-process output / 出力を後処理
+
+    4. WRITE two output files:
+       2つの出力ファイルを書き込み:
+
+       • FILENAME_mecab_processed.txt
+         Full processed output with original sentences
+         元の文を含む完全な処理済み出力
+
+       • FILENAME_extracted_vocab.txt
+         Extracted nouns in SKK format
+         SKK形式で抽出された名詞
+
+    ─────────────────────────────────────────────────────────────────────────
+    OUTPUT FILE LOCATION / 出力ファイルの場所
+    ─────────────────────────────────────────────────────────────────────────
+
+    Output files are created in the SAME DIRECTORY as the input file.
+    出力ファイルは入力ファイルと同じディレクトリに作成される。
+
+        /path/to/novel.txt
+            ↓
+        /path/to/novel_mecab_processed.txt
+        /path/to/novel_extracted_vocab.txt
 
     Args:
-        input_path: Path to input text file
+        input_path: 入力テキストファイルのパス
 
     Returns:
         Tuple of (mecab_output_path, vocab_output_path)
+        (mecab出力パス, 語彙出力パス) のタプル
     """
     # Read input file
     encodings = ['utf-8', 'shift_jis', 'euc-jp']
@@ -353,14 +738,53 @@ def process_file(input_path: str) -> tuple:
 
 
 def test_sentence(sentence: str, verbose: bool = False):
-    """Test processing on a single sentence.
+    """
+    Test processing on a single sentence (interactive debugging).
+    単一の文で処理をテスト（対話的デバッグ用）
 
-    Runs the sentence through MeCab and displays the processing pipeline
-    results to stdout.
+    ─────────────────────────────────────────────────────────────────────────
+    PURPOSE / 目的
+    ─────────────────────────────────────────────────────────────────────────
+
+    This function is for TESTING and DEBUGGING the processing pipeline.
+    Use it to understand how MeCab analyzes specific sentences.
+
+    この関数は処理パイプラインのテストとデバッグ用。
+    MeCabが特定の文をどのように解析するか理解するために使用。
+
+    ─────────────────────────────────────────────────────────────────────────
+    EXAMPLE OUTPUT / 出力例
+    ─────────────────────────────────────────────────────────────────────────
+
+    Normal mode / 通常モード:
+    ─────────────────────────
+        $ python mecab_sentence_processor.py -t "今日は天気がいい"
+
+        Input: 今日は天気がいい
+
+        === Processed output ===
+        きょう _は てんき _が いい
+
+    Verbose mode / 詳細モード:
+    ───────────────────────────
+        $ python mecab_sentence_processor.py -t "今日は天気がいい" -v
+
+        Input: 今日は天気がいい
+
+        === Raw MeCab output ===
+        今日    名詞,副詞可能,*,*,*,*,今日,キョウ,キョー
+        は      助詞,係助詞,*,*,*,*,は,ハ,ワ
+        ...
+
+        === Intermediate (yomi/POS1/POS2) ===
+        きょう/名詞/副詞可能 は/助詞/係助詞 ...
+
+        === Processed output ===
+        きょう _は てんき _が いい
 
     Args:
-        sentence: Input sentence to test
-        verbose: If True, show intermediate steps
+        sentence: 入力文
+        verbose: Trueなら中間ステップを表示
     """
     print(f"Input: {sentence}")
     print()

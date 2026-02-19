@@ -1,5 +1,225 @@
 #!/usr/bin/env python3
-# henkan.py - Kana to Kanji conversion (変換) processor
+"""
+henkan.py - Kana to Kanji conversion (変換) processor
+かな漢字変換プロセッサ
+
+================================================================================
+WHAT THIS FILE DOES / このファイルの役割
+================================================================================
+
+This is the CORE CONVERSION ENGINE of PSKK. When you type hiragana and press
+the conversion key, THIS module decides what kanji candidates to show.
+
+これはPSKKのコア変換エンジン。ひらがなを入力して変換キーを押すと、
+このモジュールがどの漢字候補を表示するかを決定する。
+
+    User types:     へんかん
+    ユーザー入力:    へんかん
+                       ↓
+    HenkanProcessor → Dictionary lookup → [変換, 返還, 編纂, ...]
+                       ↓
+    User sees:      変換 (best match)
+    ユーザー表示:    変換（最良のマッチ）
+
+================================================================================
+TWO CONVERSION MODES / 2つの変換モード
+================================================================================
+
+This module supports TWO conversion modes:
+
+このモジュールは2つの変換モードをサポート:
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                                                                         │
+    │  MODE 1: WHOLE-WORD MODE (全語モード)                                    │
+    │  ─────────────────────────────────────────────────────────────────────   │
+    │                                                                         │
+    │  Input: へんかん → Dictionary lookup → [変換, 返還, ...]                 │
+    │                                                                         │
+    │  Used when: Dictionary has an exact match for the full input            │
+    │  使用時:    辞書が入力全体に対して完全一致を持つ場合                        │
+    │                                                                         │
+    │  Simple, fast, works for most single words.                             │
+    │  シンプル、高速、ほとんどの単語で動作。                                    │
+    │                                                                         │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                                                                         │
+    │  MODE 2: BUNSETSU MODE (文節モード)                                      │
+    │  ─────────────────────────────────────────────────────────────────────   │
+    │                                                                         │
+    │  Input: きょうはてんきがよい                                              │
+    │         ↓ (No dictionary match for full string)                         │
+    │         ↓ (文字列全体に辞書マッチなし)                                    │
+    │                                                                         │
+    │  CRF predicts: きょう|は|てんき|が|よい                                   │
+    │                  ↓     ↓    ↓    ↓   ↓                                  │
+    │  Lookup:       今日   は  天気   が  良い                                │
+    │                  ↓     ↓    ↓    ↓   ↓                                  │
+    │  Result:       今日は天気が良い                                          │
+    │                                                                         │
+    │  Used when: Dictionary has NO match for full input                      │
+    │  使用時:    辞書が入力全体に対してマッチを持たない場合                      │
+    │                                                                         │
+    │  Falls back to CRF-based segmentation for multi-word phrases.           │
+    │  複数単語のフレーズにはCRFベースのセグメンテーションにフォールバック。      │
+    │                                                                         │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+HOW CRF INTERACTION WORKS / CRF連携の仕組み
+================================================================================
+
+When whole-word mode fails (no dictionary match), the processor uses the
+CRF model to segment the input into bunsetsu (phrase units):
+
+全語モードが失敗した場合（辞書マッチなし）、プロセッサはCRFモデルを使用して
+入力を文節（フレーズ単位）にセグメント化する:
+
+    STEP 1: FEATURE EXTRACTION (特徴量抽出)
+    ───────────────────────────────────────
+
+        Input: きょうはてんきがよい
+               ↓
+        For each character position, extract features:
+        各文字位置について、特徴量を抽出:
+
+        Position 0 (き): ['char=き', 'type=hiragana', 'BOS', ...]
+        Position 1 (ょ): ['char=ょ', 'char[-1]=き', ...]
+        Position 2 (う): ['char=う', 'char[-1]=ょ', ...]
+        Position 3 (は): ['char=は', 'joshi=は', ...]  ← particle detected!
+        ...
+
+    STEP 2: CRF PREDICTION (CRF予測)
+    ─────────────────────────────────
+
+        Features → CRF Model → Labels
+        特徴量    → CRFモデル → ラベル
+
+        Labels: B-L, I-L, I-L, B-P, B-L, I-L, I-L, B-P, B-L, I-L
+                ↓
+        Bunsetsu: [きょう(L), は(P), てんき(L), が(P), よい(L)]
+                      ↑         ↑         ↑        ↑       ↑
+                   Lookup  Passthrough Lookup  Passthrough Lookup
+
+    STEP 3: DICTIONARY LOOKUP PER BUNSETSU (文節ごとの辞書検索)
+    ────────────────────────────────────────────────────────────
+
+        きょう (L) → Dictionary → [今日, 京, 教, ...]
+        は (P)     → Passthrough → は (no conversion)
+        てんき (L) → Dictionary → [天気, 転機, 電気, ...]
+        が (P)     → Passthrough → が (no conversion)
+        よい (L)   → Dictionary → [良い, 酔い, 宵, ...]
+
+    STEP 4: COMBINE RESULTS (結果の結合)
+    ─────────────────────────────────────
+
+        今日 + は + 天気 + が + 良い = 今日は天気が良い
+
+================================================================================
+N-BEST PREDICTIONS / N-Best予測
+================================================================================
+
+The CRF provides N-best predictions (multiple possible segmentations):
+CRFはN-best予測（複数の可能なセグメンテーション）を提供:
+
+    N-Best #1: きょう|は|てんき|が|よい (score: -2.34)
+    N-Best #2: きょうは|てんき|が|よい (score: -3.12)
+    N-Best #3: きょう|は|てんきが|よい (score: -3.45)
+    ...
+
+Users can cycle through these predictions using the bunsetsu_cycle key.
+ユーザーはbunsetsu_cycleキーを使用してこれらの予測を循環できる。
+
+================================================================================
+CANDIDATE NAVIGATION / 候補ナビゲーション
+================================================================================
+
+In bunsetsu mode, users can:
+文節モードでは、ユーザーは以下が可能:
+
+    - Left/Right arrows: Select which bunsetsu to edit
+      左右矢印: 編集する文節を選択
+    - Up/Down arrows: Cycle candidates for the selected bunsetsu
+      上下矢印: 選択された文節の候補を循環
+    - Tab/Shift+Tab: Cycle through N-best segmentation predictions
+      Tab/Shift+Tab: N-bestセグメンテーション予測を循環
+
+    Example / 例:
+        Current: [今日] は [天気] が [良い]
+                  ↑ selected / 選択中
+
+        Press Down: [京] は [天気] が [良い]  (changed 今日→京)
+        Press Right: [今日] は [天気] が [良い]
+                              ↑ selected / 選択中
+
+================================================================================
+THREAD SAFETY / スレッドセーフティ
+================================================================================
+
+Dictionary loading happens in a BACKGROUND THREAD to avoid blocking the UI:
+辞書の読み込みはUIをブロックしないようにバックグラウンドスレッドで行われる:
+
+    Main thread             Background thread
+    メインスレッド           バックグラウンドスレッド
+    ─────────────────────────────────────────────────
+    HenkanProcessor()  ──►  Start loading dictionaries
+                            辞書の読み込みを開始
+         │
+         ▼
+    convert("へんかん")     [Still loading...]
+         │                  [読み込み中...]
+         ▼
+    Passthrough (return     ────►  Loading complete!
+    input as-is until              読み込み完了！
+    ready)
+         │
+         ▼
+    convert("へんかん")     [Ready - use dictionary]
+         │                  [準備完了 - 辞書を使用]
+         ▼
+    [変換, 返還, ...]
+
+The _lock ensures thread-safe access to the dictionary during loading.
+_lockは読み込み中の辞書への安全なアクセスを保証する。
+
+================================================================================
+DICTIONARY FORMAT / 辞書形式
+================================================================================
+
+Dictionaries are JSON files with this structure:
+辞書は以下の構造を持つJSONファイル:
+
+    {
+      "reading": {
+        "candidate1": count,
+        "candidate2": count,
+        ...
+      },
+      ...
+    }
+
+Example / 例:
+
+    {
+      "へんかん": {
+        "変換": 100,
+        "返還": 50,
+        "編纂": 10
+      },
+      "きょう": {
+        "今日": 200,
+        "京": 80,
+        "教": 40
+      }
+    }
+
+Higher count = higher priority (shown first in candidate list).
+高いカウント = 高い優先度（候補リストで最初に表示）。
+
+================================================================================
+"""
 
 import logging
 import os
@@ -15,37 +235,114 @@ logger = logging.getLogger(__name__)
 class HenkanProcessor:
     """
     Processor for kana-to-kanji conversion (かな漢字変換).
+    かな漢字変換プロセッサ。
 
-    This class handles the conversion of kana strings (or kana+kanji strings)
-    into 漢字かな混じり (kanji-kana mixed) text based on dictionary entries.
+    ============================================================================
+    OVERVIEW / 概要
+    ============================================================================
 
-    The conversion operates on bunsetsu (文節) units - meaningful phrase
-    boundaries in Japanese text.
+    This class is the main conversion engine. It handles:
+    このクラスはメイン変換エンジン。以下を担当:
 
-    Dictionary format (JSON):
-        {
-            "reading": {
-                "candidate1": {"POS": "品詞", "cost": cost1},
-                "candidate2": {"POS": "品詞", "cost": cost2},
-                ...
-            },
-            ...
-        }
-    where cost represents the priority (lower cost = better candidate).
+        1. Loading and merging multiple dictionaries
+           複数の辞書の読み込みとマージ
+        2. Whole-word dictionary lookup
+           全語辞書検索
+        3. CRF-based bunsetsu segmentation (fallback)
+           CRFベースの文節セグメンテーション（フォールバック）
+        4. Candidate navigation (next/previous)
+           候補ナビゲーション（次/前）
+        5. Bunsetsu-level navigation and candidate cycling
+           文節レベルのナビゲーションと候補循環
+
+    ============================================================================
+    CONVERSION FLOW / 変換フロー
+    ============================================================================
+
+        ┌─────────────────────────────────────────────────────────────────────┐
+        │  convert(reading)                                                   │
+        │  変換(読み)                                                          │
+        │      │                                                              │
+        │      ▼                                                              │
+        │  Dictionary has match?  ──YES──►  WHOLE-WORD MODE                   │
+        │  辞書にマッチあり？                  全語モード                        │
+        │      │                              Return sorted candidates        │
+        │      │NO                            ソートされた候補を返す             │
+        │      ▼                                                              │
+        │  CRF predict bunsetsu  ──►  BUNSETSU MODE                           │
+        │  CRF文節予測                 文節モード                               │
+        │                              Segment, lookup each, combine          │
+        │                              セグメント、各々検索、結合               │
+        └─────────────────────────────────────────────────────────────────────┘
+
+    ============================================================================
+    STATE MANAGEMENT / 状態管理
+    ============================================================================
+
+    The processor maintains state for the current conversion:
+    プロセッサは現在の変換の状態を維持:
+
+    WHOLE-WORD MODE STATE / 全語モード状態:
+        _candidates          : List of candidate dicts
+                               候補辞書のリスト
+        _selected_index      : Currently selected candidate index
+                               現在選択されている候補のインデックス
+
+    BUNSETSU MODE STATE / 文節モード状態:
+        _bunsetsu_mode       : Whether in bunsetsu mode
+                               文節モードかどうか
+        _bunsetsu_predictions: N-best CRF predictions
+                               N-best CRF予測
+        _bunsetsu_candidates : Per-bunsetsu candidate lists
+                               文節ごとの候補リスト
+        _bunsetsu_selected_indices: Per-bunsetsu selected indices
+                                    文節ごとの選択インデックス
+        _selected_bunsetsu_index: Which bunsetsu is being edited
+                                  編集中の文節
+
+    Call reset() to clear all state when starting a new conversion.
+    新しい変換を開始する時はreset()を呼んで全ての状態をクリア。
+
+    ============================================================================
+    THREAD SAFETY / スレッドセーフティ
+    ============================================================================
+
+    Dictionary loading happens in a background thread:
+    辞書の読み込みはバックグラウンドスレッドで行われる:
+
+        - Use is_ready() to check if loading is complete
+          is_ready()を使用して読み込みが完了したかチェック
+        - Before ready, convert() returns passthrough (input as-is)
+          準備完了前、convert()はパススルー（入力をそのまま）を返す
+        - _lock protects dictionary access during loading
+          _lockは読み込み中の辞書アクセスを保護
+
+    ============================================================================
     """
 
     def __init__(self, dictionary_files=None):
         """
         Initialize the HenkanProcessor.
+        HenkanProcessorを初期化。
 
-        Dictionary loading happens in a background thread to avoid blocking
-        the main thread. Use is_ready() to check if loading is complete.
+        Dictionary loading happens in a BACKGROUND THREAD to avoid blocking
+        the main thread. This ensures the IME starts quickly even with
+        large dictionaries.
+        辞書の読み込みはメインスレッドをブロックしないようにバックグラウンド
+        スレッドで行われる。これにより大きな辞書でもIMEが素早く起動する。
+
+        Use is_ready() to check if loading is complete.
         Before loading completes, convert() returns passthrough (input as-is).
+        読み込みが完了したかはis_ready()でチェック。
+        読み込み完了前、convert()はパススルー（入力をそのまま）を返す。
 
         Args:
             dictionary_files: List of paths to dictionary JSON files.
-                             Files are loaded in order; later files can
-                             add new entries or increase counts for existing ones.
+                              辞書JSONファイルへのパスのリスト。
+                              Files are loaded in order; later files can
+                              add new entries or increase counts for existing ones.
+                              ファイルは順番に読み込まれる; 後のファイルは
+                              新しいエントリを追加したり既存のカウントを増加できる。
         """
         # ─── Thread Safety ───
         # Lock for thread-safe access to _dictionary during background loading
@@ -206,25 +503,47 @@ class HenkanProcessor:
     def convert(self, reading):
         """
         Convert a kana reading to kanji candidates.
+        かなの読みを漢字候補に変換。
 
-        If a dictionary match exists for the full reading, returns those candidates
-        (whole-word mode). If no match exists, automatically falls back to
-        bunsetsu-based conversion using CRF prediction.
+        This is the MAIN ENTRY POINT for conversion. It implements the
+        two-mode conversion strategy:
+        これは変換のメインエントリーポイント。2モード変換戦略を実装:
+
+            ┌─────────────────────────────────────────────────────────────────┐
+            │  convert("へんかん")                                             │
+            │      │                                                          │
+            │      ▼                                                          │
+            │  Dictionary lookup: "へんかん" in dictionary?                    │
+            │      │                                                          │
+            │      ├──YES──►  Return [変換, 返還, ...] (whole-word mode)       │
+            │      │                                                          │
+            │      └──NO───►  CRF predict → bunsetsu mode                     │
+            │                 [今日|は|天気|が|良い]                            │
+            └─────────────────────────────────────────────────────────────────┘
 
         If background loading is not complete, returns the reading as-is
         (passthrough mode) to avoid blocking.
+        バックグラウンド読み込みが完了していない場合、ブロックを避けるため
+        読みをそのまま返す（パススルーモード）。
 
         Args:
-            reading: The kana string to convert (e.g., "へんかん")
+            reading: The kana string to convert (e.g., "へんかん").
+                     変換するかな文字列（例: "へんかん"）。
 
         Returns:
             list: List of conversion candidates, each being a dict with:
+                  変換候補のリスト、各々は以下を持つ辞書:
                   - 'surface': The converted text (e.g., "変換")
+                               変換されたテキスト（例: "変換"）
                   - 'reading': The original reading (e.g., "へんかん")
-                  - 'cost': Conversion cost/priority (lower is better)
+                               元の読み（例: "へんかん"）
+                  - 'count': Conversion priority (higher is better)
+                             変換優先度（高いほど良い）
 
                   In bunsetsu mode, the candidates list contains a single entry
                   with the combined surface from all bunsetsu.
+                  文節モードでは、候補リストには全文節からの結合サーフェスを
+                  持つ単一のエントリが含まれる。
         """
         # Reset state
         self._candidates = []
@@ -410,13 +729,23 @@ class HenkanProcessor:
         }
 
     # ─── CRF Bunsetsu Prediction ──────────────────────────────────────────
+    # CRF文節予測
 
     def _load_tagger(self):
         """
         Lazy load the CRF tagger for bunsetsu prediction.
+        文節予測用のCRFタガーを遅延読み込み。
+
+        The CRF model file (bunsetsu_boundary.crfsuite) is loaded only when
+        needed, to avoid slowing down startup for users who only use
+        whole-word conversion.
+
+        CRFモデルファイル（bunsetsu_boundary.crfsuite）は必要な時にのみ
+        読み込まれ、全語変換のみを使用するユーザーの起動を遅らせない。
 
         Returns:
-            bool: True if tagger is available, False otherwise
+            bool: True if tagger is available, False otherwise.
+                  タガーが利用可能ならTrue、それ以外はFalse。
         """
         if self._tagger is not None:
             return True
@@ -427,38 +756,71 @@ class HenkanProcessor:
     def predict_bunsetsu(self, input_text, n_best=5):
         """
         Predict bunsetsu segmentation using CRF N-best Viterbi.
+        CRF N-best Viterbiを使用して文節セグメンテーションを予測。
 
-        This method segments the input text into bunsetsu (phrase units),
-        identifying which segments should be sent to dictionary lookup
-        (Lookup bunsetsu) and which should be passed through as-is
-        (Passthrough bunsetsu, typically particles like は、が、を).
+        ============================================================================
+        HOW THIS WORKS / これの仕組み
+        ============================================================================
+
+        This is the KEY INTEGRATION POINT between henkan.py and the CRF model.
+        これはhenkan.pyとCRFモデルの間のキー統合ポイント。
+
+            Input: きょうはてんきがよい
+            入力:  きょうはてんきがよい
+                   ↓
+            1. Extract features for each character
+               各文字の特徴量を抽出
+                   ↓
+            2. CRF N-best Viterbi prediction
+               CRF N-best Viterbi予測
+                   ↓
+            3. Convert label sequences to bunsetsu lists
+               ラベルシーケンスを文節リストに変換
+                   ↓
+            Output: [('きょう', 'B-L'), ('は', 'B-P'), ...]
+            出力:   [('きょう', 'B-L'), ('は', 'B-P'), ...]
+
+        ============================================================================
+        LABEL MEANINGS / ラベルの意味
+        ============================================================================
+
+            B-L = Beginning of Lookup bunsetsu (needs dictionary conversion)
+                  LOOKUP文節の開始（辞書変換が必要）
+            I-L = Inside of Lookup bunsetsu
+                  LOOKUP文節の内部
+            B-P = Beginning of Passthrough bunsetsu (output as-is)
+                  PASSTHROUGH文節の開始（そのまま出力）
+            I-P = Inside of Passthrough bunsetsu
+                  PASSTHROUGH文節の内部
+
+        ============================================================================
 
         Args:
-            input_text: Hiragana input string to segment
-            n_best: Number of top predictions to return (default: 5)
+            input_text: Hiragana input string to segment.
+                        セグメント化するひらがな入力文字列。
+            n_best: Number of top predictions to return (default: 5).
+                    返すトップ予測の数（デフォルト: 5）。
 
         Returns:
             list: List of N-best predictions, each being a tuple of:
                   (bunsetsu_list, score)
-                  where bunsetsu_list is a list of (text, label) tuples:
-                      - text: The bunsetsu text
-                      - label: The full CRF label ('B-L' for Lookup, 'B-P' for Passthrough)
-                  To check bunsetsu type: label.endswith('-L') for Lookup,
-                  label.endswith('-P') for Passthrough.
-                  Returns empty list if tagger is unavailable or input is empty.
+                  N-best予測のリスト、各々は以下のタプル:
+                  (bunsetsu_list, score)
 
-        Example:
+                  bunsetsu_list is a list of (text, label) tuples:
+                  bunsetsu_listは(text, label)タプルのリスト:
+                      - text: The bunsetsu text / 文節テキスト
+                      - label: 'B-L' (Lookup) or 'B-P' (Passthrough)
+
+                  score is the CRF log-probability (more negative = less likely)
+                  scoreはCRF対数確率（より負 = より可能性が低い）
+
+        Example / 例:
             >>> processor.predict_bunsetsu("きょうはてんきがよい", n_best=3)
             [
                 ([('きょう', 'B-L'), ('は', 'B-P'), ('てんき', 'B-L'), ('が', 'B-P'), ('よい', 'B-L')], -2.34),
                 ([('きょうは', 'B-L'), ('てんき', 'B-L'), ('が', 'B-P'), ('よい', 'B-L')], -3.12),
                 ...
-            ]
-
-            # Consecutive Lookup bunsetsu (e.g., 企業収益 = きぎょうしゅうえき):
-            >>> processor.predict_bunsetsu("きぎょうしゅうえき", n_best=1)
-            [
-                ([('きぎょう', 'B-L'), ('しゅうえき', 'B-L')], -1.56),
             ]
         """
         if not input_text:
@@ -483,17 +845,30 @@ class HenkanProcessor:
         return output
 
     # ─── Bunsetsu Mode Methods ────────────────────────────────────────────
+    # 文節モードメソッド
 
     def _lookup_bunsetsu_candidates(self, bunsetsu_text):
         """
         Look up dictionary candidates for a single bunsetsu.
+        単一の文節に対する辞書候補を検索。
+
+        This is called for each "Lookup" bunsetsu identified by the CRF.
+        Passthrough bunsetsu (particles) skip this and keep their text as-is.
+
+        これはCRFによって識別された各「Lookup」文節に対して呼ばれる。
+        Passthrough文節（助詞）はこれをスキップし、テキストをそのまま保持する。
 
         Args:
-            bunsetsu_text: The bunsetsu yomi to look up
+            bunsetsu_text: The bunsetsu yomi to look up.
+                           検索する文節の読み。
 
         Returns:
-            list: List of candidate dicts with 'surface', 'reading', 'cost'.
-                  If no match found, returns list with original text as surface.
+            list: List of candidate dicts with 'surface', 'reading', 'count'.
+                  If no match found, returns list with original text as surface
+                  (marked as passthrough).
+                  'surface', 'reading', 'count'を持つ候補辞書のリスト。
+                  マッチが見つからない場合、元のテキストをsurfaceとして返す
+                  （passthroughとしてマーク）。
         """
         candidates = []
 
@@ -544,11 +919,27 @@ class HenkanProcessor:
     def _init_bunsetsu_mode(self, prediction_index):
         """
         Initialize bunsetsu mode state for a given prediction index.
+        指定された予測インデックスに対して文節モード状態を初期化。
 
         This sets up the per-bunsetsu candidates and selection state.
+        When entering bunsetsu mode, this method:
+        これは文節ごとの候補と選択状態を設定する。
+        文節モードに入る時、このメソッドは:
+
+            1. Gets the bunsetsu list from the N-best prediction
+               N-best予測から文節リストを取得
+            2. For each bunsetsu:
+               各文節について:
+                   - Lookup bunsetsu: Get dictionary candidates
+                     Lookup文節: 辞書候補を取得
+                   - Passthrough bunsetsu: Keep as-is (no alternatives)
+                     Passthrough文節: そのまま保持（代替なし）
+            3. Initializes selection indices (first candidate for each)
+               選択インデックスを初期化（各々の最初の候補）
 
         Args:
-            prediction_index: Index into _bunsetsu_predictions
+            prediction_index: Index into _bunsetsu_predictions.
+                              _bunsetsu_predictionsへのインデックス。
         """
         if not self._bunsetsu_predictions:
             return
@@ -648,16 +1039,33 @@ class HenkanProcessor:
 
     def cycle_bunsetsu_prediction(self):
         """
-        Cycle to the next bunsetsu prediction.
+        Cycle to the next bunsetsu prediction (N-best cycling).
+        次の文節予測に循環（N-best循環）。
 
-        This cycles through:
-        1. Whole-word dictionary match (if available)
-        2. CRF N-best #1 (if multi-bunsetsu)
-        3. CRF N-best #2 (if multi-bunsetsu)
-        ... and wraps around.
+        This allows users to try different segmentations from the CRF.
+        これによりユーザーはCRFからの異なるセグメンテーションを試せる。
+
+        Cycling order / 循環順序:
+            1. Whole-word dictionary match (if available)
+               全語辞書マッチ（利用可能な場合）
+            2. CRF N-best #1 (if multi-bunsetsu)
+               CRF N-best #1（複数文節の場合）
+            3. CRF N-best #2 (if multi-bunsetsu)
+               CRF N-best #2（複数文節の場合）
+            ... and wraps around to #1
+               ...そして#1に戻る
+
+        Example / 例:
+            Input: きょうはてんきがよい
+
+            [Tab] → 今日は天気が良い (whole-word if available)
+            [Tab] → 今日|は|天気|が|良い (N-best #1)
+            [Tab] → 今日は|天気|が|良い (N-best #2, different segmentation)
+            [Tab] → (back to start)
 
         Returns:
-            bool: True if mode changed, False otherwise
+            bool: True if mode changed, False otherwise.
+                  モードが変更されたらTrue、それ以外はFalse。
         """
         if not self._current_yomi:
             return False
@@ -825,12 +1233,21 @@ class HenkanProcessor:
     def get_display_surface(self):
         """
         Get the combined display surface for the current conversion.
+        現在の変換の結合表示サーフェスを取得。
 
-        In whole-word mode: returns the selected candidate's surface.
-        In bunsetsu mode: returns all bunsetsu surfaces concatenated.
+        In whole-word mode / 全語モード:
+            Returns the selected candidate's surface.
+            選択された候補のサーフェスを返す。
+            Example: "変換"
+
+        In bunsetsu mode / 文節モード:
+            Returns all bunsetsu surfaces concatenated.
+            全ての文節サーフェスを連結して返す。
+            Example: "今日" + "は" + "天気" + "が" + "良い" = "今日は天気が良い"
 
         Returns:
-            str: The display surface string
+            str: The display surface string.
+                 表示サーフェス文字列。
         """
         if not self._bunsetsu_mode:
             # Whole-word mode
@@ -851,10 +1268,27 @@ class HenkanProcessor:
     def get_display_surface_with_selection(self):
         """
         Get the display surface with selection markers for preedit display.
+        プリエディット表示用の選択マーカー付き表示サーフェスを取得。
+
+        This is used by the engine to render the preedit with visual
+        highlighting of the currently selected bunsetsu.
+        これはエンジンが現在選択されている文節の視覚的ハイライト付きで
+        プリエディットをレンダリングするために使用される。
+
+        In whole-word mode / 全語モード:
+            Returns single tuple with the surface, always selected.
+            サーフェスを持つ単一のタプルを返す、常に選択状態。
+            Example: [("変換", True)]
+
+        In bunsetsu mode / 文節モード:
+            Returns each bunsetsu with its selection state.
+            各文節とその選択状態を返す。
+            Example: [("今日", True), ("は", False), ("天気", False), ...]
+                       ↑ selected / 選択中
 
         Returns:
             list: List of (text, is_selected) tuples for each bunsetsu.
-                  In whole-word mode, returns single tuple with the surface.
+                  各文節の(text, is_selected)タプルのリスト。
         """
         if not self._bunsetsu_mode:
             # Whole-word mode

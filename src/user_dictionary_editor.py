@@ -1,10 +1,132 @@
 #!/usr/bin/env python3
-# user_dictionary_editor.py - GUI for managing user dictionary entries
-#
-# This module provides a GTK-based editor for the user_dictionary.json file,
-# allowing users to add, view, edit, and delete kana-to-kanji mappings.
-#
-# Can be run standalone or imported for use with keybindings.
+"""
+user_dictionary_editor.py - GUI for managing user dictionary entries
+ユーザー辞書エントリを管理するためのGUI
+
+================================================================================
+WHAT THIS FILE DOES / このファイルの役割
+================================================================================
+
+This module provides a GTK-based editor for the user_dictionary.json file.
+It allows users to add, view, edit, and delete kana-to-kanji mappings that
+personalize their input method experience.
+
+このモジュールはuser_dictionary.jsonファイル用のGTKベースのエディタを提供する。
+ユーザーは入力メソッドの体験を個人化するために、かな漢字マッピングの
+追加、表示、編集、削除ができる。
+
+================================================================================
+WHY USER DICTIONARIES? / なぜユーザー辞書が必要か？
+================================================================================
+
+System dictionaries contain common words, but they can't know:
+システム辞書は一般的な単語を含むが、以下は知らない:
+
+    - Your name and the names of people you write to
+      あなたの名前やよく書く人の名前
+    - Technical terms specific to your work
+      あなたの仕事に固有の専門用語
+    - Slang or neologisms you frequently use
+      よく使うスラングや新語
+    - Unusual readings for kanji in proper nouns
+      固有名詞での漢字の特殊な読み
+
+The user dictionary fills this gap by storing YOUR personal word choices.
+ユーザー辞書はあなた個人の単語選択を保存してこのギャップを埋める。
+
+================================================================================
+HOW TO USE / 使用方法
+================================================================================
+
+There are THREE ways to use this module:
+このモジュールを使う方法は3つ:
+
+    1. STANDALONE MODE (スタンドアロンモード)
+       ─────────────────────────────────────────
+       Run directly from command line:
+       コマンドラインから直接実行:
+
+           python user_dictionary_editor.py [reading] [candidate]
+
+       Example: python user_dictionary_editor.py "たなか" "田中"
+       例: python user_dictionary_editor.py "たなか" "田中"
+
+    2. FROM SETTINGS PANEL (設定パネルから)
+       ─────────────────────────────────────────
+       Open Settings → User Dictionary tab → "Open Editor" button
+       設定を開く → ユーザー辞書タブ → 「エディタを開く」ボタン
+
+    3. VIA KEYBINDING (キーバインド経由)
+       ─────────────────────────────────────────
+       Press the configured hotkey (e.g., Ctrl+Shift+R) while typing.
+       入力中に設定されたホットキー（例: Ctrl+Shift+R）を押す。
+       - If you have text in clipboard, it becomes the candidate
+         クリップボードにテキストがあれば、それが候補になる
+       - The current preedit becomes the reading
+         現在のプリエディットが読みになる
+
+================================================================================
+DATA FORMAT / データ形式
+================================================================================
+
+The user dictionary is stored as JSON in:
+ユーザー辞書は以下にJSONとして保存:
+
+    ~/.config/ibus-pskk/user_dictionary.json
+
+Format:
+形式:
+    {
+      "reading1": {
+        "candidate1": count,
+        "candidate2": count,
+        ...
+      },
+      "reading2": {
+        ...
+      }
+    }
+
+Example:
+例:
+    {
+      "たなか": {
+        "田中": 5,
+        "棚下": 1
+      },
+      "ひろし": {
+        "博": 3,
+        "宏": 2
+      }
+    }
+
+The "count" value represents usage frequency - higher counts mean the
+candidate appears earlier in the suggestion list.
+「count」値は使用頻度を表す - 高いカウントは候補が提案リストの上位に表示される。
+
+================================================================================
+MODULE STRUCTURE / モジュール構造
+================================================================================
+
+    UTILITY FUNCTIONS (standalone-safe):
+    ユーティリティ関数（スタンドアロン安全）:
+        - get_user_dictionary_path()  → Get default file path
+        - load_user_dictionary()      → Load from JSON
+        - save_user_dictionary()      → Save to JSON
+        - add_entry()                 → Add a single entry
+        - remove_entry()              → Remove a single entry
+
+    GUI CLASS:
+    GUIクラス:
+        - UserDictionaryEditor       → GTK window for editing
+
+    INTEGRATION FUNCTIONS (for use from IME):
+    統合関数（IMEからの使用用）:
+        - open_editor()              → Open editor window
+        - register_from_clipboard()  → Quick registration workflow
+
+================================================================================
+"""
 
 import json
 import logging
@@ -20,7 +142,15 @@ logger = logging.getLogger(__name__)
 
 
 def get_user_dictionary_path():
-    """Get the path to user_dictionary.json in the config directory."""
+    """
+    Get the path to user_dictionary.json in the config directory.
+    設定ディレクトリ内のuser_dictionary.jsonへのパスを取得。
+
+    Returns:
+        str: Full path to the user dictionary file.
+             ユーザー辞書ファイルへのフルパス。
+             Example: "/home/user/.config/ibus-pskk/user_dictionary.json"
+    """
     config_dir = os.path.join(os.path.expanduser('~'), '.config', 'ibus-pskk')
     return os.path.join(config_dir, 'user_dictionary.json')
 
@@ -28,12 +158,25 @@ def get_user_dictionary_path():
 def load_user_dictionary(path=None):
     """
     Load user dictionary from JSON file.
+    JSONファイルからユーザー辞書を読み込む。
+
+    Reads the user dictionary file and returns its contents as a nested dict.
+    Handles missing files gracefully by returning an empty dict.
+    ユーザー辞書ファイルを読み取り、内容をネストされた辞書として返す。
+    ファイルが見つからない場合は空の辞書を返して適切に処理する。
 
     Args:
         path: Path to dictionary file. If None, uses default location.
+              辞書ファイルへのパス。Noneの場合はデフォルトの場所を使用。
 
     Returns:
-        dict: Dictionary data {reading: {candidate: count, ...}, ...}
+        dict: Dictionary data in format {reading: {candidate: count, ...}, ...}
+              形式 {読み: {候補: カウント, ...}, ...} の辞書データ
+
+    Example:
+        >>> data = load_user_dictionary()
+        >>> data
+        {'たなか': {'田中': 5, '棚下': 1}}
     """
     if path is None:
         path = get_user_dictionary_path()
@@ -60,13 +203,22 @@ def load_user_dictionary(path=None):
 def save_user_dictionary(data, path=None):
     """
     Save user dictionary to JSON file.
+    ユーザー辞書をJSONファイルに保存。
+
+    Writes the dictionary data to a JSON file with UTF-8 encoding.
+    Creates the parent directory if it doesn't exist.
+    辞書データをUTF-8エンコーディングでJSONファイルに書き込む。
+    親ディレクトリが存在しない場合は作成する。
 
     Args:
-        data: Dictionary data to save
+        data: Dictionary data to save (nested dict format).
+              保存する辞書データ（ネストされた辞書形式）。
         path: Path to dictionary file. If None, uses default location.
+              辞書ファイルへのパス。Noneの場合はデフォルトの場所を使用。
 
     Returns:
-        bool: True if successful, False otherwise
+        bool: True if successful, False otherwise.
+              成功時True、それ以外False。
     """
     if path is None:
         path = get_user_dictionary_path()
@@ -87,18 +239,37 @@ def save_user_dictionary(data, path=None):
 def add_entry(reading, candidate, count=1, data=None, path=None):
     """
     Add a single entry to the user dictionary.
+    ユーザー辞書に単一エントリを追加。
 
-    This function can be called programmatically (e.g., from keybindings).
+    This function can be called programmatically (e.g., from keybindings)
+    to register new words without opening the GUI editor.
+    この関数はプログラムから（例えばキーバインドから）呼び出して、
+    GUIエディタを開かずに新しい単語を登録できる。
+
+    If the entry already exists, its count is incremented rather than
+    creating a duplicate.
+    エントリが既に存在する場合、重複を作成せずにカウントが増加される。
 
     Args:
-        reading: The kana reading (e.g., "あい")
-        candidate: The kanji candidate (e.g., "愛")
-        count: Initial count/weight for the entry (default: 1)
+        reading: The kana reading (e.g., "あい").
+                 かなの読み（例: "あい"）。
+        candidate: The kanji candidate (e.g., "愛").
+                   漢字の候補（例: "愛"）。
+        count: Initial count/weight for the entry (default: 1).
+               エントリの初期カウント/重み（デフォルト: 1）。
         data: Existing dictionary data. If None, will be loaded from file.
+              既存の辞書データ。Noneの場合はファイルから読み込む。
         path: Path to dictionary file. If None, uses default location.
+              辞書ファイルへのパス。Noneの場合はデフォルトの場所を使用。
 
     Returns:
-        tuple: (success: bool, data: dict) - Updated dictionary data
+        tuple: (success: bool, data: dict) - Success flag and updated data.
+               (成功: bool, データ: dict) - 成功フラグと更新されたデータ。
+
+    Example:
+        >>> success, data = add_entry("たなか", "田中")
+        >>> success
+        True
     """
     if data is None:
         data = load_user_dictionary(path)
@@ -127,15 +298,26 @@ def add_entry(reading, candidate, count=1, data=None, path=None):
 def remove_entry(reading, candidate, data=None, path=None):
     """
     Remove a single entry from the user dictionary.
+    ユーザー辞書から単一エントリを削除。
+
+    Removes a specific reading→candidate mapping. If the reading has no
+    more candidates after removal, the reading key itself is also deleted.
+    特定の読み→候補マッピングを削除する。削除後に読みに候補がなくなった場合、
+    読みのキー自体も削除される。
 
     Args:
-        reading: The kana reading
-        candidate: The kanji candidate to remove
+        reading: The kana reading.
+                 かなの読み。
+        candidate: The kanji candidate to remove.
+                   削除する漢字の候補。
         data: Existing dictionary data. If None, will be loaded from file.
+              既存の辞書データ。Noneの場合はファイルから読み込む。
         path: Path to dictionary file. If None, uses default location.
+              辞書ファイルへのパス。Noneの場合はデフォルトの場所を使用。
 
     Returns:
-        tuple: (success: bool, data: dict) - Updated dictionary data
+        tuple: (success: bool, data: dict) - Success flag and updated data.
+               (成功: bool, データ: dict) - 成功フラグと更新されたデータ。
     """
     if data is None:
         data = load_user_dictionary(path)
@@ -158,18 +340,102 @@ def remove_entry(reading, candidate, data=None, path=None):
 class UserDictionaryEditor(Gtk.Window):
     """
     GTK Window for editing the user dictionary.
+    ユーザー辞書を編集するためのGTKウィンドウ。
 
-    Provides a GUI for viewing, adding, editing, and deleting
-    kana-to-kanji entries in user_dictionary.json.
+    ============================================================================
+    OVERVIEW / 概要
+    ============================================================================
+
+    Provides a graphical interface for managing user_dictionary.json.
+    Users can add, view, search, edit counts, and delete entries without
+    manually editing the JSON file.
+
+    user_dictionary.jsonを管理するためのグラフィカルインターフェースを提供。
+    ユーザーはJSONファイルを手動で編集せずに、エントリの追加、表示、
+    検索、カウント編集、削除ができる。
+
+    ============================================================================
+    WINDOW LAYOUT / ウィンドウレイアウト
+    ============================================================================
+
+        ┌─────────────────────────────────────────────────────────────────────┐
+        │  User Dictionary Editor                                    [─][□][×]│
+        ├─────────────────────────────────────────────────────────────────────┤
+        │  ┌─ Add New Entry ────────────────────────────────────────────────┐ │
+        │  │  Reading: [かな入力  ] → Kanji: [漢字入力  ]  [Add]            │ │
+        │  └────────────────────────────────────────────────────────────────┘ │
+        │  ┌─ Dictionary Entries ───────────────────────────────────────────┐ │
+        │  │  Search: [フィルタ入力...                        ] [Clear]     │ │
+        │  │  ┌────────────┬────────────┬───────┐                          │ │
+        │  │  │ Reading    │ Kanji      │ Count │  ← Sortable columns      │ │
+        │  │  ├────────────┼────────────┼───────┤                          │ │
+        │  │  │ たなか     │ 田中       │   5   │  ← Count is editable     │ │
+        │  │  │ たなか     │ 棚下       │   1   │                          │ │
+        │  │  │ ひろし     │ 博         │   3   │                          │ │
+        │  │  └────────────┴────────────┴───────┘                          │ │
+        │  │  5 entries                                                     │ │
+        │  │  [Delete Selected]                              [Refresh]      │ │
+        │  └────────────────────────────────────────────────────────────────┘ │
+        │  ~/.config/ibus-pskk/user_dictionary.json                  [Close]  │
+        └─────────────────────────────────────────────────────────────────────┘
+
+    ============================================================================
+    FEATURES / 機能
+    ============================================================================
+
+    - ADD ENTRIES: Type reading and kanji, press Enter or click Add
+      エントリ追加: 読みと漢字を入力し、Enterを押すか追加をクリック
+
+    - SEARCH/FILTER: Type in search box to filter displayed entries
+      検索/フィルタ: 検索ボックスに入力して表示エントリをフィルタ
+
+    - EDIT COUNT: Click on the count cell to edit priority/weight
+      カウント編集: カウントセルをクリックして優先度/重みを編集
+
+    - DELETE: Select rows (Ctrl+click for multiple) and click Delete
+      削除: 行を選択（複数はCtrl+クリック）して削除をクリック
+
+    - SORT: Click column headers to sort by reading, kanji, or count
+      ソート: 列ヘッダーをクリックして読み、漢字、カウントでソート
+
+    ============================================================================
+    ATTRIBUTES / 属性
+    ============================================================================
+
+    dictionary_path : str
+        Full path to the user_dictionary.json file.
+        user_dictionary.jsonファイルへのフルパス。
+
+    data : dict
+        In-memory copy of the dictionary data.
+        辞書データのメモリ内コピー。
+
+    modified : bool
+        Whether changes have been made (for potential future use).
+        変更が行われたかどうか（将来の使用のため）。
+
+    store : Gtk.ListStore
+        The data model backing the TreeView.
+        TreeViewをバックするデータモデル。
+
+    ============================================================================
     """
 
     def __init__(self, prefill_reading=None, prefill_candidate=None):
         """
         Initialize the dictionary editor window.
+        辞書エディタウィンドウを初期化。
+
+        Creates the window, loads dictionary data, builds the UI, and
+        optionally pre-fills the add form with provided values.
+        ウィンドウを作成し、辞書データを読み込み、UIを構築し、
+        オプションで提供された値で追加フォームを事前入力する。
 
         Args:
-            prefill_reading: Optional reading to pre-fill in the add form
-            prefill_candidate: Optional candidate to pre-fill (e.g., from clipboard)
+            prefill_reading: Optional reading to pre-fill in the add form.
+                             追加フォームに事前入力するオプションの読み。
+            prefill_candidate: Optional candidate to pre-fill (e.g., from clipboard).
+                               事前入力するオプションの候補（例: クリップボードから）。
         """
         super().__init__(title="User Dictionary Editor")
         self.set_default_size(500, 400)
@@ -211,7 +477,19 @@ class UserDictionaryEditor(Gtk.Window):
         return False
 
     def _build_ui(self):
-        """Build the window UI."""
+        """
+        Build the window UI components.
+        ウィンドウのUIコンポーネントを構築。
+
+        Creates the following structure:
+        以下の構造を作成:
+            - Add Entry frame (reading/candidate inputs + Add button)
+              エントリ追加フレーム（読み/候補入力 + 追加ボタン）
+            - Entry List frame (search box + TreeView + action buttons)
+              エントリリストフレーム（検索ボックス + ツリービュー + アクションボタン）
+            - Bottom bar (file path display + Close button)
+              下部バー（ファイルパス表示 + 閉じるボタン）
+        """
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.add(main_box)
 
@@ -354,7 +632,15 @@ class UserDictionaryEditor(Gtk.Window):
         main_box.pack_start(bottom_box, False, False, 0)
 
     def _refresh_list(self):
-        """Reload data from file and refresh the TreeView."""
+        """
+        Reload data from file and refresh the TreeView.
+        ファイルからデータを再読み込みしTreeViewを更新。
+
+        Called after add/delete operations to ensure the display is in sync
+        with the file. Also updates the entry count label.
+        追加/削除操作後に呼ばれ、表示がファイルと同期していることを確認。
+        エントリカウントラベルも更新する。
+        """
         self.data = load_user_dictionary(self.dictionary_path)
         self.store.clear()
 
@@ -393,7 +679,16 @@ class UserDictionaryEditor(Gtk.Window):
         self._update_count_label(len(self.store))
 
     def _on_add_clicked(self, widget):
-        """Handle add button click."""
+        """
+        Handle add button click or Enter key in entry fields.
+        追加ボタンのクリックまたはエントリフィールドでのEnterキーを処理。
+
+        Validates inputs, adds the entry to the dictionary, saves to file,
+        and refreshes the display. After successful add, sets the search
+        filter to show the newly added entry.
+        入力を検証し、エントリを辞書に追加し、ファイルに保存し、表示を更新する。
+        追加が成功したら、新しく追加されたエントリを表示するように検索フィルタを設定。
+        """
         reading = self.reading_entry.get_text().strip()
         candidate = self.candidate_entry.get_text().strip()
 
@@ -427,7 +722,15 @@ class UserDictionaryEditor(Gtk.Window):
             self._show_error("Failed to add entry. Check the log for details.")
 
     def _on_delete_clicked(self, widget):
-        """Handle delete button click."""
+        """
+        Handle delete button click.
+        削除ボタンのクリックを処理。
+
+        Gets selected rows, shows confirmation dialog, then deletes each
+        selected entry and refreshes the display. Supports multi-selection.
+        選択された行を取得し、確認ダイアログを表示し、選択された各エントリを
+        削除して表示を更新する。複数選択をサポート。
+        """
         selection = self.tree.get_selection()
         model, paths = selection.get_selected_rows()
 
@@ -467,7 +770,23 @@ class UserDictionaryEditor(Gtk.Window):
         self.modified = True
 
     def _on_count_edited(self, renderer, path, new_text):
-        """Handle count cell edit."""
+        """
+        Handle count cell edit in the TreeView.
+        TreeViewでのカウントセル編集を処理。
+
+        Validates the new count (must be positive integer), updates the
+        in-memory data, saves to file, and updates the display.
+        新しいカウントを検証（正の整数でなければならない）し、メモリ内データを
+        更新し、ファイルに保存し、表示を更新する。
+
+        Higher counts make candidates appear earlier in suggestions.
+        高いカウントは候補が提案の上位に表示されるようにする。
+
+        Args:
+            renderer: The CellRenderer (unused).
+            path: Tree path to the edited cell.
+            new_text: The user's input text.
+        """
         # Validate: must be a positive integer
         try:
             new_count = int(new_text)
@@ -520,17 +839,35 @@ class UserDictionaryEditor(Gtk.Window):
 def open_editor(prefill_reading=None, prefill_candidate=None, check_clipboard=True):
     """
     Open the dictionary editor window.
+    辞書エディタウィンドウを開く。
 
-    This function can be called from keybindings or other parts of the IME.
+    This is the primary function for launching the editor from other parts
+    of the IME (e.g., from a keybinding or the settings panel).
+    これはIMEの他の部分（例えばキーバインドや設定パネルから）から
+    エディタを起動するための主要な関数。
+
+    If check_clipboard is True and no candidate is provided, automatically
+    checks the clipboard for text to use as the candidate.
+    check_clipboardがTrueで候補が提供されていない場合、自動的に
+    クリップボードのテキストを候補として使用するかチェックする。
 
     Args:
-        prefill_reading: Optional reading to pre-fill
-        prefill_candidate: Optional candidate to pre-fill (e.g., from clipboard)
+        prefill_reading: Optional reading to pre-fill in the add form.
+                         追加フォームに事前入力するオプションの読み。
+        prefill_candidate: Optional candidate to pre-fill.
+                           事前入力するオプションの候補。
         check_clipboard: If True and prefill_candidate is None, check clipboard
-                        for candidate text (default: True)
+                         for candidate text (default: True).
+                         Trueでprefill_candidateがNoneの場合、クリップボードを
+                         候補テキストとしてチェック（デフォルト: True）。
 
     Returns:
-        UserDictionaryEditor: The editor window instance
+        UserDictionaryEditor: The editor window instance.
+                              エディタウィンドウのインスタンス。
+
+    Example (from keybinding handler):
+        >>> editor = open_editor(prefill_reading=current_preedit)
+        >>> editor.show_all()
     """
     # Auto-fill candidate from clipboard if not provided
     if prefill_candidate is None and check_clipboard:
@@ -551,18 +888,43 @@ def open_editor(prefill_reading=None, prefill_candidate=None, check_clipboard=Tr
 def register_from_clipboard(reading):
     """
     Register a new entry using clipboard content as the candidate.
+    クリップボードの内容を候補としてして新しいエントリを登録。
 
-    This is the "Option 3" workflow:
-    1. User copies kanji from somewhere
-    2. User has a reading in preedit
-    3. User presses keybinding
-    4. Entry is registered automatically
+    ============================================================================
+    QUICK REGISTRATION WORKFLOW / クイック登録ワークフロー
+    ============================================================================
+
+    This enables a fast workflow for adding new words:
+    これは新しい単語を追加するための高速ワークフローを可能にする:
+
+        1. User copies kanji from a webpage, document, etc.
+           ユーザーがWebページ、ドキュメントなどから漢字をコピー
+
+        2. User types the reading in the IME (shows in preedit)
+           ユーザーがIMEで読みを入力（プリエディットに表示）
+
+        3. User presses the registration keybinding
+           ユーザーが登録キーバインドを押す
+
+        4. Entry is registered automatically (no GUI needed!)
+           エントリが自動的に登録される（GUIは不要！）
+
+    This is much faster than opening the editor for one-off registrations.
+    これは1回限りの登録のためにエディタを開くよりもはるかに速い。
+
+    ============================================================================
 
     Args:
-        reading: The kana reading to register
+        reading: The kana reading to register.
+                 登録するかなの読み。
 
     Returns:
         tuple: (success: bool, candidate: str or None)
+               (成功: bool, 候補: str or None)
+               - success is True if entry was added
+                 エントリが追加された場合successはTrue
+               - candidate is the registered text, or None on failure
+                 candidateは登録されたテキスト、失敗時はNone
     """
     if not reading:
         logger.warning('Cannot register from clipboard: no reading provided')
@@ -587,7 +949,18 @@ def register_from_clipboard(reading):
 
 
 def main():
-    """Main entry point for standalone execution."""
+    """
+    Main entry point for standalone execution.
+    スタンドアロン実行のメインエントリーポイント。
+
+    Usage / 使用方法:
+        python user_dictionary_editor.py [reading] [candidate]
+
+    Examples / 例:
+        python user_dictionary_editor.py                    # Open empty editor
+        python user_dictionary_editor.py "たなか"           # Pre-fill reading
+        python user_dictionary_editor.py "たなか" "田中"    # Pre-fill both
+    """
     # Setup logging for standalone mode
     logging.basicConfig(
         level=logging.DEBUG,

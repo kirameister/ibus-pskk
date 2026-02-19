@@ -1,49 +1,207 @@
 #!/usr/bin/env python3
-# ui/conversion_model.py - Conversion Model Panel for IBus-PSKK
 """
-CRF-based bunsetsu (文節) segmentation model trainer and tester.
+conversion_model.py - CRF-based bunsetsu segmentation model trainer and tester
+CRFベースの文節セグメンテーションモデルのトレーナーとテスター
 
-This module trains a Conditional Random Field model to predict bunsetsu
-boundaries in Japanese text. The model uses character-level features
-including character identity, character type, surrounding context,
-particle/auxiliary verb detection, and dictionary lookups.
+================================================================================
+WHAT IS THIS MODULE FOR? / このモジュールの目的
+================================================================================
 
-IMPORTANT: Training Data Format
--------------------------------
-Training data must be in HIRAGANA (yomi/reading), not kanji-kana mixture.
-This is because at inference time, the model receives the user's typed
-hiragana input (before kana-to-kanji conversion), so training on kanji
-would create a domain mismatch.
+This module provides a GUI for training and testing machine learning models
+that predict WHERE to split Japanese text into bunsetsu (phrase units).
 
-Two annotation formats are supported:
+このモジュールは、日本語テキストを文節（フレーズ単位）に分割する場所を
+予測する機械学習モデルの訓練とテストのためのGUIを提供する。
 
-1. Simple format (B/I labels only):
-   Space-delimited bunsetsu, no type distinction.
+    User types:    きょうはてんきがよい
+    ユーザー入力:   きょうはてんきがよい
 
-       きょうは てんきが よい
+    Model predicts: きょう|は|てんき|が|よい
+    モデル予測:     きょう|は|てんき|が|よい
 
-   Use parse_training_line() for this format.
+    Converted:      今日|は|天気|が|良い
+    変換結果:       今日|は|天気|が|良い
 
-2. Annotated format (B-L/I-L/B-P/I-P labels):
-   Space-delimited bunsetsu with underscore markers for passthrough segments.
-   Bunsetsu starting or ending with '_' are Passthrough (output as-is).
-   Bunsetsu without '_' are Lookup (send to dictionary for conversion).
+================================================================================
+WHAT IS CRF? / CRFとは？（FOR NEWCOMERS / 初心者向け）
+================================================================================
 
-       きょう _は_ てんき _が_ よい
+CRF (Conditional Random Field) is a machine learning model well-suited for
+SEQUENCE LABELING tasks - where you need to assign a label to each element
+in a sequence while considering the context of neighboring elements.
 
-   Labels:
-     B-L = Beginning of Lookup bunsetsu (needs kana→kanji conversion)
-     I-L = Inside of Lookup bunsetsu
-     B-P = Beginning of Passthrough bunsetsu (output as-is, e.g., particles)
-     I-P = Inside of Passthrough bunsetsu
+CRF（条件付き確率場）は、シーケンスラベリングタスクに適した機械学習モデル -
+隣接する要素のコンテキストを考慮しながら、シーケンス内の各要素に
+ラベルを割り当てる必要がある場合に使用される。
 
-   Use parse_annotated_line() for this format.
+WHY CRF FOR BUNSETSU SEGMENTATION? / なぜ文節分割にCRF？
+─────────────────────────────────────────────────────────
 
-Incorrect format (kanji - do NOT use):
-    今日は 天気が 良い
+Consider the input: きょうはてんきがよい
 
-If you have a kanji-annotated corpus, convert it to readings first
-using the dictionary or a morphological analyzer like MeCab.
+We need to decide for EACH character: "Does a bunsetsu boundary come
+BEFORE this character?"
+
+入力について考える: きょうはてんきがよい
+
+各文字について決定する必要がある:「この文字の前に文節境界が来るか？」
+
+    Character:  き  ょ  う  は  て  ん  き  が  よ  い
+    Label:      B   I   I   B   B   I   I   B   B   I
+                ↑           ↑   ↑       ↑   ↑
+              Begin       Begin Begin Begin Begin
+              (start of   (は is  (new    (が) (new
+               sentence)   alone)  bunsetsu)    bunsetsu)
+
+    B = Beginning of bunsetsu / 文節の開始
+    I = Inside bunsetsu (continuation) / 文節の内部（継続）
+
+CRF is perfect for this because:
+CRFがこれに最適な理由:
+
+    1. It looks at CONTEXT (neighboring characters)
+       コンテキスト（隣接する文字）を見る
+       → "は" after "う" likely starts a new bunsetsu
+         「う」の後の「は」は新しい文節を開始する可能性が高い
+
+    2. It considers the WHOLE SEQUENCE together
+       シーケンス全体を一緒に考慮する
+       → Avoids impossible label sequences (like B-B-B-B)
+         不可能なラベルシーケンス（B-B-B-Bなど）を回避
+
+    3. It's TRAINABLE from examples
+       例から訓練可能
+       → Feed it annotated sentences, it learns the patterns
+         注釈付きの文を与えると、パターンを学習する
+
+CRF vs OTHER APPROACHES / CRF vs 他のアプローチ:
+────────────────────────────────────────────────
+
+    RULE-BASED (ルールベース):
+        "Split after particles は, が, を..."
+        「助詞 は, が, を... の後で分割」
+        ✗ Can't handle exceptions, new patterns
+          例外、新しいパターンを処理できない
+
+    SIMPLE CLASSIFIER (単純な分類器):
+        Decide each position independently
+        各位置を独立して決定
+        ✗ Ignores that B must be followed by I or B
+          BはIかBが続く必要があることを無視
+
+    CRF (条件付き確率場):
+        Consider context + enforce valid sequences
+        コンテキストを考慮 + 有効なシーケンスを強制
+        ✓ Best of both worlds
+          両方の長所を併せ持つ
+
+================================================================================
+HOW CRF FEATURES WORK / CRF特徴量の仕組み
+================================================================================
+
+The model learns from FEATURES - properties of each character position:
+モデルは特徴量から学習する - 各文字位置のプロパティ:
+
+    Position 3 (は) has these features:
+    位置3（は）にはこれらの特徴量がある:
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │  Feature                    │  Value      │  Why it helps              │
+    │  特徴量                      │  値         │  なぜ役立つか               │
+    ├─────────────────────────────┼─────────────┼────────────────────────────┤
+    │  char=は                    │  current    │  "は" often starts bunsetsu │
+    │  char[-1]=う                │  previous   │  what came before          │
+    │  char[+1]=て                │  next       │  what comes after          │
+    │  type=hiragana              │  char type  │  distinguishes あ vs A vs 漢 │
+    │  joshi=は                   │  particle?  │  助詞 often start bunsetsu  │
+    │  type_change=False          │  boundary?  │  type changes often = split│
+    │  dict_start_len=4           │  dictionary │  word "てんき" starts here  │
+    └─────────────────────────────┴─────────────┴────────────────────────────┘
+
+The CRF learns weights for each feature:
+CRFは各特徴量の重みを学習する:
+
+    "If joshi=は is present, increase probability of B label by 2.5"
+    「joshi=はが存在する場合、Bラベルの確率を2.5増加」
+
+    "If char[-1]=っ (small tsu), decrease probability of B label by 1.8"
+    「char[-1]=っ（促音）の場合、Bラベルの確率を1.8減少」
+
+================================================================================
+4-CLASS LABELING SYSTEM / 4クラスラベリングシステム
+================================================================================
+
+This module uses an EXTENDED labeling scheme with 4 classes:
+このモジュールは4クラスの拡張ラベリングスキームを使用:
+
+    B-L = Beginning of LOOKUP bunsetsu (needs dictionary conversion)
+          LOOKUP文節の開始（辞書変換が必要）
+          Example: きょう → 今日
+
+    I-L = Inside of LOOKUP bunsetsu
+          LOOKUP文節の内部
+
+    B-P = Beginning of PASSTHROUGH bunsetsu (output as-is)
+          PASSTHROUGH文節の開始（そのまま出力）
+          Example: は → は (particle, no conversion needed)
+
+    I-P = Inside of PASSTHROUGH bunsetsu
+          PASSTHROUGH文節の内部
+
+This distinction helps the IME know:
+この区別はIMEが以下を知るのに役立つ:
+    - Which segments need kanji conversion / どのセグメントが漢字変換が必要か
+    - Which segments should pass through unchanged / どのセグメントがそのまま通過すべきか
+
+================================================================================
+TRAINING DATA FORMAT / 訓練データ形式
+================================================================================
+
+IMPORTANT: Training data must be in HIRAGANA (readings), NOT kanji!
+重要: 訓練データはひらがな（読み）でなければならない、漢字ではない！
+
+    ✓ CORRECT:  きょう _は_ てんき _が_ よい
+    ✗ WRONG:    今日は 天気が 良い
+
+Why? At inference time, the model sees the user's typed hiragana BEFORE
+conversion. Training on kanji would create a domain mismatch.
+なぜ？推論時、モデルは変換前にユーザーが入力したひらがなを見る。
+漢字で訓練するとドメインミスマッチが発生する。
+
+FORMAT 1: Simple (B/I only) / シンプル形式（B/Iのみ）:
+─────────────────────────────────────────────────────
+
+    きょうは てんきが よい
+
+    (Space-separated bunsetsu, no L/P distinction)
+    （スペースで区切られた文節、L/Pの区別なし）
+
+FORMAT 2: Annotated (B-L/I-L/B-P/I-P) / 注釈付き形式:
+──────────────────────────────────────────────────────
+
+    きょう _は_ てんき _が_ よい
+
+    Underscore (_) marks PASSTHROUGH segments:
+    アンダースコア（_）はPASSTHROUGHセグメントをマーク:
+        - _は_ → passthrough (particle, output as-is)
+        - てんき → lookup (send to dictionary)
+
+================================================================================
+MODULE STRUCTURE / モジュール構造
+================================================================================
+
+    CONSTANTS / 定数:
+        JOSHI       - Set of Japanese particles (助詞)
+        JODOUSHI    - Set of auxiliary verbs (助動詞)
+
+    FUNCTIONS / 関数:
+        parse_annotated_line()   - Parse training data
+        extract_char_features()  - Extract features for one character
+
+    GUI CLASS / GUIクラス:
+        ConversionModelPanel     - GTK window for training/testing
+
+================================================================================
 """
 
 import gi
@@ -67,68 +225,200 @@ except ImportError:
 
 
 # ─── 助詞 / 助動詞 sets ──────────────────────────────────────────────
+#
+# WHAT ARE JOSHI AND JODOUSHI? / 助詞と助動詞とは？
+# ─────────────────────────────────────────────────
+#
+# These are Japanese grammatical particles and auxiliary verbs - small words
+# that attach to content words to show grammatical relationships.
+# これらは日本語の文法的な助詞と助動詞 - 文法的な関係を示すために
+# 内容語に付く小さな単語。
+#
+# WHY ARE THEY IMPORTANT FOR BUNSETSU SEGMENTATION?
+# なぜ文節分割に重要か？
+#
+# Particles often mark bunsetsu boundaries:
+# 助詞はしばしば文節境界をマークする:
+#
+#     きょう|は|てんき|が|よい
+#           ↑       ↑
+#         particle particle
+#
+# The CRF uses these as features: "If this position matches a known particle,
+# it's likely the start of a new bunsetsu."
+# CRFはこれらを特徴量として使用:「この位置が既知の助詞と一致する場合、
+# 新しい文節の開始である可能性が高い」
+#
+# ─────────────────────────────────────────────────
 
 JOSHI = {
-    # 格助詞
-    'が', 'を', 'に', 'へ', 'で', 'と', 'から', 'より', 'まで',
-    # 接続助詞
-    'て', 'ば', 'けど', 'けれど', 'けれども', 'ながら', 'のに', 'ので', 'たり', 'し',
-    # 副助詞
-    'は', 'も', 'こそ', 'さえ', 'でも', 'しか', 'ばかり', 'だけ', 'ほど',
-    'くらい', 'ぐらい', 'など', 'なり', 'やら',
-    # 終助詞
-    'か', 'よ', 'ね', 'な', 'ぞ', 'わ', 'さ',
-    # 連体助詞 / 並列助詞
-    'の', 'や',
+    # 格助詞 (Case particles) - mark grammatical roles
+    # 格助詞 - 文法的役割をマーク
+    'が',      # subject marker / 主格
+    'を',      # object marker / 目的格
+    'に',      # direction, time, indirect object / 方向、時間、間接目的語
+    'へ',      # direction / 方向
+    'で',      # location of action, means / 動作の場所、手段
+    'と',      # with, quotation / と一緒に、引用
+    'から',    # from / から
+    'より',    # from, than (comparison) / から、より（比較）
+    'まで',    # until, up to / まで
+
+    # 接続助詞 (Conjunctive particles) - connect clauses
+    # 接続助詞 - 節を接続
+    'て',      # te-form connector / て形接続
+    'ば',      # conditional / 条件
+    'けど', 'けれど', 'けれども',  # but / しかし
+    'ながら',  # while / ながら
+    'のに',    # although / にもかかわらず
+    'ので',    # because / ので
+    'たり',    # and (listing actions) / たり
+    'し',      # and (listing reasons) / し
+
+    # 副助詞 (Adverbial particles) - add nuance
+    # 副助詞 - ニュアンスを追加
+    'は',      # topic marker / 主題
+    'も',      # also, too / も
+    'こそ',    # emphasis / 強調
+    'さえ',    # even / さえ
+    'でも',    # even, or something / でも
+    'しか',    # only (with negative) / だけ（否定と共に）
+    'ばかり',  # only, just / ばかり
+    'だけ',    # only / だけ
+    'ほど',    # extent, about / ほど
+    'くらい', 'ぐらい',  # about, approximately / くらい
+    'など',    # etc., and so on / など
+    'なり',    # as soon as / なり
+    'やら',    # things like / やら
+
+    # 終助詞 (Sentence-ending particles) - express emotion/question
+    # 終助詞 - 感情・疑問を表現
+    'か',      # question / 疑問
+    'よ',      # assertion / 断定
+    'ね',      # confirmation / 確認
+    'な',      # prohibition, emotion / 禁止、感情
+    'ぞ',      # emphasis (masculine) / 強調（男性的）
+    'わ',      # emphasis (feminine) / 強調（女性的）
+    'さ',      # casual assertion / カジュアルな断定
+
+    # 連体助詞 / 並列助詞 (Attributive/Parallel particles)
+    # 連体助詞・並列助詞
+    'の',      # possessive, nominalizer / 所有、名詞化
+    'や',      # and (non-exhaustive list) / と（非網羅的リスト）
 }
 
 JODOUSHI = {
-    'れる', 'られる', 'せる', 'させる',
-    'ない', 'たい', 'た', 'だ',
-    'ます', 'です',
-    'う', 'よう', 'まい',
-    'らしい',
+    # 助動詞 (Auxiliary verbs) - attach to verb stems to modify meaning
+    # 助動詞 - 動詞の語幹に付いて意味を修正
+
+    # 受身・使役 (Passive/Causative)
+    'れる',    # passive (ichidan) / 受身（一段）
+    'られる',  # passive (godan), potential / 受身（五段）、可能
+    'せる',    # causative (ichidan) / 使役（一段）
+    'させる',  # causative (godan) / 使役（五段）
+
+    # 否定・願望 (Negation/Desire)
+    'ない',    # negation / 否定
+    'たい',    # want to / したい
+
+    # 過去・断定 (Past/Assertion)
+    'た',      # past tense / 過去形
+    'だ',      # copula (plain) / だ
+
+    # 丁寧 (Politeness)
+    'ます',    # polite verb ending / 丁寧語動詞語尾
+    'です',    # polite copula / 丁寧語だ
+
+    # 推量・意志 (Conjecture/Volition)
+    'う',      # volition, conjecture (godan) / 意志、推量（五段）
+    'よう',    # volition, conjecture (ichidan) / 意志、推量（一段）
+    'まい',    # negative volition / 否定意志
+
+    # その他 (Other)
+    'らしい',  # seems like / らしい
 }
 
+# Maximum length of particles/auxiliaries (for efficient substring matching)
+# 助詞・助動詞の最大長（効率的な部分文字列マッチングのため）
 JOSHI_MAX_LEN = max(len(w) for w in JOSHI)
 JODOUSHI_MAX_LEN = max(len(w) for w in JODOUSHI)
 
 
 # ─── Feature extraction ──────────────────────────────────────────────
 # Note: char_type, tokenize_line, add_features_per_line are imported from util
+# 注: char_type, tokenize_line, add_features_per_line は util からインポート
+
 
 def parse_annotated_line(line):
-    """Parse an annotated line into tokens and 4-class labels.
+    """
+    Parse an annotated training line into tokens and 4-class labels.
+    注釈付き訓練行をトークンと4クラスラベルに解析。
 
-    Annotation format: Space-delimited bunsetsu with underscore markers.
-    Bunsetsu starting or ending with '_' are Passthrough (no dictionary lookup).
-    Bunsetsu without '_' are Lookup (send to dictionary for conversion).
+    ============================================================================
+    PURPOSE / 目的
+    ============================================================================
 
-    IMPORTANT: Uses util.tokenize_line() for tokenization to ensure consistency
-    with feature extraction. This means:
-    - Non-ASCII characters: each character is a token
-    - ASCII words: consecutive letters/digits form a single token
+    Converts human-annotated training data into the format needed by CRF:
+    人間が注釈付けした訓練データをCRFが必要とする形式に変換:
 
-    Labels:
-        B-L = Beginning of Lookup bunsetsu (needs kana→kanji conversion)
+        Input:  "きょう _は_ てんき _が_ よい"
+        入力:   "きょう _は_ てんき _が_ よい"
+                    ↓
+        Output: tokens = ['き', 'ょ', 'う', 'は', 'て', 'ん', 'き', 'が', 'よ', 'い']
+                tags   = ['B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L']
+
+    ============================================================================
+    ANNOTATION FORMAT / 注釈形式
+    ============================================================================
+
+    - Space separates bunsetsu
+      スペースで文節を区切る
+    - Underscore (_) marks PASSTHROUGH segments (no kanji conversion)
+      アンダースコア（_）はPASSTHROUGHセグメントをマーク（漢字変換なし）
+
+        きょう     → Lookup (L) - send to dictionary → 今日
+        _は_       → Passthrough (P) - output as-is → は
+
+    ============================================================================
+    LABELS / ラベル
+    ============================================================================
+
+        B-L = Beginning of Lookup bunsetsu
+              LOOKUP文節の開始
         I-L = Inside of Lookup bunsetsu
-        B-P = Beginning of Passthrough bunsetsu (output as-is)
+              LOOKUP文節の内部
+        B-P = Beginning of Passthrough bunsetsu
+              PASSTHROUGH文節の開始
         I-P = Inside of Passthrough bunsetsu
+              PASSTHROUGH文節の内部
 
-    Example: "きょう _は_ てんき _が_ よい"
-      → tokens: ['き', 'ょ', 'う', 'は', 'て', 'ん', 'き', 'が', 'よ', 'い']
-      → tags:   ['B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L', 'I-L', 'B-P', 'B-L', 'I-L']
+    ============================================================================
+    TOKENIZATION / トークン化
+    ============================================================================
 
-    Example with ASCII: "hello _は_ world"
-      → tokens: ['hello', 'は', 'world']  (ASCII words merged)
-      → tags:   ['B-L', 'B-P', 'B-L']
+    Uses util.tokenize_line() for consistency with feature extraction:
+    特徴量抽出との一貫性のためutil.tokenize_line()を使用:
+
+        - Non-ASCII: each character = one token
+          非ASCII: 各文字 = 1トークン
+        - ASCII: consecutive letters/digits = one token
+          ASCII: 連続する文字/数字 = 1トークン
+
+    Example / 例: "hello _は_ world"
+        → tokens: ['hello', 'は', 'world']
+        → tags:   ['B-L', 'B-P', 'B-L']
+
+    ============================================================================
 
     Args:
-        line: Annotated line with space-delimited bunsetsu
+        line: Annotated line with space-delimited bunsetsu.
+              スペース区切りの文節を持つ注釈付き行。
 
     Returns:
         Tuple of (tokens, tags) where tokens is list of tokens
-        and tags is list of labels (B-L, I-L, B-P, I-P)
+        and tags is list of labels (B-L, I-L, B-P, I-P).
+        (tokens, tags)のタプル。tokensはトークンのリスト、
+        tagsはラベル（B-L, I-L, B-P, I-P）のリスト。
     """
     line = line.strip()
     if not line:
@@ -163,7 +453,67 @@ def parse_annotated_line(line):
 
 
 def extract_char_features(chars, i, dictionary_readings=None):
-    """Extract CRF features for a single character at position i."""
+    """
+    Extract CRF features for a single character at position i.
+    位置iの単一文字に対するCRF特徴量を抽出。
+
+    ============================================================================
+    WHAT THIS FUNCTION DOES / この関数の役割
+    ============================================================================
+
+    For each character position, we need to extract FEATURES - properties that
+    help the CRF decide whether this is a bunsetsu boundary.
+    各文字位置について、CRFがこれが文節境界かどうかを決定するのに役立つ
+    特徴量（プロパティ）を抽出する必要がある。
+
+    ============================================================================
+    FEATURE CATEGORIES / 特徴量カテゴリ
+    ============================================================================
+
+    1. CHARACTER IDENTITY (文字アイデンティティ):
+       - The character itself: char=は
+         文字自体
+       - Character type: type=hiragana
+         文字タイプ
+
+    2. CONTEXT WINDOW (コンテキストウィンドウ):
+       - Previous/next characters: char[-1]=う, char[+1]=て
+         前後の文字
+       - Bigrams: bigram[-1:0]=うは
+         バイグラム
+       - Type changes: type_change=True (hiragana→katakana often = boundary)
+         タイプ変更（ひらがな→カタカナは境界であることが多い）
+
+    3. BOUNDARY MARKERS (境界マーカー):
+       - BOS (Beginning of Sentence) / 文頭
+       - EOS (End of Sentence) / 文末
+
+    4. LINGUISTIC FEATURES (言語特徴量):
+       - Particle detection: joshi=は
+         助詞検出
+       - Auxiliary verb detection: jodoushi=ます
+         助動詞検出
+
+    5. DICTIONARY FEATURES (辞書特徴量):
+       - Does a dictionary word START here? dict_start_len=4
+         辞書の単語がここから始まるか？
+       - Does a dictionary word END here? dict_end_len=3
+         辞書の単語がここで終わるか？
+
+    ============================================================================
+
+    Args:
+        chars: List of characters in the sentence.
+               文中の文字のリスト。
+        i: Position of the current character (0-indexed).
+           現在の文字の位置（0始まり）。
+        dictionary_readings: Optional set of dictionary readings for lookup.
+                             ルックアップ用のオプションの辞書読みのセット。
+
+    Returns:
+        list: List of feature strings for this position.
+              この位置の特徴量文字列のリスト。
+    """
     c = chars[i]
     ct = util.char_type(c)
     n = len(chars)
@@ -235,23 +585,133 @@ def extract_char_features(chars, i, dictionary_readings=None):
 # ─── GTK Panel ────────────────────────────────────────────────────────
 
 class ConversionModelPanel(Gtk.Window):
+    """
+    GTK Window for training and testing CRF bunsetsu segmentation models.
+    CRF文節セグメンテーションモデルの訓練とテスト用のGTKウィンドウ。
+
+    ============================================================================
+    OVERVIEW / 概要
+    ============================================================================
+
+    This panel provides a complete workflow for:
+    このパネルは以下の完全なワークフローを提供:
+
+        1. TESTING existing models (Test tab)
+           既存モデルのテスト（テストタブ）
+        2. TRAINING new models (Train tab)
+           新しいモデルの訓練（トレインタブ）
+
+    ============================================================================
+    TEST TAB / テストタブ
+    ============================================================================
+
+    Allows testing the trained model on arbitrary input:
+    任意の入力で訓練されたモデルをテストできる:
+
+        ┌─────────────────────────────────────────────────────────────────────┐
+        │  Input: [きょうはてんきがよい                    ] [Test Prediction]│
+        │                                                                     │
+        │  Results:                                                           │
+        │  ┌─────────┬─────────┬─────────┬─────────┬─────────┐              │
+        │  │ きょう  │   は    │ てんき  │   が    │  よい   │              │
+        │  │  (L)    │  (P)    │  (L)    │  (P)    │  (L)    │              │
+        │  └─────────┴─────────┴─────────┴─────────┴─────────┘              │
+        └─────────────────────────────────────────────────────────────────────┘
+
+    ============================================================================
+    TRAIN TAB - 3-STEP PIPELINE / トレインタブ - 3ステップパイプライン
+    ============================================================================
+
+        STEP 1: BROWSE CORPUS / コーパスを参照
+        ─────────────────────────────────────
+        Select a text file with annotated training data.
+        注釈付き訓練データのテキストファイルを選択。
+
+            きょう _は_ てんき _が_ よい
+            わたし _は_ がくせい _です_
+
+        STEP 2: FEATURE EXTRACT / 特徴量抽出
+        ────────────────────────────────────
+        Parse the corpus and extract CRF features.
+        コーパスを解析してCRF特徴量を抽出。
+
+            - Parses each line into tokens + labels
+              各行をトークン + ラベルに解析
+            - Extracts features for each token position
+              各トークン位置の特徴量を抽出
+
+        STEP 3: TRAIN / 訓練
+        ─────────────────────
+        Train the CRF model using pycrfsuite.
+        pycrfsuiteを使用してCRFモデルを訓練。
+
+            - Uses L-BFGS optimization
+              L-BFGS最適化を使用
+            - Outputs bunsetsu_boundary.crfsuite model file
+              bunsetsu_boundary.crfsuiteモデルファイルを出力
+
+    ============================================================================
+    ATTRIBUTES / 属性
+    ============================================================================
+
+    _raw_lines : list
+        Raw lines loaded from corpus file (Step 1 output).
+        コーパスファイルから読み込んだ生の行（ステップ1の出力）。
+
+    _sentences : list
+        Parsed (tokens, tags) tuples (Step 2 output).
+        解析された(tokens, tags)タプル（ステップ2の出力）。
+
+    _features : list
+        Extracted features per sentence (Step 2 output).
+        文ごとの抽出された特徴量（ステップ2の出力）。
+
+    _tagger : pycrfsuite.Tagger
+        Loaded CRF model for testing (lazy loaded).
+        テスト用に読み込まれたCRFモデル（遅延読み込み）。
+
+    ============================================================================
+    DEPENDENCIES / 依存関係
+    ============================================================================
+
+    Requires pycrfsuite for training:
+    訓練にはpycrfsuiteが必要:
+
+        pip install python-crfsuite
+
+    If not installed, training will be unavailable (test still works if
+    model file exists).
+    インストールされていない場合、訓練は利用不可（モデルファイルが
+    存在すればテストは動作する）。
+
+    ============================================================================
+    """
+
     def __init__(self):
+        """
+        Initialize the Conversion Model panel.
+        変換モデルパネルを初期化。
+        """
         super().__init__(title="Conversion Model")
 
         self.set_default_size(1100, 800)
         self.set_border_width(10)
 
         # Set up CSS styling for grid headers
+        # グリッドヘッダー用のCSSスタイリングを設定
         self._setup_css()
 
         # State for 3-step pipeline: Browse → Feature Extract → Train
+        # 3ステップパイプライン用の状態: 参照 → 特徴量抽出 → 訓練
         self._raw_lines = []      # Raw lines from corpus file (set by Browse)
         self._sentences = []      # Parsed (chars, tags) tuples (set by Feature Extract)
         self._features = []       # Extracted features per sentence (set by Feature Extract)
 
         # State for Test tab
+        # テストタブ用の状態
         self._tagger = None       # CRF tagger (lazy loaded)
         # Pre-computed dictionary features for CRF
+        # CRF用の事前計算された辞書特徴量
         self._crf_feature_materials = util.load_crf_feature_materials()
 
         # Create UI
@@ -323,7 +783,25 @@ class ConversionModelPanel(Gtk.Window):
         return self._tagger is not None
 
     def on_test_prediction(self, button):
-        """Run bunsetsu-split prediction on input text."""
+        """
+        Run bunsetsu-split prediction on input text.
+        入力テキストに対して文節分割予測を実行。
+
+        This is the main test function. It:
+        これはメインのテスト関数。以下を行う:
+            1. Loads the CRF model (if not already loaded)
+               CRFモデルを読み込む（まだ読み込まれていない場合）
+            2. Extracts features from the input text
+               入力テキストから特徴量を抽出
+            3. Runs the CRF tagger to predict labels
+               CRFタガーを実行してラベルを予測
+            4. Displays results in a visual grid
+               結果を視覚的なグリッドで表示
+
+        Args:
+            button: The Gtk.Button that was clicked (unused).
+                    クリックされたGtk.Button（未使用）。
+        """
         # Load model if not already loaded
         if not self._load_tagger():
             dialog = Gtk.MessageDialog(
@@ -860,7 +1338,32 @@ class ConversionModelPanel(Gtk.Window):
             Gtk.main_iteration()
 
     def on_browse_corpus(self, button):
-        """Open file chooser for training corpus"""
+        """
+        Open file chooser for training corpus (Step 1 of training pipeline).
+        訓練コーパス用のファイル選択ダイアログを開く（訓練パイプラインのステップ1）。
+
+        Opens a file dialog for the user to select a text file containing
+        annotated training data. The file should contain one sentence per line
+        with space-separated bunsetsu (and optional underscore markers for
+        passthrough segments).
+        注釈付き訓練データを含むテキストファイルをユーザーが選択するための
+        ファイルダイアログを開く。ファイルには1行につき1文、スペースで区切られた
+        文節（およびパススルーセグメント用のオプションのアンダースコアマーカー）
+        が含まれている必要がある。
+
+        On successful selection:
+        選択成功時:
+            - Loads file contents into self._raw_lines
+              ファイル内容をself._raw_linesに読み込み
+            - Shows preview in the corpus preview area
+              コーパスプレビューエリアにプレビューを表示
+            - Enables the "Feature Extract" button
+              「特徴量抽出」ボタンを有効化
+
+        Args:
+            button: The Gtk.Button that was clicked (unused).
+                    クリックされたGtk.Button（未使用）。
+        """
         dialog = Gtk.FileChooserDialog(
             title="Select Training Corpus",
             parent=self,
@@ -910,7 +1413,40 @@ class ConversionModelPanel(Gtk.Window):
         )
 
     def on_feature_extract(self, button):
-        """Parse annotations and extract features (step 2 of pipeline)."""
+        """
+        Parse annotations and extract CRF features (Step 2 of training pipeline).
+        注釈を解析しCRF特徴量を抽出（訓練パイプラインのステップ2）。
+
+        This step transforms raw annotated text into the format needed by CRF:
+        このステップは生の注釈付きテキストをCRFが必要とする形式に変換:
+
+            Raw line:     "きょう _は_ てんき _が_ よい"
+            生の行:        "きょう _は_ てんき _が_ よい"
+                               ↓
+            Tokens:       ['き', 'ょ', 'う', 'は', 'て', ...]
+            トークン:      ['き', 'ょ', 'う', 'は', 'て', ...]
+                               ↓
+            Labels:       ['B-L', 'I-L', 'I-L', 'B-P', 'B-L', ...]
+            ラベル:        ['B-L', 'I-L', 'I-L', 'B-P', 'B-L', ...]
+                               ↓
+            Features:     [['bias', 'char=き', 'BOS', ...], ...]
+            特徴量:        [['bias', 'char=き', 'BOS', ...], ...]
+
+        On completion:
+        完了時:
+            - Stores parsed data in self._sentences
+              解析されたデータをself._sentencesに保存
+            - Stores features in self._features
+              特徴量をself._featuresに保存
+            - Shows statistics in the log
+              統計をログに表示
+            - Enables the "Train" button
+              「訓練」ボタンを有効化
+
+        Args:
+            button: The Gtk.Button that was clicked (unused).
+                    クリックされたGtk.Button（未使用）。
+        """
         if not self._raw_lines:
             self._log("ERROR: No corpus loaded. Click 'Browse' first.")
             return
@@ -1009,7 +1545,50 @@ class ConversionModelPanel(Gtk.Window):
         self._log("Done. Ready for training.")
 
     def on_train(self, button):
-        """Run CRF training using extracted features (step 3 of pipeline)."""
+        """
+        Run CRF training using extracted features (Step 3 of training pipeline).
+        抽出された特徴量を使用してCRF訓練を実行（訓練パイプラインのステップ3）。
+
+        This is the final step that actually trains the CRF model:
+        これはCRFモデルを実際に訓練する最終ステップ:
+
+            1. Creates a pycrfsuite.Trainer
+               pycrfsuite.Trainerを作成
+            2. Feeds in all (features, labels) pairs from Step 2
+               ステップ2からの全ての(特徴量, ラベル)ペアを入力
+            3. Runs L-BFGS optimization to learn feature weights
+               L-BFGS最適化を実行して特徴量の重みを学習
+            4. Saves the trained model to bunsetsu_boundary.crfsuite
+               訓練されたモデルをbunsetsu_boundary.crfsuiteに保存
+
+        CRF Training Parameters / CRF訓練パラメータ:
+            - algorithm: lbfgs (Limited-memory BFGS optimization)
+              アルゴリズム: lbfgs（限定メモリBFGS最適化）
+            - max_iterations: 100
+              最大イテレーション: 100
+            - c1: 0.1 (L1 regularization coefficient)
+              c1: 0.1（L1正則化係数）
+            - c2: 0.1 (L2 regularization coefficient)
+              c2: 0.1（L2正則化係数）
+
+        On completion:
+        完了時:
+            - Saves model to user config directory
+              ユーザー設定ディレクトリにモデルを保存
+            - Shows training statistics (loss, feature count, etc.)
+              訓練統計を表示（損失、特徴量数など）
+
+        Requires:
+        要件:
+            - pycrfsuite must be installed
+              pycrfsuiteがインストールされている必要がある
+            - Features must be extracted first (Step 2)
+              特徴量が先に抽出されている必要がある（ステップ2）
+
+        Args:
+            button: The Gtk.Button that was clicked (unused).
+                    クリックされたGtk.Button（未使用）。
+        """
         if not HAS_CRFSUITE:
             dialog = Gtk.MessageDialog(
                 transient_for=self, flags=0,
@@ -1089,7 +1668,18 @@ class ConversionModelPanel(Gtk.Window):
 
 
 def main():
-    """Run conversion model panel standalone"""
+    """
+    Run conversion model panel as standalone application.
+    変換モデルパネルをスタンドアロンアプリケーションとして実行。
+
+    Usage / 使用方法:
+        python conversion_model.py
+
+    This allows training and testing CRF models without going through
+    the main IBus settings. Useful for model development and debugging.
+    これによりメインのIBus設定を経由せずにCRFモデルの訓練とテストができる。
+    モデル開発とデバッグに便利。
+    """
     # Configure logging from user config
     config, _ = util.get_config_data()
     level_name = config.get('logging_level', 'WARNING').upper()

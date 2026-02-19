@@ -1,5 +1,130 @@
 #!/usr/bin/env python3
-# ui/settings_panel.py - GUI Settings Panel for IBus-PSKK
+"""
+settings_panel.py - GUI Settings Panel for IBus-PSKK
+IBus-PSKK用のGUI設定パネル
+
+================================================================================
+WHAT THIS FILE DOES / このファイルの役割
+================================================================================
+
+This is the CONFIGURATION INTERFACE for PSKK. When users want to customize
+their input method, they launch this settings panel. It provides a graphical
+way to modify all aspects of the IME without editing config files directly.
+
+これはPSKKの設定インターフェース。ユーザーが入力メソッドをカスタマイズしたい時に
+この設定パネルを起動する。設定ファイルを直接編集せずに、IMEの全ての面を
+グラフィカルに変更できる方法を提供する。
+
+================================================================================
+HOW TO LAUNCH / 起動方法
+================================================================================
+
+There are two ways to open this panel:
+このパネルを開く方法は2つ:
+
+    1. From IBus preferences → PSKK → Preferences button
+       IBus設定から → PSKK → 設定ボタン
+
+    2. Run directly: python settings_panel.py
+       直接実行: python settings_panel.py
+
+================================================================================
+PANEL STRUCTURE (TABS) / パネル構造（タブ）
+================================================================================
+
+The settings panel is organized into these tabs:
+設定パネルは以下のタブで構成:
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │  [General] [Input] [Conversion] [System Dict] [User Dict] [Ext] [無連想] │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+    1. General (一般)
+       ─────────────────
+       - Input layout selection (QWERTY, JIS Kana, etc.)
+         入力レイアウト選択
+       - Mode switch keys (Hiragana/Direct mode hotkeys)
+         モード切替キー
+       - UI preferences (annotations, page size, colors)
+         UI設定（注釈、ページサイズ、色）
+
+    2. Input (入力)
+       ─────────────────
+       - SandS (Space and Shift) feature toggle
+         SandS機能のON/OFF
+       - Learning mode toggle (remember user choices)
+         学習モードのON/OFF
+       - Simultaneous key input settings
+         同時打鍵設定
+
+    3. Conversion (変換)
+       ─────────────────
+       - Conversion key bindings (to hiragana, katakana, etc.)
+         変換キーバインド
+       - Kanchoku (direct kanji input) settings
+         漢直設定
+       - Bunsetsu (phrase boundary) settings
+         文節設定
+
+    4. System Dictionary (システム辞書)
+       ─────────────────
+       - Enable/disable system dictionaries
+         システム辞書の有効/無効
+       - Adjust dictionary weights (priority)
+         辞書の重み（優先度）調整
+       - Convert SKK dictionaries to binary format
+         SKK辞書をバイナリ形式に変換
+
+    5. User Dictionary (ユーザー辞書)
+       ─────────────────
+       - Manage personal dictionary files
+         個人辞書ファイルの管理
+       - Open the User Dictionary Editor
+         ユーザー辞書エディタを開く
+
+    6. Ext-Dictionary (拡張辞書)
+       ─────────────────
+       - External dictionaries in custom locations
+         カスタム場所の外部辞書
+       - Import SKK-JISYO format dictionaries
+         SKK-JISYO形式の辞書をインポート
+
+    7. 無連想配列 (Murenso Layout)
+       ─────────────────
+       - Edit Murenso (two-key combination) mappings
+         無連想（2キー組み合わせ）マッピングの編集
+       - Load/save custom Murenso configurations
+         カスタム無連想設定の読み込み/保存
+
+================================================================================
+CONFIGURATION STORAGE / 設定の保存場所
+================================================================================
+
+All settings are stored in: ~/.config/ibus-pskk/config.json
+全ての設定は以下に保存: ~/.config/ibus-pskk/config.json
+
+The panel reads this file on startup and writes changes when "Save" is clicked.
+パネルは起動時にこのファイルを読み込み、「保存」クリック時に変更を書き込む。
+
+================================================================================
+KEY CAPTURE DIALOG / キーキャプチャダイアログ
+================================================================================
+
+When configuring keybindings, a special dialog appears that:
+キーバインドを設定する時、特別なダイアログが表示される:
+
+    - Captures the actual keys you press (including modifiers)
+      実際に押したキーをキャプチャ（修飾キー含む）
+    - Shows a preview of the captured combination
+      キャプチャした組み合わせのプレビューを表示
+    - Validates that the binding is not modifier-only
+      修飾キーのみのバインドでないことを検証
+
+Example: Press Ctrl+Shift+K → Displays "Control+Shift+K"
+例: Ctrl+Shift+Kを押す → 「Control+Shift+K」と表示
+
+================================================================================
+"""
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -17,24 +142,107 @@ import user_dictionary_editor
 class SettingsPanel(Gtk.Window):
     """
     GUI Settings Panel for IBus-PSKK configuration.
+    IBus-PSKK設定用のGUI設定パネル。
 
-    Features:
+    ============================================================================
+    OVERVIEW / 概要
+    ============================================================================
+
+    This is a GTK3 window that provides a user-friendly interface for
+    configuring all aspects of the PSKK input method. It extends Gtk.Window
+    and uses a notebook (tabbed interface) to organize settings by category.
+
+    これはPSKK入力メソッドの全ての面を設定するためのユーザーフレンドリーな
+    インターフェースを提供するGTK3ウィンドウ。Gtk.Windowを継承し、設定を
+    カテゴリ別に整理するためにノートブック（タブインターフェース）を使用。
+
+    ============================================================================
+    FEATURES / 機能
+    ============================================================================
+
     - Enable/disable features (SandS, Murenso, Forced Preedit, Learning)
-    - Configure mode switch keys
-    - Set conversion key bindings
-    - Manage dictionaries
-    - Edit Murenso mappings
-    - Import/export configuration
+      機能の有効/無効（SandS、無連想、強制プリエディット、学習）
+    - Configure mode switch keys (Hiragana ↔ Direct)
+      モード切替キーの設定（ひらがな ↔ 直接入力）
+    - Set conversion key bindings (to hiragana, katakana, ASCII, zenkaku)
+      変換キーバインドの設定（ひらがな、カタカナ、ASCII、全角へ）
+    - Manage system and user dictionaries with priority weights
+      優先度の重みでシステム辞書とユーザー辞書を管理
+    - Edit Murenso (two-key) mappings for direct kanji input
+      漢直用の無連想（2キー）マッピングを編集
+    - Import/export configuration and dictionaries
+      設定と辞書のインポート/エクスポート
+
+    ============================================================================
+    KEY ATTRIBUTES / 主な属性
+    ============================================================================
+
+    config : dict
+        The loaded configuration dictionary from config.json.
+        config.jsonから読み込んだ設定辞書。
+
+    kanchoku_layout : dict
+        The Murenso/Kanchoku key-to-kanji mappings.
+        無連想/漢直のキーから漢字へのマッピング。
+
+    Various UI widgets (checkboxes, entries, buttons, tree views):
+    各種UIウィジェット（チェックボックス、エントリ、ボタン、ツリービュー）:
+        - self.*_check: Gtk.CheckButton widgets for toggles
+        - self.*_entry: Gtk.Entry widgets for text input
+        - self.*_button: Gtk.Button widgets for keybinding capture
+        - self.*_store: Gtk.ListStore for tree view data
+
+    ============================================================================
+    LIFECYCLE / ライフサイクル
+    ============================================================================
+
+        ┌─────────────────────────────────────────────────────────────────────┐
+        │  __init__()                                                         │
+        │      │                                                              │
+        │      ├── Load config from util.get_config_data()                    │
+        │      ├── Load kanchoku layout                                       │
+        │      ├── create_ui() → Build all tabs and widgets                   │
+        │      ├── load_settings_to_ui() → Populate widgets with values       │
+        │      └── Show warnings if config had issues                         │
+        │                                                                     │
+        │  User interacts with UI...                                          │
+        │  ユーザーがUIを操作...                                                │
+        │                                                                     │
+        │  on_save_clicked()                                                  │
+        │      │                                                              │
+        │      ├── Read values from all widgets                               │
+        │      ├── Update self.config dictionary                              │
+        │      └── save_config() → Write to config.json                       │
+        └─────────────────────────────────────────────────────────────────────┘
+
+    ============================================================================
     """
+
     def __init__(self):
+        """
+        Initialize the settings panel window.
+        設定パネルウィンドウを初期化。
+
+        This constructor:
+        このコンストラクタは:
+            1. Creates the GTK window with title and size
+               タイトルとサイズでGTKウィンドウを作成
+            2. Loads current configuration from file
+               ファイルから現在の設定を読み込み
+            3. Builds all UI elements (tabs, widgets)
+               全てのUI要素を構築（タブ、ウィジェット）
+            4. Populates widgets with current settings
+               現在の設定でウィジェットを設定
+            5. Shows any configuration warnings to user
+               設定の警告があればユーザーに表示
+        """
         super().__init__(title="IBus-PSKK Settings")
 
         self.set_default_size(800, 600)
         self.set_border_width(10)
 
-        # Config file path
-        #self.config_path = os.path.expanduser("~/.config/ibus-pskk/config.json")
-        #self.config = self.load_config()
+        # Load configuration (returns tuple of config dict and any warnings)
+        # 設定を読み込み（設定辞書と警告のタプルを返す）
         self.config, warnings = util.get_config_data()
         # save (back) the config to file
         util.save_config_data(self.config)
@@ -195,15 +403,32 @@ class SettingsPanel(Gtk.Window):
         return has_ctrl and has_shift and has_key
 
     def show_key_capture_dialog(self, title, current_value):
-        """Show dialog to capture key press
+        """
+        Show dialog to capture a key press for keybinding configuration.
+        キーバインド設定のためのキー入力をキャプチャするダイアログを表示。
+
+        Displays a modal dialog that intercepts key events. The user can:
+        キーイベントをインターセプトするモーダルダイアログを表示。ユーザーは:
+            - Press a key/combination to set a new binding
+              新しいバインドを設定するためにキー/組み合わせを押す
+            - Click "Remove" to clear the binding
+              「Remove」をクリックしてバインドをクリア
+            - Click "Cancel" to keep the existing binding
+              「Cancel」をクリックして既存のバインドを維持
 
         Args:
-            title: Dialog title
-            current_value: Current key binding as a string (e.g., "Alt_R", "Ctrl+K")
+            title: Dialog title (describes which keybinding is being set).
+                   ダイアログタイトル（どのキーバインドを設定中か説明）。
+            current_value: Current key binding string (e.g., "Alt_R", "Ctrl+K").
+                           現在のキーバインド文字列（例: "Alt_R", "Ctrl+K"）。
 
         Returns:
-            str: The captured key combination as a "+"-joined string,
-                 empty string "" if removed, or None if cancelled
+            str: The captured key combination as a "+"-joined string
+                 (e.g., "Control+Shift+K"), empty string "" if removed,
+                 or None if cancelled.
+                 「+」で結合されたキーの組み合わせ文字列
+                 （例: "Control+Shift+K"）、削除された場合は空文字列""、
+                 キャンセルされた場合はNone。
         """
         dialog = Gtk.Dialog(
             title=title,
@@ -406,7 +631,21 @@ class SettingsPanel(Gtk.Window):
         return True
 
     def save_config(self):
-        """Save configuration to file"""
+        """
+        Save configuration to the config.json file.
+        設定をconfig.jsonファイルに保存。
+
+        Writes self.config to ~/.config/ibus-pskk/config.json using
+        util.save_config_data(). Shows a success or error dialog to inform
+        the user of the result.
+
+        util.save_config_data()を使用してself.configを
+        ~/.config/ibus-pskk/config.jsonに書き込む。
+        結果をユーザーに通知するため、成功またはエラーのダイアログを表示。
+
+        Note: Changes take effect on the next keystroke in the IME.
+        注: 変更はIMEの次のキー入力から有効になる。
+        """
         success = util.save_config_data(self.config)
 
         if success:
@@ -434,7 +673,30 @@ class SettingsPanel(Gtk.Window):
 
 
     def create_ui(self):
-        """Create the user interface"""
+        """
+        Create the main user interface structure.
+        メインユーザーインターフェース構造を作成。
+
+        Builds the complete UI hierarchy:
+        完全なUI階層を構築:
+
+            Window
+            └── main_box (vertical)
+                ├── notebook (tabbed container)
+                │   ├── General tab      → create_general_tab()
+                │   ├── Input tab        → create_input_tab()
+                │   ├── Conversion tab   → create_conversion_tab()
+                │   ├── System Dict tab  → create_system_dictionary_tab()
+                │   ├── User Dict tab    → create_user_dictionary_tab()
+                │   ├── Ext-Dict tab     → create_ext_dictionary_tab()
+                │   └── Murenso tab      → create_murenso_tab()
+                └── button_box (horizontal)
+                    ├── Close button
+                    └── Save button
+
+        Also applies CSS for entry validation (red background on invalid input).
+        エントリ検証用のCSSも適用（無効な入力時に赤背景）。
+        """
         # Apply CSS for entry validation styling
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(b"""
@@ -481,7 +743,22 @@ class SettingsPanel(Gtk.Window):
 
 
     def create_general_tab(self):
-        """Create General settings tab"""
+        """
+        Create the General settings tab.
+        一般設定タブを作成。
+
+        Contains:
+        含まれる内容:
+            - Layout selection (input keyboard layout)
+              レイアウト選択（入力キーボードレイアウト）
+            - Mode switch keys (Hiragana/Direct hotkeys)
+              モード切替キー（ひらがな/直接入力のホットキー）
+            - UI preferences (annotations, page size, preedit colors)
+              UI設定（注釈、ページサイズ、プリエディット色）
+
+        Returns:
+            Gtk.Box: The configured tab container.
+        """
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
         
@@ -620,10 +897,27 @@ class SettingsPanel(Gtk.Window):
 
 
     def create_input_tab(self):
-        """Create Input settings tab"""
+        """
+        Create the Input settings tab.
+        入力設定タブを作成。
+
+        Contains:
+        含まれる内容:
+            - SandS (Space and Shift) toggle and timeout
+              SandS（スペースとシフト）のON/OFFとタイムアウト
+            - Learning mode toggle (remember user selections)
+              学習モードのON/OFF（ユーザー選択を記憶）
+            - Forced preedit mode toggle
+              強制プリエディットモードのON/OFF
+            - Simultaneous input settings (timing threshold)
+              同時入力設定（タイミング閾値）
+
+        Returns:
+            Gtk.Box: The configured tab container.
+        """
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
-        
+
         # SandS settings
         sands_frame = Gtk.Frame(label="SandS (Space and Shift)")
         sands_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -678,10 +972,27 @@ class SettingsPanel(Gtk.Window):
 
 
     def create_conversion_tab(self):
-        """Create Conversion settings tab"""
+        """
+        Create the Conversion settings tab.
+        変換設定タブを作成。
+
+        Contains:
+        含まれる内容:
+            - Conversion key bindings (to_hiragana, to_katakana, etc.)
+              変換キーバインド（ひらがなへ、カタカナへ、など）
+            - Kanchoku bunsetsu marker key
+              漢直文節マーカーキー
+            - Bunsetsu prediction cycle key
+              文節予測サイクルキー
+            - User dictionary editor launch key
+              ユーザー辞書エディタ起動キー
+
+        Returns:
+            Gtk.Box: The configured tab container.
+        """
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
-        
+
         # Conversion keys
         keys_frame = Gtk.Frame(label="Conversion Key Bindings")
         keys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -763,7 +1074,25 @@ class SettingsPanel(Gtk.Window):
 
 
     def create_system_dictionary_tab(self):
-        """Create System Dictionary tab"""
+        """
+        Create the System Dictionary settings tab.
+        システム辞書設定タブを作成。
+
+        Contains:
+        含まれる内容:
+            - List of available system dictionaries with toggle and weight
+              有効/無効と重みを持つ利用可能なシステム辞書のリスト
+            - Refresh button to rescan dictionary directory
+              辞書ディレクトリを再スキャンするリフレッシュボタン
+            - Convert button to compile SKK dictionaries to binary
+              SKK辞書をバイナリにコンパイルする変換ボタン
+
+        System dictionaries are located in the package data directory.
+        システム辞書はパッケージデータディレクトリにある。
+
+        Returns:
+            Gtk.Box: The configured tab container.
+        """
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
 
@@ -822,7 +1151,25 @@ class SettingsPanel(Gtk.Window):
         return box
 
     def create_user_dictionary_tab(self):
-        """Create User Dictionary tab"""
+        """
+        Create the User Dictionary settings tab.
+        ユーザー辞書設定タブを作成。
+
+        Contains:
+        含まれる内容:
+            - List of user dictionaries with toggle and weight
+              有効/無効と重みを持つユーザー辞書のリスト
+            - Refresh/Convert buttons for user dictionaries
+              ユーザー辞書のリフレッシュ/変換ボタン
+            - Button to open the User Dictionary Editor
+              ユーザー辞書エディタを開くボタン
+
+        User dictionaries are stored in ~/.config/ibus-pskk/user_dict/
+        ユーザー辞書は ~/.config/ibus-pskk/user_dict/ に保存される。
+
+        Returns:
+            Gtk.Box: The configured tab container.
+        """
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
 
@@ -897,7 +1244,36 @@ class SettingsPanel(Gtk.Window):
 
 
     def create_murenso_tab(self):
-        """Create Murenso mappings tab"""
+        """
+        Create the Murenso (無連想) mappings tab.
+        無連想マッピングタブを作成。
+
+        WHAT IS MURENSO? / 無連想とは？
+        ─────────────────────────────────
+        Murenso is a method of direct kanji input using two-key combinations.
+        Instead of typing readings and converting, you press two keys in
+        sequence to directly input a kanji character.
+
+        無連想は2キーの組み合わせによる漢字直接入力方式。読みを入力して変換する
+        代わりに、2つのキーを順番に押して漢字を直接入力する。
+
+        Example: Press 'a' then 'k' → outputs '日'
+        例: 'a'を押してから'k'を押す → '日'を出力
+
+        Contains:
+        含まれる内容:
+            - Kanchoku layout selection dropdown
+              漢直レイアウト選択ドロップダウン
+            - Editable tree view of all mappings (first key, second key, kanji)
+              全マッピングの編集可能なツリービュー（第1キー、第2キー、漢字）
+            - Search/filter fields for finding specific mappings
+              特定のマッピングを見つけるための検索/フィルタフィールド
+            - Load/Save buttons for custom mapping files
+              カスタムマッピングファイルの読み込み/保存ボタン
+
+        Returns:
+            Gtk.Box: The configured tab container.
+        """
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
 
@@ -1069,15 +1445,41 @@ class SettingsPanel(Gtk.Window):
 
 
     def create_ext_dictionary_tab(self):
-        """Create Ext-Dictionary tab.
+        """
+        Create the Ext-Dictionary (Extension Dictionary) settings tab.
+        拡張辞書設定タブを作成。
 
-        This tab lets the user select system and user dictionaries as sources
-        for generating extended_dictionary.json.  The generation algorithm:
-          1. Reads the kanchoku layout to find all produceable kanji.
-          2. Reads the selected source dictionaries (SKK-format) to extract
-             yomi→single-kanji mappings (only kanji in the kanchoku set).
-          3. Substring-matches those yomi against system/user dictionary readings.
-          4. Creates hybrid keys with matched yomi replaced by the kanji.
+        WHAT IS THE EXTENDED DICTIONARY? / 拡張辞書とは？
+        ─────────────────────────────────────────────────────
+        The extended dictionary bridges kanchoku (direct kanji input) with
+        normal kana-kanji conversion. It allows users to mix both input methods
+        seamlessly by creating hybrid dictionary entries.
+
+        拡張辞書は漢直（漢字直接入力）と通常のかな漢字変換を橋渡しする。
+        ハイブリッド辞書エントリを作成することで、両方の入力方式を
+        シームレスに混在させることができる。
+
+        GENERATION ALGORITHM / 生成アルゴリズム:
+          1. Reads the kanchoku layout to find all produceable kanji
+             漢直レイアウトを読んで生成可能な全ての漢字を取得
+          2. Extracts yomi→single-kanji mappings from source dictionaries
+             ソース辞書から読み→単一漢字のマッピングを抽出
+          3. Substring-matches those yomi against dictionary readings
+             それらの読みを辞書の読みに部分文字列マッチング
+          4. Creates hybrid keys with matched yomi replaced by kanji
+             マッチした読みを漢字に置換したハイブリッドキーを作成
+
+        Contains:
+        含まれる内容:
+            - System dictionary source selection
+              システム辞書ソースの選択
+            - User dictionary source selection
+              ユーザー辞書ソースの選択
+            - Generate/Import buttons
+              生成/インポートボタン
+
+        Returns:
+            Gtk.Box: The configured tab container.
         """
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_border_width(10)
@@ -1165,7 +1567,32 @@ class SettingsPanel(Gtk.Window):
 
 
     def load_settings_to_ui(self):
-        """Load current settings into UI widgets"""
+        """
+        Load current settings from config into UI widgets.
+        設定からUIウィジェットに現在の設定を読み込む。
+
+        This method populates all UI controls with values from self.config:
+        このメソッドはself.configの値で全てのUIコントロールを設定する:
+
+            - Dropdown menus: Sets active item based on config value
+              ドロップダウンメニュー: 設定値に基づいてアクティブ項目を設定
+            - Checkboxes: Sets checked state based on boolean values
+              チェックボックス: ブール値に基づいてチェック状態を設定
+            - Text entries: Sets text content
+              テキストエントリ: テキスト内容を設定
+            - Spin buttons: Sets numeric values
+              スピンボタン: 数値を設定
+            - Key binding buttons: Sets label to show current binding
+              キーバインドボタン: 現在のバインドを表示するラベルを設定
+            - Tree views: Populates list of dictionaries
+              ツリービュー: 辞書のリストを設定
+
+        Called once during __init__() after create_ui().
+        create_ui()の後、__init__()で1回呼ばれる。
+
+        Uses default_config as fallback for any missing values.
+        欠落している値のフォールバックとしてdefault_configを使用。
+        """
         # Load default config to use as fallback for default values
         default_config = util.get_default_config_data() or {}
 
@@ -1429,7 +1856,21 @@ class SettingsPanel(Gtk.Window):
 
 
     def on_save_clicked(self, button):
-        """Save button clicked - collect all UI values and save to config.json"""
+        """
+        Handle Save button click - collect UI values and persist to file.
+        保存ボタンのクリックを処理 - UI値を収集しファイルに永続化。
+
+        This is the inverse of load_settings_to_ui(): reads all widget values
+        and writes them back to self.config, then calls save_config() to
+        write to disk.
+
+        これはload_settings_to_ui()の逆: 全てのウィジェット値を読み取り
+        self.configに書き戻し、save_config()を呼んでディスクに書き込む。
+
+        Args:
+            button: The Gtk.Button that was clicked (unused).
+                    クリックされたGtk.Button（未使用）。
+        """
         # General tab
         self.config["layout"] = self.layout_combo.get_active_id() or "shingeta.json"
         self.config["kanchoku_layout"] = self.kanchoku_layout_combo.get_active_id() or "aki_code.json"
@@ -2275,7 +2716,16 @@ class SettingsPanel(Gtk.Window):
 
 
 def main():
-    """Run settings panel standalone"""
+    """
+    Run the settings panel as a standalone application.
+    設定パネルをスタンドアロンアプリケーションとして実行。
+
+    This allows testing and using the settings panel without going through
+    IBus preferences. Simply run: python settings_panel.py
+
+    これによりIBus設定を経由せずに設定パネルをテスト・使用できる。
+    単純に実行: python settings_panel.py
+    """
     win = SettingsPanel()
     win.connect("destroy", Gtk.main_quit)
     win.show_all()
