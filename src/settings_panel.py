@@ -284,71 +284,6 @@ class SettingsPanel(Gtk.Window):
         dialog.destroy()
         return False  # Don't call again
 
-    def on_hiragana_key_button_clicked(self, button):
-        """Show key capture dialog for hiragana mode key"""
-        result = self.show_key_capture_dialog("Hiragana Mode Key", self.hiragana_key_value)
-        if result is not None:
-            self.hiragana_key_value = result
-            # result is now a string (e.g., "Alt_R", "Ctrl+K", or "" for removed)
-            self.hiragana_key_button.set_label(result if result else "Not Set")
-
-    def on_direct_key_button_clicked(self, button):
-        """Show key capture dialog for direct mode key"""
-        result = self.show_key_capture_dialog("Direct Mode Key", self.direct_key_value)
-        if result is not None:
-            self.direct_key_value = result
-            # result is now a string (e.g., "Alt_L", "Ctrl+K", or "" for removed)
-            self.direct_key_button.set_label(result if result else "Not Set")
-
-    def on_to_hiragana_button_clicked(self, button):
-        """Show key capture dialog for to_hiragana conversion key"""
-        result = self.show_key_capture_dialog("To Hiragana Key", self.to_hiragana_value)
-        if result is not None:
-            self.to_hiragana_value = result
-            self.to_hiragana_button.set_label(result if result else "Not Set")
-
-    def on_to_katakana_button_clicked(self, button):
-        """Show key capture dialog for to_katakana conversion key"""
-        result = self.show_key_capture_dialog("To Katakana Key", self.to_katakana_value)
-        if result is not None:
-            self.to_katakana_value = result
-            self.to_katakana_button.set_label(result if result else "Not Set")
-
-    def on_to_ascii_button_clicked(self, button):
-        """Show key capture dialog for to_ascii conversion key"""
-        result = self.show_key_capture_dialog("To ASCII Key", self.to_ascii_value)
-        if result is not None:
-            self.to_ascii_value = result
-            self.to_ascii_button.set_label(result if result else "Not Set")
-
-    def on_to_zenkaku_button_clicked(self, button):
-        """Show key capture dialog for to_zenkaku conversion key"""
-        result = self.show_key_capture_dialog("To Zenkaku Key", self.to_zenkaku_value)
-        if result is not None:
-            self.to_zenkaku_value = result
-            self.to_zenkaku_button.set_label(result if result else "Not Set")
-
-    def on_kanchoku_marker_button_clicked(self, button):
-        """Show key capture dialog for kanchoku bunsetsu marker key"""
-        result = self.show_key_capture_dialog("Kanchoku Bunsetsu Marker", self.kanchoku_marker_value)
-        if result is not None:
-            self.kanchoku_marker_value = result
-            self.kanchoku_marker_button.set_label(result if result else "Not Set")
-
-    def on_bunsetsu_cycle_key_button_clicked(self, button):
-        """Show key capture dialog for bunsetsu prediction cycle key"""
-        result = self.show_key_capture_dialog("Bunsetsu Prediction Cycle Key", self.bunsetsu_cycle_key_value)
-        if result is not None:
-            self.bunsetsu_cycle_key_value = result
-            self.bunsetsu_cycle_key_button.set_label(result if result else "Not Set")
-
-    def on_force_commit_key_button_clicked(self, button):
-        """Show key capture dialog for force commit key"""
-        result = self.show_key_capture_dialog("Force Commit Key", self.force_commit_key_value)
-        if result is not None:
-            self.force_commit_key_value = result
-            self.force_commit_key_button.set_label(result if result else "Not Set")
-
     def on_user_dict_editor_key_button_clicked(self, button):
         """Show key capture dialog for user dictionary editor launch key.
 
@@ -388,6 +323,24 @@ class SettingsPanel(Gtk.Window):
                 dialog.run()
                 dialog.destroy()
                 # Loop continues, dialog will be shown again
+
+    def _list_to_display_string(self, value):
+        """
+        Convert a config value (possibly a list) to a display string.
+        設定値（リストの可能性あり）を表示用文字列に変換。
+
+        For legacy UI components that expect string values but config now uses lists.
+        旧UIコンポーネント用（文字列を期待するが、設定はリストを使用）。
+
+        Args:
+            value: String, list of strings, or None
+
+        Returns:
+            First element if list, the string itself if string, or empty string
+        """
+        if isinstance(value, list):
+            return value[0] if value else ""
+        return value or ""
 
     def _validate_ctrl_shift_key(self, binding):
         """Validate that a keybinding is in Ctrl+Shift+<key> format.
@@ -727,8 +680,7 @@ class SettingsPanel(Gtk.Window):
         
         # Create tabs
         notebook.append_page(self.create_general_tab(), Gtk.Label(label="General"))
-        notebook.append_page(self.create_input_tab(), Gtk.Label(label="Input"))
-        notebook.append_page(self.create_conversion_tab(), Gtk.Label(label="Conversion"))
+        notebook.append_page(self.create_key_configs_tab(), Gtk.Label(label="Key Configs"))
         notebook.append_page(self.create_system_dictionary_tab(), Gtk.Label(label="System Dictionary"))
         notebook.append_page(self.create_user_dictionary_tab(), Gtk.Label(label="User Dictionary"))
         notebook.append_page(self.create_ext_dictionary_tab(), Gtk.Label(label="Ext-Dictionary"))
@@ -758,8 +710,6 @@ class SettingsPanel(Gtk.Window):
         含まれる内容:
             - Layout selection (input keyboard layout)
               レイアウト選択（入力キーボードレイアウト）
-            - Mode switch keys (Hiragana/Direct hotkeys)
-              モード切替キー（ひらがな/直接入力のホットキー）
             - UI preferences (annotations, page size, preedit colors)
               UI設定（注釈、ページサイズ、プリエディット色）
 
@@ -781,40 +731,7 @@ class SettingsPanel(Gtk.Window):
         layout_box.pack_start(self.layout_combo, False, False, 0)
         
         box.pack_start(layout_frame, False, False, 0)
-        
-        # Mode switch keys
-        mode_frame = Gtk.Frame(label="Mode Switch Keys")
-        mode_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        mode_box.set_border_width(10)
-        mode_frame.add(mode_box)
 
-        # Create size group for labels to ensure equal button widths
-        mode_label_size_group = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
-
-        hiragana_box = Gtk.Box(spacing=6)
-        hiragana_label = Gtk.Label(label="Hiragana Mode:")
-        mode_label_size_group.add_widget(hiragana_label)
-        hiragana_box.pack_start(hiragana_label, False, False, 0)
-        self.hiragana_key_button = Gtk.Button(label="Not Set")
-        self.hiragana_key_button.connect("clicked", self.on_hiragana_key_button_clicked)
-        hiragana_box.pack_start(self.hiragana_key_button, True, True, 0)
-        mode_box.pack_start(hiragana_box, False, False, 0)
-
-        direct_box = Gtk.Box(spacing=6)
-        direct_label = Gtk.Label(label="Direct Mode:")
-        mode_label_size_group.add_widget(direct_label)
-        direct_box.pack_start(direct_label, False, False, 0)
-        self.direct_key_button = Gtk.Button(label="Not Set")
-        self.direct_key_button.connect("clicked", self.on_direct_key_button_clicked)
-        direct_box.pack_start(self.direct_key_button, True, True, 0)
-        mode_box.pack_start(direct_box, False, False, 0)
-
-        # Store key values
-        self.hiragana_key_value = None
-        self.direct_key_value = None
-        
-        box.pack_start(mode_frame, False, False, 0)
-        
         # UI preferences
         ui_frame = Gtk.Frame(label="UI Preferences")
         ui_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -899,203 +816,6 @@ class SettingsPanel(Gtk.Window):
         ui_box.pack_start(self.use_ibus_hint_check, False, False, 0)
 
         box.pack_start(ui_frame, False, False, 0)
-        
-        return box
-
-
-    def create_input_tab(self):
-        """
-        Create the Input settings tab.
-        入力設定タブを作成。
-
-        Contains:
-        含まれる内容:
-            - SandS (Space and Shift) toggle and timeout
-              SandS（スペースとシフト）のON/OFFとタイムアウト
-            - Learning mode toggle (remember user selections)
-              学習モードのON/OFF（ユーザー選択を記憶）
-            - Forced preedit mode toggle
-              強制プリエディットモードのON/OFF
-            - Simultaneous input settings (timing threshold)
-              同時入力設定（タイミング閾値）
-
-        Returns:
-            Gtk.Box: The configured tab container.
-        """
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        box.set_border_width(10)
-
-        # SandS settings
-        sands_frame = Gtk.Frame(label="SandS (Space and Shift)")
-        sands_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        sands_box.set_border_width(10)
-        sands_frame.add(sands_box)
-        
-        self.sands_enabled_check = Gtk.CheckButton(label="Enable SandS (Space acts as Shift when held)")
-        sands_box.pack_start(self.sands_enabled_check, False, False, 0)
-
-        marker_row = Gtk.Box(spacing=6)
-        marker_row.pack_start(Gtk.Label(label="Kanchoku Bunsetsu Marker:"), False, False, 0)
-        self.kanchoku_marker_button = Gtk.Button(label="Not Set")
-        self.kanchoku_marker_button.connect("clicked", self.on_kanchoku_marker_button_clicked)
-        marker_row.pack_start(self.kanchoku_marker_button, True, True, 0)
-        sands_box.pack_start(marker_row, False, False, 0)
-
-        self.kanchoku_marker_value = None
-
-        box.pack_start(sands_frame, False, False, 0)
-        
-        # Forced Preedit settings
-        fp_frame = Gtk.Frame(label="Forced Preedit Mode")
-        fp_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        fp_box.set_border_width(10)
-        fp_frame.add(fp_box)
-        
-        self.forced_preedit_enabled_check = Gtk.CheckButton(
-            label="Enable Forced Preedit (Mixed Kanji-Kana input for disambiguation)")
-        fp_box.pack_start(self.forced_preedit_enabled_check, False, False, 0)
-        
-        trigger_box = Gtk.Box(spacing=6)
-        trigger_box.pack_start(Gtk.Label(label="Trigger Key:"), False, False, 0)
-        self.forced_preedit_trigger_entry = Gtk.Entry()
-        trigger_box.pack_start(self.forced_preedit_trigger_entry, True, True, 0)
-        fp_box.pack_start(trigger_box, False, False, 0)
-        
-        box.pack_start(fp_frame, False, False, 0)
-        
-        # Murenso settings
-        murenso_frame = Gtk.Frame(label="無連想配列 (Direct Kanji Input)")
-        murenso_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        murenso_box.set_border_width(10)
-        murenso_frame.add(murenso_box)
-        
-        self.murenso_enabled_check = Gtk.CheckButton(
-            label="Enable 無連想配列 (Direct Kanji input via 2-key chords)")
-        murenso_box.pack_start(self.murenso_enabled_check, False, False, 0)
-        
-        box.pack_start(murenso_frame, False, False, 0)
-
-        return box
-
-
-    def create_conversion_tab(self):
-        """
-        Create the Conversion settings tab.
-        変換設定タブを作成。
-
-        Contains:
-        含まれる内容:
-            - Conversion key bindings (to_hiragana, to_katakana, etc.)
-              変換キーバインド（ひらがなへ、カタカナへ、など）
-            - Kanchoku bunsetsu marker key
-              漢直文節マーカーキー
-            - Bunsetsu prediction cycle key
-              文節予測サイクルキー
-            - User dictionary editor launch key
-              ユーザー辞書エディタ起動キー
-
-        Returns:
-            Gtk.Box: The configured tab container.
-        """
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        box.set_border_width(10)
-
-        # Conversion keys
-        keys_frame = Gtk.Frame(label="Conversion Key Bindings")
-        keys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        keys_box.set_border_width(10)
-        keys_frame.add(keys_box)
-
-        # Create size group for labels to ensure equal button widths
-        conv_label_size_group = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
-
-        # Hiragana
-        hira_box = Gtk.Box(spacing=6)
-        hira_label = Gtk.Label(label="To Hiragana:")
-        conv_label_size_group.add_widget(hira_label)
-        hira_box.pack_start(hira_label, False, False, 0)
-        self.to_hiragana_button = Gtk.Button(label="Not Set")
-        self.to_hiragana_button.connect("clicked", self.on_to_hiragana_button_clicked)
-        hira_box.pack_start(self.to_hiragana_button, True, True, 0)
-        keys_box.pack_start(hira_box, False, False, 0)
-
-        # Katakana
-        kata_box = Gtk.Box(spacing=6)
-        kata_label = Gtk.Label(label="To Katakana:")
-        conv_label_size_group.add_widget(kata_label)
-        kata_box.pack_start(kata_label, False, False, 0)
-        self.to_katakana_button = Gtk.Button(label="Not Set")
-        self.to_katakana_button.connect("clicked", self.on_to_katakana_button_clicked)
-        kata_box.pack_start(self.to_katakana_button, True, True, 0)
-        keys_box.pack_start(kata_box, False, False, 0)
-
-        # ASCII
-        ascii_box = Gtk.Box(spacing=6)
-        ascii_label = Gtk.Label(label="To ASCII:")
-        conv_label_size_group.add_widget(ascii_label)
-        ascii_box.pack_start(ascii_label, False, False, 0)
-        self.to_ascii_button = Gtk.Button(label="Not Set")
-        self.to_ascii_button.connect("clicked", self.on_to_ascii_button_clicked)
-        ascii_box.pack_start(self.to_ascii_button, True, True, 0)
-        keys_box.pack_start(ascii_box, False, False, 0)
-
-        # Zenkaku
-        zen_box = Gtk.Box(spacing=6)
-        zen_label = Gtk.Label(label="To Zenkaku:")
-        conv_label_size_group.add_widget(zen_label)
-        zen_box.pack_start(zen_label, False, False, 0)
-        self.to_zenkaku_button = Gtk.Button(label="Not Set")
-        self.to_zenkaku_button.connect("clicked", self.on_to_zenkaku_button_clicked)
-        zen_box.pack_start(self.to_zenkaku_button, True, True, 0)
-        keys_box.pack_start(zen_box, False, False, 0)
-
-        # Initialize conversion key instance variables
-        self.to_hiragana_value = None
-        self.to_katakana_value = None
-        self.to_ascii_value = None
-        self.to_zenkaku_value = None
-
-        box.pack_start(keys_frame, False, False, 0)
-
-        # Bunsetsu Prediction settings
-        bunsetsu_frame = Gtk.Frame(label="Bunsetsu Prediction")
-        bunsetsu_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        bunsetsu_box.set_border_width(10)
-        bunsetsu_frame.add(bunsetsu_box)
-
-        # Bunsetsu Prediction Cycle Key
-        cycle_key_box = Gtk.Box(spacing=6)
-        cycle_key_label = Gtk.Label(label="Bunsetsu Prediction Cycle Key:")
-        cycle_key_box.pack_start(cycle_key_label, False, False, 0)
-        self.bunsetsu_cycle_key_button = Gtk.Button(label="Not Set")
-        self.bunsetsu_cycle_key_button.connect("clicked", self.on_bunsetsu_cycle_key_button_clicked)
-        cycle_key_box.pack_start(self.bunsetsu_cycle_key_button, True, True, 0)
-        bunsetsu_box.pack_start(cycle_key_box, False, False, 0)
-
-        # Initialize bunsetsu prediction instance variable
-        self.bunsetsu_cycle_key_value = None
-
-        box.pack_start(bunsetsu_frame, False, False, 0)
-
-        # Force Commit settings
-        force_commit_frame = Gtk.Frame(label="Force Commit")
-        force_commit_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        force_commit_box.set_border_width(10)
-        force_commit_frame.add(force_commit_box)
-
-        # Force Commit Key
-        force_commit_key_box = Gtk.Box(spacing=6)
-        force_commit_key_label = Gtk.Label(label="Force Commit Key:")
-        force_commit_key_box.pack_start(force_commit_key_label, False, False, 0)
-        self.force_commit_key_button = Gtk.Button(label="Not Set")
-        self.force_commit_key_button.connect("clicked", self.on_force_commit_key_button_clicked)
-        force_commit_key_box.pack_start(self.force_commit_key_button, True, True, 0)
-        force_commit_box.pack_start(force_commit_key_box, False, False, 0)
-
-        # Initialize force commit instance variable
-        self.force_commit_key_value = None
-
-        box.pack_start(force_commit_frame, False, False, 0)
 
         return box
 
@@ -1593,6 +1313,205 @@ class SettingsPanel(Gtk.Window):
         return box
 
 
+    def create_key_configs_tab(self):
+        """
+        Create the Key Configs tab with a dynamic keybinding table.
+        動的なキーバインディングテーブルを持つキー設定タブを作成。
+
+        Contains:
+        含まれる内容:
+            - Scrollable list of keybinding rows (action dropdown + key button)
+              キーバインディング行のスクロール可能なリスト（アクションドロップダウン＋キーボタン）
+            - Add/Remove buttons for managing keybindings
+              キーバインディングを管理するための追加/削除ボタン
+
+        Each row allows:
+        各行で可能なこと:
+            - Selecting an action from dropdown
+              ドロップダウンからアクションを選択
+            - Capturing a key combo via button click
+              ボタンクリックでキーコンボをキャプチャ
+            - Removing the row
+              行の削除
+
+        Returns:
+            Gtk.Box: The configured tab container.
+        """
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_border_width(10)
+
+        # Define available keybinding actions
+        # Format: (action_id, display_label)
+        self.keybinding_actions = [
+            ("enable_hiragana_key", "Enable Hiragana Mode"),
+            ("disable_hiragana_key", "Disable Hiragana Mode"),
+            ("forced_preedit_trigger_key", "Forced Preedit Trigger"),
+            ("to_katakana", "Convert to Katakana"),
+            ("to_hiragana", "Convert to Hiragana"),
+            ("to_ascii", "Convert to ASCII"),
+            ("to_zenkaku", "Convert to Zenkaku"),
+            ("kanchoku_bunsetsu_marker", "Kanchoku/Bunsetsu Marker"),
+            ("bunsetsu_prediction_cycle_key", "Bunsetsu Prediction Cycle"),
+            ("force_commit_key", "Force Commit"),
+        ]
+
+        # Size groups for consistent column widths across all rows
+        self.keybinding_action_size_group = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+        self.keybinding_key_size_group = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+
+        # Info label
+        info_label = Gtk.Label()
+        info_label.set_markup(
+            "<small>Configure keybindings for various actions. "
+            "Multiple keys can be assigned to the same action.</small>"
+        )
+        info_label.set_xalign(0)
+        info_label.set_line_wrap(True)
+        box.pack_start(info_label, False, False, 0)
+
+        # Header row
+        header_box = Gtk.Box(spacing=6)
+        header_box.set_margin_start(6)
+        header_box.set_margin_end(6)
+        action_header = Gtk.Label(label="Action")
+        action_header.set_xalign(0)
+        action_header.set_size_request(200, -1)  # Minimum width for action column
+        key_header = Gtk.Label(label="Key")
+        key_header.set_xalign(0)
+        key_header.set_size_request(150, -1)  # Minimum width for key column
+        self.keybinding_action_size_group.add_widget(action_header)
+        self.keybinding_key_size_group.add_widget(key_header)
+        header_box.pack_start(action_header, False, False, 0)
+        header_box.pack_start(key_header, False, False, 0)
+        # Spacer for remove button column
+        header_box.pack_start(Gtk.Label(label=""), True, True, 0)
+        box.pack_start(header_box, False, False, 0)
+
+        # Scrolled container for keybinding list
+        self.keybinding_scroll = Gtk.ScrolledWindow()
+        self.keybinding_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.keybinding_scroll.set_min_content_height(250)
+        self.keybinding_scroll.set_max_content_height(400)
+
+        # ListBox for keybinding rows
+        self.keybinding_listbox = Gtk.ListBox()
+        self.keybinding_listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.keybinding_scroll.add(self.keybinding_listbox)
+
+        box.pack_start(self.keybinding_scroll, True, True, 0)
+
+        # Button box for Add/Remove
+        btn_box = Gtk.Box(spacing=6)
+
+        add_btn = Gtk.Button(label="Add")
+        add_btn.connect("clicked", self.on_add_keybinding)
+        btn_box.pack_start(add_btn, False, False, 0)
+
+        remove_btn = Gtk.Button(label="Remove")
+        remove_btn.connect("clicked", self.on_remove_keybinding)
+        btn_box.pack_start(remove_btn, False, False, 0)
+
+        box.pack_start(btn_box, False, False, 0)
+
+        return box
+
+    def _create_keybinding_row(self, action_id="", key_value=""):
+        """
+        Create a single keybinding row widget.
+
+        Args:
+            action_id: The action identifier (e.g., "force_commit_key")
+            key_value: The key combo string (e.g., "Ctrl+Return")
+
+        Returns:
+            Gtk.ListBoxRow containing the action dropdown and key button
+        """
+        row = Gtk.ListBoxRow()
+        row_box = Gtk.Box(spacing=6)
+        row_box.set_margin_top(3)
+        row_box.set_margin_bottom(3)
+        row_box.set_margin_start(6)
+        row_box.set_margin_end(6)
+
+        # Action dropdown
+        action_combo = Gtk.ComboBoxText()
+        for aid, label in self.keybinding_actions:
+            action_combo.append(aid, label)
+        if action_id:
+            action_combo.set_active_id(action_id)
+        # Disable scroll-wheel changing selection; let scroll propagate to parent
+        action_combo.connect("scroll-event", self._on_combo_scroll)
+        self.keybinding_action_size_group.add_widget(action_combo)
+        row_box.pack_start(action_combo, False, False, 0)
+
+        # Key capture button
+        key_button = Gtk.Button(label=key_value if key_value else "Not Set")
+        key_button.connect("clicked", self._on_keybinding_key_clicked)
+        self.keybinding_key_size_group.add_widget(key_button)
+        row_box.pack_start(key_button, False, False, 0)
+
+        # Spacer to push content left (matches header layout)
+        row_box.pack_start(Gtk.Label(label=""), True, True, 0)
+
+        # Store references in the row for later access
+        row.action_combo = action_combo
+        row.key_button = key_button
+        row.key_value = key_value
+
+        row.add(row_box)
+        row.show_all()
+        return row
+
+    def _on_combo_scroll(self, widget, event):
+        """
+        Prevent scroll-wheel from changing ComboBox selection and forward to ScrolledWindow.
+        スクロールホイールでComboBoxの選択が変わるのを防止し、ScrolledWindowに転送。
+
+        Instead of letting the ComboBox handle the scroll (which changes selection),
+        we manually forward the event to the keybinding ScrolledWindow.
+        """
+        # Use the stored ScrolledWindow reference directly (avoids deprecated Viewport method)
+        if self.keybinding_scroll:
+            # Get the vertical adjustment and scroll it
+            vadj = self.keybinding_scroll.get_vadjustment()
+            if vadj:
+                # Scroll amount (positive = down, negative = up)
+                scroll_delta = 50  # pixels per scroll step
+                if event.direction == Gdk.ScrollDirection.UP:
+                    vadj.set_value(vadj.get_value() - scroll_delta)
+                elif event.direction == Gdk.ScrollDirection.DOWN:
+                    vadj.set_value(vadj.get_value() + scroll_delta)
+                elif event.direction == Gdk.ScrollDirection.SMOOTH:
+                    # Handle smooth scrolling (touchpads)
+                    _, dy = event.get_scroll_deltas()
+                    vadj.set_value(vadj.get_value() + dy * scroll_delta)
+        return True  # Block ComboBox from handling the scroll
+
+    def _on_keybinding_key_clicked(self, button):
+        """Handle key capture button click in keybinding row."""
+        # Find the row containing this button
+        row = button.get_parent().get_parent()
+        current_value = row.key_value
+
+        result = self.show_key_capture_dialog("Keybinding", current_value)
+        if result is not None:
+            row.key_value = result
+            button.set_label(result if result else "Not Set")
+
+    def on_add_keybinding(self, button):
+        """Add a new empty keybinding row."""
+        row = self._create_keybinding_row()
+        self.keybinding_listbox.add(row)
+
+    def on_remove_keybinding(self, button):
+        """Remove the selected (last) keybinding row."""
+        children = self.keybinding_listbox.get_children()
+        if children:
+            # Remove the last row (or could implement selection-based removal)
+            last_row = children[-1]
+            self.keybinding_listbox.remove(last_row)
+
+
     def load_settings_to_ui(self):
         """
         Load current settings from config into UI widgets.
@@ -1675,16 +1594,6 @@ class SettingsPanel(Gtk.Window):
             layout_type = layout  # layout is a string
         self.layout_combo.set_active_id(layout_type)
 
-        # Load enable_hiragana_key from config
-        default_enable_key = default_config.get("enable_hiragana_key", "Alt_R")
-        self.hiragana_key_value = self.config.get("enable_hiragana_key", default_enable_key)
-        self.hiragana_key_button.set_label(self.hiragana_key_value or "Not Set")
-
-        # Load disable_hiragana_key from config
-        default_disable_key = default_config.get("disable_hiragana_key", "Alt_L")
-        self.direct_key_value = self.config.get("disable_hiragana_key", default_disable_key)
-        self.direct_key_button.set_label(self.direct_key_value or "Not Set")
-
         ui = self.config.get("ui") or {}
         if not isinstance(ui, dict):
             ui = {}
@@ -1713,56 +1622,49 @@ class SettingsPanel(Gtk.Window):
             # Trigger the toggle handler to update field states
             self.on_use_ibus_hint_toggled(self.use_ibus_hint_check)
 
-        # Input tab
-        self.sands_enabled_check.set_active(self.config.get("enable_sands", True))
+        # Key Configs tab - load keybindings into table
+        # Clear existing rows
+        for child in self.keybinding_listbox.get_children():
+            self.keybinding_listbox.remove(child)
 
-        fp = self.config.get("forced_preedit_trigger_entry") or {}
-        if not isinstance(fp, dict):
-            fp = {}
-        self.forced_preedit_enabled_check.set_active(fp.get("enabled", True))
-        self.forced_preedit_trigger_entry.set_text(fp.get("trigger_key", "f"))
+        # Map of config keys to action IDs
+        # Some are top-level, some are nested under conversion_keys
+        keybinding_config_map = {
+            "enable_hiragana_key": "enable_hiragana_key",
+            "disable_hiragana_key": "disable_hiragana_key",
+            "forced_preedit_trigger_key": "forced_preedit_trigger_key",
+            "kanchoku_bunsetsu_marker": "kanchoku_bunsetsu_marker",
+            "bunsetsu_prediction_cycle_key": "bunsetsu_prediction_cycle_key",
+            "force_commit_key": "force_commit_key",
+        }
 
-        self.murenso_enabled_check.set_active(self.config.get("enable_murenso", True))
+        # Load top-level keybindings
+        for config_key, action_id in keybinding_config_map.items():
+            keys = self.config.get(config_key, default_config.get(config_key, []))
+            if isinstance(keys, str):
+                keys = [keys] if keys else []
+            for key in keys:
+                if key:  # Skip empty strings
+                    row = self._create_keybinding_row(action_id, key)
+                    self.keybinding_listbox.add(row)
 
-        # Load kanchoku_bunsetsu_marker
-        default_marker = default_config.get("kanchoku_bunsetsu_marker", "space")
-        self.kanchoku_marker_value = self.config.get("kanchoku_bunsetsu_marker", default_marker)
-        self.kanchoku_marker_button.set_label(self.kanchoku_marker_value or "Not Set")
-
-        # Conversion tab
-        conv_keys = self.config.get("conversion_keys") or {}
-        if not isinstance(conv_keys, dict):
-            conv_keys = {}
-        default_conv_keys = default_config.get("conversion_keys") or {}
-        if not isinstance(default_conv_keys, dict):
-            default_conv_keys = {}
-
-        self.to_katakana_value = conv_keys.get("to_katakana", default_conv_keys.get("to_katakana", "Ctrl+K"))
-        self.to_katakana_button.set_label(self.to_katakana_value or "Not Set")
-
-        self.to_hiragana_value = conv_keys.get("to_hiragana", default_conv_keys.get("to_hiragana", "Ctrl+J"))
-        self.to_hiragana_button.set_label(self.to_hiragana_value or "Not Set")
-
-        self.to_ascii_value = conv_keys.get("to_ascii", default_conv_keys.get("to_ascii", "Ctrl+L"))
-        self.to_ascii_button.set_label(self.to_ascii_value or "Not Set")
-
-        self.to_zenkaku_value = conv_keys.get("to_zenkaku", default_conv_keys.get("to_zenkaku", "Ctrl+Shift+L"))
-        self.to_zenkaku_button.set_label(self.to_zenkaku_value or "Not Set")
-
-        # Bunsetsu Prediction settings
-        self.bunsetsu_cycle_key_value = self.config.get("bunsetsu_prediction_cycle_key",
-                                                         default_config.get("bunsetsu_prediction_cycle_key", ""))
-        self.bunsetsu_cycle_key_button.set_label(self.bunsetsu_cycle_key_value or "Not Set")
-
-        # Force Commit settings
-        self.force_commit_key_value = self.config.get("force_commit_key",
-                                                       default_config.get("force_commit_key", ""))
-        self.force_commit_key_button.set_label(self.force_commit_key_value or "Not Set")
-
-        # User Dictionary Editor keybinding
-        self.user_dict_editor_key_value = self.config.get("user_dictionary_editor_trigger",
-                                                           default_config.get("user_dictionary_editor_trigger", "Ctrl+Shift+R"))
-        self.user_dict_editor_key_button.set_label(self.user_dict_editor_key_value or "Not Set")
+        # Load conversion_keys (nested)
+        conv_keys = self.config.get("conversion_keys", {}) or {}
+        default_conv_keys = default_config.get("conversion_keys", {}) or {}
+        conversion_key_map = {
+            "to_katakana": "to_katakana",
+            "to_hiragana": "to_hiragana",
+            "to_ascii": "to_ascii",
+            "to_zenkaku": "to_zenkaku",
+        }
+        for config_key, action_id in conversion_key_map.items():
+            keys = conv_keys.get(config_key, default_conv_keys.get(config_key, []))
+            if isinstance(keys, str):
+                keys = [keys] if keys else []
+            for key in keys:
+                if key:  # Skip empty strings
+                    row = self._create_keybinding_row(action_id, key)
+                    self.keybinding_listbox.add(row)
 
         # Dictionaries tab
         dictionaries = self.config.get("dictionaries") or {}
@@ -1906,8 +1808,6 @@ class SettingsPanel(Gtk.Window):
         # General tab
         self.config["layout"] = self.layout_combo.get_active_id() or "shingeta.json"
         self.config["kanchoku_layout"] = self.kanchoku_layout_combo.get_active_id() or "aki_code.json"
-        self.config["enable_hiragana_key"] = self.hiragana_key_value or ""
-        self.config["disable_hiragana_key"] = self.direct_key_value or ""
 
         self.config["ui"] = {
             "show_annotations": self.show_annotations_check.get_active(),
@@ -1923,28 +1823,36 @@ class SettingsPanel(Gtk.Window):
         # Save use_ibus_hint_colors setting
         self.config["use_ibus_hint_colors"] = self.use_ibus_hint_check.get_active()
 
-        # Input tab
-        self.config["enable_sands"] = self.sands_enabled_check.get_active()
-        self.config["forced_preedit_trigger_key"] = self.forced_preedit_trigger_entry.get_text()
-        self.config["enable_murenso"] = self.murenso_enabled_check.get_active()
-        self.config["kanchoku_bunsetsu_marker"] = self.kanchoku_marker_value or ""
+        # Key Configs tab - save keybindings from table
+        # Collect keybindings grouped by action
+        keybindings_by_action = {}
+        for row in self.keybinding_listbox.get_children():
+            action_id = row.action_combo.get_active_id()
+            key_value = row.key_value
+            if action_id and key_value:
+                if action_id not in keybindings_by_action:
+                    keybindings_by_action[action_id] = []
+                keybindings_by_action[action_id].append(key_value)
 
-        # Conversion tab
+        # Save top-level keybinding configs (as lists)
+        top_level_keys = [
+            "enable_hiragana_key",
+            "disable_hiragana_key",
+            "forced_preedit_trigger_key",
+            "kanchoku_bunsetsu_marker",
+            "bunsetsu_prediction_cycle_key",
+            "force_commit_key",
+        ]
+        for config_key in top_level_keys:
+            self.config[config_key] = keybindings_by_action.get(config_key, [])
+
+        # Save conversion_keys (nested, as lists)
         self.config["conversion_keys"] = {
-            "to_katakana": self.to_katakana_value or "",
-            "to_hiragana": self.to_hiragana_value or "",
-            "to_ascii": self.to_ascii_value or "",
-            "to_zenkaku": self.to_zenkaku_value or ""
+            "to_katakana": keybindings_by_action.get("to_katakana", []),
+            "to_hiragana": keybindings_by_action.get("to_hiragana", []),
+            "to_ascii": keybindings_by_action.get("to_ascii", []),
+            "to_zenkaku": keybindings_by_action.get("to_zenkaku", []),
         }
-
-        # Bunsetsu Prediction settings
-        self.config["bunsetsu_prediction_cycle_key"] = self.bunsetsu_cycle_key_value or ""
-
-        # Force Commit settings
-        self.config["force_commit_key"] = self.force_commit_key_value or ""
-
-        # User Dictionary Editor keybinding
-        self.config["user_dictionary_editor_trigger"] = self.user_dict_editor_key_value or ""
 
         # Dictionaries tab
         # For both system and user dictionaries, save as {path: weight} for enabled entries only

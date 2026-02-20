@@ -6,14 +6,14 @@
     "logging_level_": "Level of the runtime logging",
     "logging_level_ja": "ログレベル",
 
-    "enable_hiragana_key": "Henkan",
+    "enable_hiragana_key": ["Henkan"],
     "enable_hiragana_key_": "Key to enable hiragana/Japanese typing",
     "enable_hiragana_key_ja": "ひらがな/日本語を入力するモードを起動するキー",
-    "disable_hiragana_key": "Muhenkan",
+    "disable_hiragana_key": ["Muhenkan"],
     "disable_hiragana_key_": "Key to disable hiragana/Japanese typing",
     "disable_hiragana_key_ja": "ひらがな/日本語を入力するモードを停止するキー (直接入力への切り替えキー)",
 
-    "forced_preedit_trigger_key": "f",
+    "forced_preedit_trigger_key": ["f"],
     "forced_preedit_trigger_key_": "The key to trigger the forceed preedit mode",
     "forced_preedit_trigger_key_ja": "強制 Preedit モードを起動するためのトリガーキー",
 
@@ -38,23 +38,16 @@
     "dictionaries_": "Dictionary configuration with weights. Format: {path: weight}. Higher weight = higher priority during merge. System dictionaries use full paths, user dictionaries use filenames from ${config_dir}/dictionaries/.",
     "dictionaries_ja": "辞書の設定（重みつき）。形式: {パス: 重み}。重みが高いほど、マージ時の優先度が高くなります。システム辞書はフルパス、ユーザー辞書は ${config_dir}/dictionaries/ 内のファイル名を使用します。",
 
-    "enable_sands": true,
-    "enable_sands_": "Setting to determine whether or not the SandS is enabled",
-
     "conversion_keys": {
-        "to_katakana": "Ctrl+K",
-        "to_hiragana": "Ctrl+J",
-        "to_ascii": "Ctrl+L",
-        "to_zenkaku": "Ctrl+Shift+L"
+        "to_katakana": ["Ctrl+K"],
+        "to_hiragana": ["Ctrl+J"],
+        "to_ascii": ["Ctrl+L"],
+        "to_zenkaku": ["Ctrl+Shift+L"]
     },
     "conversion_keys_": "Each key-combo to convert the preedit string into respective character representation",
     "conversion_keys_ja": "Preedit (未確定) の文字列を対応する文字種に変換するためのキーコンボです",
 
-    "enable_murenso": true,
-    "enable_murenso_": "Setting to determine whether or not the murenso typing is enabled",
-    "enable_murenso_ja": "ture にすることで無連想配列を使用します",
-
-    "kanchoku_bunsetsu_marker": "space",
+    "kanchoku_bunsetsu_marker": ["space"],
     "kanchoku_bunsetsu_marker_": "Key used for typing kanchoku (漢直) strokes while held, and marking the start of bunsetsu (文節) when tapped.",
     "kanchoku_bunsetsu_marker_ja": "漢直の入力と文節の始まりをマークするためのキー -- 押下中に漢直入力を行うことができるとともに、押下中にキーを一つ押して離すことで文節の始まりをマークします。",
 
@@ -62,13 +55,13 @@
     "bunsetsu_prediction_n_best_": "Maximum number of bunsetsu-split predictions from CRF model",
     "bunsetsu_prediction_n_best_ja": "CRF により予想された文節区切り候補の最大数",
 
-    "bunsetsu_prediction_cycle_key": "Shift+space",
+    "bunsetsu_prediction_cycle_key": ["Shift+space"],
     "bunsetsu_prediction_cycle_key_": "Key used for cyclying through the bunsetsu-split candidates proivded by CRF",
     "bunsetsu_prediction_cycle_key_ja": "CRF により予想された文節の区切り候補を切り替えるキー",
 
     "user_dictionary_editor_trigger": "Ctrl+Shift+R",
 
-    "force_commit_key": "Ctrl+O",
+    "force_commit_key": ["Ctrl+O"],
     "force_commit_key_": "Key to commit preedit as-is without kanji conversion. If buffer is empty, passes key to application.",
     "force_commit_key_ja": "漢字変換せずに現在のプリエディットをそのまま確定するキー。バッファが空の場合、キーはアプリケーションに渡されます。"
 }
