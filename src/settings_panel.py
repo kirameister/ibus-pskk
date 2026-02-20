@@ -1788,6 +1788,64 @@ class SettingsPanel(Gtk.Window):
         # Load mappings
         self.load_murenso_mappings()
 
+    def _validate_keybindings(self):
+        """
+        Validate keybindings from the UI table before saving.
+        保存前にUIテーブルのキーバインディングを検証。
+
+        Performs two validations:
+        1. Deduplication: Removes duplicate (action, key) pairs silently
+        2. Conflict detection: Detects same key assigned to different actions
+
+        二つの検証を実行:
+        1. 重複排除: 同じ（アクション、キー）ペアを静かに削除
+        2. 競合検出: 同じキーが異なるアクションに割り当てられているかを検出
+
+        Returns:
+            tuple: (keybindings_by_action, error_message)
+                   - keybindings_by_action: dict mapping action_id to list of unique keys
+                   - error_message: None if valid, or error string if conflicts found
+        """
+        # Collect all (action, key) pairs
+        action_key_pairs = []
+        for row in self.keybinding_listbox.get_children():
+            action_id = row.action_combo.get_active_id()
+            key_value = row.key_value
+            if action_id and key_value:
+                action_key_pairs.append((action_id, key_value))
+
+        # Build keybindings_by_action with deduplication (using set)
+        keybindings_by_action = {}
+        for action_id, key_value in action_key_pairs:
+            if action_id not in keybindings_by_action:
+                keybindings_by_action[action_id] = set()
+            keybindings_by_action[action_id].add(key_value)
+
+        # Convert sets to lists for JSON serialization
+        keybindings_by_action = {k: list(v) for k, v in keybindings_by_action.items()}
+
+        # Check for conflicts: same key assigned to different actions
+        key_to_actions = {}
+        for action_id, keys in keybindings_by_action.items():
+            for key in keys:
+                if key not in key_to_actions:
+                    key_to_actions[key] = []
+                key_to_actions[key].append(action_id)
+
+        # Find conflicts (keys with multiple actions)
+        conflicts = {k: v for k, v in key_to_actions.items() if len(v) > 1}
+        if conflicts:
+            # Build human-readable error message
+            conflict_lines = []
+            for key, actions in conflicts.items():
+                action_names = ", ".join(actions)
+                conflict_lines.append(f"  • {key} → {action_names}")
+            error_msg = "The following keys are assigned to multiple actions:\n\n"
+            error_msg += "\n".join(conflict_lines)
+            error_msg += "\n\nPlease resolve these conflicts before saving."
+            return keybindings_by_action, error_msg
+
+        return keybindings_by_action, None
 
     def on_save_clicked(self, button):
         """
@@ -1823,16 +1881,21 @@ class SettingsPanel(Gtk.Window):
         # Save use_ibus_hint_colors setting
         self.config["use_ibus_hint_colors"] = self.use_ibus_hint_check.get_active()
 
-        # Key Configs tab - save keybindings from table
-        # Collect keybindings grouped by action
-        keybindings_by_action = {}
-        for row in self.keybinding_listbox.get_children():
-            action_id = row.action_combo.get_active_id()
-            key_value = row.key_value
-            if action_id and key_value:
-                if action_id not in keybindings_by_action:
-                    keybindings_by_action[action_id] = []
-                keybindings_by_action[action_id].append(key_value)
+        # Key Configs tab - validate and collect keybindings
+        keybindings_by_action, error_msg = self._validate_keybindings()
+        if error_msg:
+            # Show error dialog and abort save
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Keybinding Conflict Detected"
+            )
+            dialog.format_secondary_text(error_msg)
+            dialog.run()
+            dialog.destroy()
+            return  # Abort save, keep panel open
 
         # Save top-level keybinding configs (as lists)
         top_level_keys = [
@@ -1841,6 +1904,7 @@ class SettingsPanel(Gtk.Window):
             "forced_preedit_trigger_key",
             "kanchoku_bunsetsu_marker",
             "bunsetsu_prediction_cycle_key",
+            "user_dictionary_editor_trigger",
             "force_commit_key",
         ]
         for config_key in top_level_keys:
