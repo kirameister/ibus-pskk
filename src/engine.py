@@ -1231,6 +1231,10 @@ class EnginePSKK(IBus.Engine):
         if self._check_user_dictionary_editor_key(key_name, state, is_pressed):
             return True
 
+        # Check force_commit_key
+        if self._check_force_commit_key(key_name, state, is_pressed):
+            return True
+
         return False
 
     def _parse_key_binding(self, binding_str):
@@ -1445,6 +1449,44 @@ class EnginePSKK(IBus.Engine):
         if self._matches_key_binding(key_name, state, binding):
             logger.debug(f'user_dictionary_editor_trigger matched: {binding}')
             self._open_user_dictionary_editor_with_preedit()
+            self._handled_config_keys.add(key_name)
+            return True
+
+        return False
+
+    def _check_force_commit_key(self, key_name, state, is_pressed):
+        """
+        Check and handle force_commit_key binding.
+        force_commit_key バインディングを確認し処理
+
+        Commits the current preedit as-is (hiragana/katakana/ASCII) without
+        performing kanji conversion. If the buffer is empty, returns False
+        to pass the key through to the application.
+
+        現在のプリエディット（ひらがな/カタカナ/ASCII）を漢字変換せずに
+        そのまま確定します。バッファが空の場合は False を返し、キーを
+        アプリケーションに渡します。
+        """
+        binding = self._config.get('force_commit_key', '')
+        if not binding:
+            return False
+
+        # On release: consume if this key was handled on press
+        if not is_pressed:
+            if key_name in self._handled_config_keys:
+                self._handled_config_keys.discard(key_name)
+                return True
+            return False
+
+        # If preedit is empty, pass through to application
+        if not self._preedit_string:
+            return False
+
+        # On press: check if key matches the binding
+        if self._matches_key_binding(key_name, state, binding):
+            logger.debug(f'force_commit_key matched: {binding}')
+            self._commit_string()
+            self._reset_henkan_state()  # Clear conversion state flags
             self._handled_config_keys.add(key_name)
             return True
 

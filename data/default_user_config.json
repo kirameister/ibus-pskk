@@ -66,5 +66,9 @@
     "bunsetsu_prediction_cycle_key_": "Key used for cyclying through the bunsetsu-split candidates proivded by CRF",
     "bunsetsu_prediction_cycle_key_ja": "CRF により予想された文節の区切り候補を切り替えるキー",
 
-    "user_dictionary_editor_trigger": "Ctrl+Shift+R"
+    "user_dictionary_editor_trigger": "Ctrl+Shift+R",
+
+    "force_commit_key": "Ctrl+O",
+    "force_commit_key_": "Key to commit preedit as-is without kanji conversion. If buffer is empty, passes key to application.",
+    "force_commit_key_ja": "漢字変換せずに現在のプリエディットをそのまま確定するキー。バッファが空の場合、キーはアプリケーションに渡されます。"
 }

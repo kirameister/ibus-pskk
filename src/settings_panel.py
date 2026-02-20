@@ -342,6 +342,13 @@ class SettingsPanel(Gtk.Window):
             self.bunsetsu_cycle_key_value = result
             self.bunsetsu_cycle_key_button.set_label(result if result else "Not Set")
 
+    def on_force_commit_key_button_clicked(self, button):
+        """Show key capture dialog for force commit key"""
+        result = self.show_key_capture_dialog("Force Commit Key", self.force_commit_key_value)
+        if result is not None:
+            self.force_commit_key_value = result
+            self.force_commit_key_button.set_label(result if result else "Not Set")
+
     def on_user_dict_editor_key_button_clicked(self, button):
         """Show key capture dialog for user dictionary editor launch key.
 
@@ -1070,6 +1077,26 @@ class SettingsPanel(Gtk.Window):
 
         box.pack_start(bunsetsu_frame, False, False, 0)
 
+        # Force Commit settings
+        force_commit_frame = Gtk.Frame(label="Force Commit")
+        force_commit_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        force_commit_box.set_border_width(10)
+        force_commit_frame.add(force_commit_box)
+
+        # Force Commit Key
+        force_commit_key_box = Gtk.Box(spacing=6)
+        force_commit_key_label = Gtk.Label(label="Force Commit Key:")
+        force_commit_key_box.pack_start(force_commit_key_label, False, False, 0)
+        self.force_commit_key_button = Gtk.Button(label="Not Set")
+        self.force_commit_key_button.connect("clicked", self.on_force_commit_key_button_clicked)
+        force_commit_key_box.pack_start(self.force_commit_key_button, True, True, 0)
+        force_commit_box.pack_start(force_commit_key_box, False, False, 0)
+
+        # Initialize force commit instance variable
+        self.force_commit_key_value = None
+
+        box.pack_start(force_commit_frame, False, False, 0)
+
         return box
 
 
@@ -1727,6 +1754,11 @@ class SettingsPanel(Gtk.Window):
                                                          default_config.get("bunsetsu_prediction_cycle_key", ""))
         self.bunsetsu_cycle_key_button.set_label(self.bunsetsu_cycle_key_value or "Not Set")
 
+        # Force Commit settings
+        self.force_commit_key_value = self.config.get("force_commit_key",
+                                                       default_config.get("force_commit_key", ""))
+        self.force_commit_key_button.set_label(self.force_commit_key_value or "Not Set")
+
         # User Dictionary Editor keybinding
         self.user_dict_editor_key_value = self.config.get("user_dictionary_editor_trigger",
                                                            default_config.get("user_dictionary_editor_trigger", "Ctrl+Shift+R"))
@@ -1907,6 +1939,9 @@ class SettingsPanel(Gtk.Window):
 
         # Bunsetsu Prediction settings
         self.config["bunsetsu_prediction_cycle_key"] = self.bunsetsu_cycle_key_value or ""
+
+        # Force Commit settings
+        self.config["force_commit_key"] = self.force_commit_key_value or ""
 
         # User Dictionary Editor keybinding
         self.config["user_dictionary_editor_trigger"] = self.user_dict_editor_key_value or ""
