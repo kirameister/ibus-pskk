@@ -1351,7 +1351,9 @@ class SettingsPanel(Gtk.Window):
             ("to_ascii", "Convert to ASCII"),
             ("to_zenkaku", "Convert to Zenkaku"),
             ("kanchoku_bunsetsu_marker", "Kanchoku/Bunsetsu Marker"),
+            ("kanchoku_pure_trigger_key", "Pure Kanchoku Trigger"),
             ("bunsetsu_prediction_cycle_key", "Bunsetsu Prediction Cycle"),
+            ("user_dictionary_editor_trigger", "User Dictionary Editor"),
             ("force_commit_key", "Force Commit"),
         ]
 
@@ -1903,6 +1905,7 @@ class SettingsPanel(Gtk.Window):
             "disable_hiragana_key",
             "forced_preedit_trigger_key",
             "kanchoku_bunsetsu_marker",
+            "kanchoku_pure_trigger_key",
             "bunsetsu_prediction_cycle_key",
             "user_dictionary_editor_trigger",
             "force_commit_key",

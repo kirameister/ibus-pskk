@@ -474,6 +474,8 @@ class EnginePSKK(IBus.Engine):
         self._layout_data = None  # raw layout JSON data
         self._simul_processor = None  # SimultaneousInputProcessor instance
         self._kanchoku_layout = dict()
+        self._kanchoku_valid_first_keys = set()   # Valid first-stroke keys for pure kanchoku
+        self._kanchoku_valid_seconds = dict()     # first_key -> set of valid second keys
         # SandS vars
         self._modkey_status = 0 # This is supposed to be bitwise status
         self._typing_mode = 0 # This is to indicate which state the stroke is supposed to be
@@ -488,6 +490,10 @@ class EnginePSKK(IBus.Engine):
         self._marker_had_input = False          # True if any key was pressed during this marker hold
         self._preedit_before_marker = ''        # Preedit snapshot to restore if kanchoku
         self._in_forced_preedit = False         # True when in forced preedit mode (Case C)
+
+        # Pure kanchoku trigger state (simpler alternative to marker-based kanchoku)
+        self._pure_kanchoku_held = False        # True when pure kanchoku trigger key is held
+        self._pure_kanchoku_first_key = None    # First key of two-key kanchoku sequence
 
         # Henkan (kana-kanji conversion) state variables
         self._bunsetsu_active = False           # True when bunsetsu mode is active (yomi input)
@@ -578,6 +584,10 @@ class EnginePSKK(IBus.Engine):
         self._marker_first_key = None
         self._marker_keys_held.clear()
         self._marker_had_input = False
+
+        # Reset pure kanchoku state
+        self._pure_kanchoku_held = False
+        self._pure_kanchoku_first_key = None
 
 
     def _init_props(self):
@@ -691,6 +701,10 @@ class EnginePSKK(IBus.Engine):
         Returns:
             dict: A nested dictionary mapping first-key -> second-key -> kanji character
                   for all keys in KANCHOKU_KEY_SET
+
+        Side effects:
+            Sets self._kanchoku_valid_first_keys (set of keys that are valid first strokes)
+            Sets self._kanchoku_valid_seconds (dict: first_key -> set of valid second keys)
         """
         return_dict = dict()
 
@@ -700,11 +714,21 @@ class EnginePSKK(IBus.Engine):
         if kanchoku_layout_data is None:
             logger.error('Failed to load kanchoku layout data')
             # Initialize empty structure as fallback
+            self._kanchoku_valid_first_keys = set()
+            self._kanchoku_valid_seconds = dict()
             for first in KANCHOKU_KEY_SET:
                 return_dict[first] = dict()
                 for second in KANCHOKU_KEY_SET:
                     return_dict[first][second] = MISSING_KANCHOKU_KANJI
             return return_dict
+
+        # Extract valid first keys and their valid second keys from raw JSON data
+        # This is used by pure kanchoku trigger to determine pass-through behavior
+        self._kanchoku_valid_first_keys = set(kanchoku_layout_data.keys())
+        self._kanchoku_valid_seconds = {
+            first: set(seconds.keys())
+            for first, seconds in kanchoku_layout_data.items()
+        }
 
         # Initialize and populate the layout for all keys in KANCHOKU_KEY_SET
         for first in KANCHOKU_KEY_SET:
@@ -976,6 +1000,14 @@ class EnginePSKK(IBus.Engine):
         # Must be checked before other bindings since the marker key (e.g., Space)
         # triggers a state machine that consumes subsequent key events.
         if self._handle_kanchoku_bunsetsu_marker(key_name, keyval, state, is_pressed):
+            return True
+
+        # =====================================================================
+        # PURE KANCHOKU TRIGGER (alternative kanchoku input)
+        # =====================================================================
+        # Simpler kanchoku input that doesn't involve bunsetsu marking.
+        # Keys not in kanchoku layout pass through (e.g., Alt+Tab works normally).
+        if self._handle_pure_kanchoku(key_name, keyval, state, is_pressed):
             return True
 
         # =====================================================================
@@ -1515,6 +1547,124 @@ class EnginePSKK(IBus.Engine):
             return True
 
         return False
+
+    def _handle_pure_kanchoku(self, key_name, keyval, state, is_pressed):
+        """
+        Handle pure kanchoku trigger key for simplified kanji input.
+        純粋な漢直トリガーキーによる簡易漢字入力を処理
+
+        This is a simpler alternative to the marker-based kanchoku that doesn't
+        involve bunsetsu marking or forced preedit mode. While the trigger key
+        is held, two-key kanchoku sequences are captured and converted to kanji.
+
+        マーカーベースの漢直の代替として、文節マークや強制プリエディットモードを
+        伴わない、より単純な漢直入力方法。トリガーキーを押している間、2キーの
+        漢直シーケンスがキャプチャされ、漢字に変換される。
+
+        Key behaviors:
+        - Keys defined in kanchoku layout: captured for kanchoku sequence
+        - Keys NOT in layout: passed through (e.g., Alt+Tab works normally)
+        - Incomplete sequences on trigger release: silent reset
+        - Continuous input: multiple kanchoku pairs while trigger held
+
+        Args:
+            key_name: Key name from IBus.keyval_name()
+            keyval: Key value
+            state: Modifier key state bitmask from IBus
+            is_pressed: True if key press, False if key release
+
+        Returns:
+            bool: True if key was consumed, False to pass through
+        """
+        trigger_keys = self._config.get('kanchoku_pure_trigger_key', [])
+        if not trigger_keys:
+            return False
+
+        # Ensure trigger_keys is a list (defensive check)
+        if isinstance(trigger_keys, str):
+            trigger_keys = [trigger_keys]
+
+        # Check if this is the trigger key itself (match by key name only, ignoring state)
+        # This is necessary because pressing a modifier key like Alt_L immediately sets
+        # MOD1_MASK in state, which would cause _matches_key_binding to fail.
+        #
+        # Also handle the case where user configures "Alt" but presses "Alt_R" or "Alt_L":
+        # Strip _L/_R suffix from key_name before comparing.
+        key_name_normalized = key_name.lower()
+        if key_name_normalized.endswith('_l') or key_name_normalized.endswith('_r'):
+            key_name_base = key_name_normalized[:-2]  # Remove _L or _R
+        else:
+            key_name_base = key_name_normalized
+
+        is_trigger = any(
+            key_name_base == tk.split('+')[-1].lower() or
+            key_name_normalized == tk.split('+')[-1].lower()
+            for tk in trigger_keys
+        )
+
+        logger.debug(f'Pure kanchoku: key={key_name} (base={key_name_base}), triggers={trigger_keys}, '
+                     f'is_trigger={is_trigger}, held={self._pure_kanchoku_held}')
+
+        if is_trigger:
+            if is_pressed:
+                self._pure_kanchoku_held = True
+                self._pure_kanchoku_first_key = None
+                logger.debug(f'Pure kanchoku trigger pressed, valid_first_keys={len(self._kanchoku_valid_first_keys)}')
+            else:
+                # Released - silent reset
+                if self._pure_kanchoku_first_key:
+                    logger.debug(f'Pure kanchoku incomplete sequence, silent reset (first_key was: {self._pure_kanchoku_first_key})')
+                self._pure_kanchoku_held = False
+                self._pure_kanchoku_first_key = None
+            return True
+
+        # If trigger not held, don't interfere
+        if not self._pure_kanchoku_held:
+            return False
+
+        # Ignore key releases while in pure kanchoku mode
+        if not is_pressed:
+            return True
+
+        # Convert keyval to lowercase character for lookup
+        if keyval < 0x20 or keyval > 0x7e:
+            # Non-printable key - pass through
+            return False
+
+        key_char = chr(keyval).lower()
+
+        # Check if we have a first key yet
+        if self._pure_kanchoku_first_key is None:
+            # First key of sequence
+            if key_char in self._kanchoku_valid_first_keys:
+                # Valid first stroke - capture it
+                self._pure_kanchoku_first_key = key_char
+                logger.debug(f'Pure kanchoku first key: {key_char}')
+                return True
+            else:
+                # Not a valid first stroke - pass through
+                logger.debug(f'Pure kanchoku: {key_char} not in layout, passing through')
+                return False
+        else:
+            # Second key of sequence
+            first_key = self._pure_kanchoku_first_key
+            valid_seconds = self._kanchoku_valid_seconds.get(first_key, set())
+
+            if key_char in valid_seconds:
+                # Valid second stroke - emit kanji
+                kanji = self._kanchoku_processor._lookup_kanji(first_key, key_char)
+                if kanji and kanji != MISSING_KANCHOKU_KANJI:
+                    logger.debug(f'Pure kanchoku: {first_key}+{key_char} → {kanji}')
+                    self._emit_kanchoku_output(kanji)
+                else:
+                    logger.debug(f'Pure kanchoku: {first_key}+{key_char} → no kanji found')
+            else:
+                # Invalid second stroke - silent reset (consume key)
+                logger.debug(f'Pure kanchoku: {key_char} not valid second for {first_key}, silent reset')
+
+            # Reset first key for next sequence (whether successful or not)
+            self._pure_kanchoku_first_key = None
+            return True
 
     def _open_user_dictionary_editor_with_preedit(self):
         """

@@ -51,6 +51,10 @@
     "kanchoku_bunsetsu_marker_": "Key used for typing kanchoku (漢直) strokes while held, and marking the start of bunsetsu (文節) when tapped.",
     "kanchoku_bunsetsu_marker_ja": "漢直の入力と文節の始まりをマークするためのキー -- 押下中に漢直入力を行うことができるとともに、押下中にキーを一つ押して離すことで文節の始まりをマークします。",
 
+    "kanchoku_pure_trigger_key": [],
+    "kanchoku_pure_trigger_key_": "Key for pure kanchoku input (kanji-only, no bunsetsu marking). Hold to type kanchoku strokes. Keys not in the kanchoku layout pass through normally.",
+    "kanchoku_pure_trigger_key_ja": "純粋な漢直入力用のキー（漢字のみ、文節マークなし）。押下中に漢直ストロークを入力します。漢直レイアウトに定義されていないキーは通常通りパススルーされます。",
+
     "bunsetsu_prediction_n_best": 3,
     "bunsetsu_prediction_n_best_": "Maximum number of bunsetsu-split predictions from CRF model",
     "bunsetsu_prediction_n_best_ja": "CRF により予想された文節区切り候補の最大数",
