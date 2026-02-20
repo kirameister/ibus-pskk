@@ -1299,13 +1299,31 @@ class EnginePSKK(IBus.Engine):
 
         return current_mods == required_mods
 
+    def _matches_any_key_binding(self, key_name, state, bindings):
+        """
+        Check if key_name + state matches any binding in a list.
+        key_name + state がリスト内のいずれかのバインディングに一致するか確認。
+
+        Args:
+            key_name: The key name from IBus.keyval_name()
+            state: Modifier state bitmask from IBus
+            bindings: List of key binding strings (e.g., ["Ctrl+K", "Ctrl+Shift+K"])
+
+        Returns:
+            str or None: The matched binding string, or None if no match
+        """
+        for binding in bindings:
+            if self._matches_key_binding(key_name, state, binding):
+                return binding
+        return None
+
     def _check_enable_hiragana_key(self, key_name, state, is_pressed):
         """
         Check and handle enable_hiragana_key binding.
 
         Switches mode to hiragana ('あ') when the configured key is pressed.
         """
-        binding = self._config.get('enable_hiragana_key', '')
+        bindings = self._config.get('enable_hiragana_key', [])
 
         # On release: consume if this key was handled on press
         if not is_pressed:
@@ -1314,9 +1332,10 @@ class EnginePSKK(IBus.Engine):
                 return True
             return False
 
-        # On press: check if binding matches
-        if self._matches_key_binding(key_name, state, binding):
-            logger.debug(f'enable_hiragana_key matched: {binding}')
+        # On press: check if any binding matches
+        matched = self._matches_any_key_binding(key_name, state, bindings)
+        if matched:
+            logger.debug(f'enable_hiragana_key matched: {matched}')
             self._mode = 'あ'
             self._update_input_mode()  # Update IBus icon
             self._handled_config_keys.add(key_name)
@@ -1332,7 +1351,7 @@ class EnginePSKK(IBus.Engine):
         If in CONVERTING state, commits the selected candidate first.
         If in BUNSETSU_ACTIVE state, commits the preedit as-is.
         """
-        binding = self._config.get('disable_hiragana_key', '')
+        bindings = self._config.get('disable_hiragana_key', [])
 
         # On release: consume if this key was handled on press
         if not is_pressed:
@@ -1341,9 +1360,10 @@ class EnginePSKK(IBus.Engine):
                 return True
             return False
 
-        # On press: check if binding matches
-        if self._matches_key_binding(key_name, state, binding):
-            logger.debug(f'disable_hiragana_key matched: {binding}')
+        # On press: check if any binding matches
+        matched = self._matches_any_key_binding(key_name, state, bindings)
+        if matched:
+            logger.debug(f'disable_hiragana_key matched: {matched}')
 
             # If in CONVERTING state, commit the selected candidate
             if self._in_conversion:
@@ -1388,9 +1408,10 @@ class EnginePSKK(IBus.Engine):
         if not self._preedit_string:
             return False
 
-        for conversion_type, binding in conversion_keys.items():
-            if self._matches_key_binding(key_name, state, binding):
-                logger.debug(f'conversion_key matched: {conversion_type} = {binding}')
+        for conversion_type, bindings in conversion_keys.items():
+            matched = self._matches_any_key_binding(key_name, state, bindings)
+            if matched:
+                logger.debug(f'conversion_key matched: {conversion_type} = {matched}')
                 self._handle_conversion(conversion_type)
                 self._handled_config_keys.add(key_name)
                 return True
@@ -1403,8 +1424,8 @@ class EnginePSKK(IBus.Engine):
 
         This key cycles through N-best bunsetsu prediction candidates.
         """
-        binding = self._config.get('bunsetsu_prediction_cycle_key', '')
-        if not binding:
+        bindings = self._config.get('bunsetsu_prediction_cycle_key', [])
+        if not bindings:
             return False
 
         # On release: consume if this key was handled on press
@@ -1414,9 +1435,10 @@ class EnginePSKK(IBus.Engine):
                 return True
             return False
 
-        # On press: check if key matches the binding
-        if self._matches_key_binding(key_name, state, binding):
-            logger.debug(f'bunsetsu_prediction_cycle_key matched: {binding}')
+        # On press: check if any binding matches
+        matched = self._matches_any_key_binding(key_name, state, bindings)
+        if matched:
+            logger.debug(f'bunsetsu_prediction_cycle_key matched: {matched}')
             self._cycle_bunsetsu_prediction()
             self._handled_config_keys.add(key_name)
             return True
@@ -1430,8 +1452,8 @@ class EnginePSKK(IBus.Engine):
         Opens the User Dictionary Editor with the current preedit as the reading.
         Only activates when preedit is non-empty.
         """
-        binding = self._config.get('user_dictionary_editor_trigger', '')
-        if not binding:
+        bindings = self._config.get('user_dictionary_editor_trigger', [])
+        if not bindings:
             return False
 
         # On release: consume if this key was handled on press
@@ -1445,9 +1467,10 @@ class EnginePSKK(IBus.Engine):
         if not self._preedit_string:
             return False
 
-        # On press: check if key matches the binding
-        if self._matches_key_binding(key_name, state, binding):
-            logger.debug(f'user_dictionary_editor_trigger matched: {binding}')
+        # On press: check if any binding matches
+        matched = self._matches_any_key_binding(key_name, state, bindings)
+        if matched:
+            logger.debug(f'user_dictionary_editor_trigger matched: {matched}')
             self._open_user_dictionary_editor_with_preedit()
             self._handled_config_keys.add(key_name)
             return True
@@ -1467,8 +1490,8 @@ class EnginePSKK(IBus.Engine):
         そのまま確定します。バッファが空の場合は False を返し、キーを
         アプリケーションに渡します。
         """
-        binding = self._config.get('force_commit_key', '')
-        if not binding:
+        bindings = self._config.get('force_commit_key', [])
+        if not bindings:
             return False
 
         # On release: consume if this key was handled on press
@@ -1482,9 +1505,10 @@ class EnginePSKK(IBus.Engine):
         if not self._preedit_string:
             return False
 
-        # On press: check if key matches the binding
-        if self._matches_key_binding(key_name, state, binding):
-            logger.debug(f'force_commit_key matched: {binding}')
+        # On press: check if any binding matches
+        matched = self._matches_any_key_binding(key_name, state, bindings)
+        if matched:
+            logger.debug(f'force_commit_key matched: {matched}')
             self._commit_string()
             self._reset_henkan_state()  # Clear conversion state flags
             self._handled_config_keys.add(key_name)
@@ -1728,11 +1752,12 @@ class EnginePSKK(IBus.Engine):
         Returns:
             bool: キーが消費された場合True、そうでなければFalse
         """
-        marker_binding = self._config.get('kanchoku_bunsetsu_marker', '')
-        if not marker_binding:
+        marker_bindings = self._config.get('kanchoku_bunsetsu_marker', [])
+        if not marker_bindings:
             return False
 
-        is_marker_key = self._matches_key_binding(key_name, state, marker_binding)
+        matched_binding = self._matches_any_key_binding(key_name, state, marker_bindings)
+        is_marker_key = matched_binding is not None
 
         # === MARKER KEY HANDLING ===
         if is_marker_key:
@@ -1966,9 +1991,9 @@ class EnginePSKK(IBus.Engine):
         self._preedit_hiragana = new_bunsetsu_hiragana
         self._preedit_ascii = new_bunsetsu_ascii
 
-        forced_preedit_key = self._config.get('forced_preedit_trigger_key', 'f')
+        forced_preedit_keys = self._config.get('forced_preedit_trigger_key', [])
 
-        if self._marker_first_key == forced_preedit_key:
+        if self._marker_first_key in forced_preedit_keys:
             # Case (C): Forced preedit mode
             # Clear the tentative output (e.g., "ん") since it's not part of bunsetsu
             self._preedit_string = ''
