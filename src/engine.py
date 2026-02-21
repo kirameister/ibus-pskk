@@ -2271,8 +2271,16 @@ class EnginePSKK(IBus.Engine):
                     # The old content will be stripped in _handle_marker_release_decision().
                     self._preedit_before_marker = self._preedit_string
                 else:
-                    # IDLE state: save current preedit (will be committed on release if needed)
-                    self._preedit_before_marker = self._preedit_string
+                    # IDLE state: commit any existing preedit (e.g., from prior kanchoku)
+                    # before starting a new bunsetsu sequence. This ensures kanchoku kanji
+                    # are committed and don't get mixed into the new bunsetsu.
+                    if self._preedit_string:
+                        logger.debug(f'Committing prior preedit before new bunsetsu: "{self._preedit_string}"')
+                        self.commit_text(IBus.Text.new_from_string(self._preedit_string))
+                        self._preedit_string = ''
+                        self._preedit_hiragana = ''
+                        self._preedit_ascii = ''
+                    self._preedit_before_marker = ''
 
                 # Let simultaneous processor handle this key (tentative output)
                 self._process_simultaneous_input(keyval, is_pressed)
@@ -2319,6 +2327,10 @@ class EnginePSKK(IBus.Engine):
                 logger.debug(f'Second key pressed: "{key_char}" → KANCHOKU')
                 # Undo the tentative simultaneous output
                 self._preedit_string = self._preedit_before_marker
+                # Clear hiragana/ascii buffers to prevent stale data from affecting
+                # subsequent input. Kanchoku kanji only exist in _preedit_string.
+                self._preedit_hiragana = ''
+                self._preedit_ascii = ''
                 # Look up and emit kanchoku kanji
                 kanji = self._kanchoku_processor._lookup_kanji(self._marker_first_key, key_char)
                 self._emit_kanchoku_output(kanji)
