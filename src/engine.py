@@ -3001,8 +3001,8 @@ class EnginePSKK(IBus.Engine):
                     0,
                     preedit_len
                 ))
-
-                logger.debug(f'Using explicit preedit colors: fg=0x{fg_color:06x}, bg=0x{bg_color:06x}')
+                # Seeing this line in the log file seemed to be just too much -- commenting out
+                #logger.debug(f'Using explicit preedit colors: fg=0x{fg_color:06x}, bg=0x{bg_color:06x}')
 
             preedit_text.set_attributes(attrs)
 
