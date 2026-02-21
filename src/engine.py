@@ -888,6 +888,9 @@ class EnginePSKK(IBus.Engine):
 
     def user_dictionary_editor_closed_callback(self, editor):
         self._user_dictionary_editor = None
+    # =========================================================================
+    # End of GUI-related definitions
+    # =========================================================================
 
     def _update_input_mode(self):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))
