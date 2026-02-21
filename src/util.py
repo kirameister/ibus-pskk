@@ -22,8 +22,6 @@ MODULE ORGANIZATION / モジュール構成
    ─────────────────────────────────────────────────────────────────
    - char_type(): Classify characters by Unicode block
                   Unicode ブロックによる文字分類
-   - katakana_to_hiragana(): Convert katakana to hiragana
-                             カタカナをひらがなに変換
    - tokenize_line(): Split mixed Japanese/ASCII text into tokens
                       日本語/ASCII混在テキストをトークンに分割
 
@@ -202,28 +200,6 @@ def char_type(c):
         return 'ascii'
     else:
         return 'other'
-
-
-def katakana_to_hiragana(text):
-    """Convert katakana characters to hiragana.
-
-    Args:
-        text: Input string (may contain katakana, hiragana, or other characters)
-
-    Returns:
-        String with katakana converted to hiragana (other characters unchanged)
-    """
-    result = []
-    for c in text:
-        cp = ord(c)
-        # Katakana range: 0x30A1 (ァ) to 0x30F6 (ヶ)
-        # Hiragana range: 0x3041 (ぁ) to 0x3096 (ゖ)
-        # Offset: 0x60 (96)
-        if 0x30A1 <= cp <= 0x30F6:
-            result.append(chr(cp - 0x60))
-        else:
-            result.append(c)
-    return ''.join(result)
 
 
 def tokenize_line(line):

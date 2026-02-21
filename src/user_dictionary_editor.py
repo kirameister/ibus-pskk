@@ -885,69 +885,6 @@ def open_editor(prefill_reading=None, prefill_candidate=None, check_clipboard=Tr
     return editor
 
 
-def register_from_clipboard(reading):
-    """
-    Register a new entry using clipboard content as the candidate.
-    クリップボードの内容を候補としてして新しいエントリを登録。
-
-    ============================================================================
-    QUICK REGISTRATION WORKFLOW / クイック登録ワークフロー
-    ============================================================================
-
-    This enables a fast workflow for adding new words:
-    これは新しい単語を追加するための高速ワークフローを可能にする:
-
-        1. User copies kanji from a webpage, document, etc.
-           ユーザーがWebページ、ドキュメントなどから漢字をコピー
-
-        2. User types the reading in the IME (shows in preedit)
-           ユーザーがIMEで読みを入力（プリエディットに表示）
-
-        3. User presses the registration keybinding
-           ユーザーが登録キーバインドを押す
-
-        4. Entry is registered automatically (no GUI needed!)
-           エントリが自動的に登録される（GUIは不要！）
-
-    This is much faster than opening the editor for one-off registrations.
-    これは1回限りの登録のためにエディタを開くよりもはるかに速い。
-
-    ============================================================================
-
-    Args:
-        reading: The kana reading to register.
-                 登録するかなの読み。
-
-    Returns:
-        tuple: (success: bool, candidate: str or None)
-               (成功: bool, 候補: str or None)
-               - success is True if entry was added
-                 エントリが追加された場合successはTrue
-               - candidate is the registered text, or None on failure
-                 candidateは登録されたテキスト、失敗時はNone
-    """
-    if not reading:
-        logger.warning('Cannot register from clipboard: no reading provided')
-        return False, None
-
-    # Get clipboard content
-    clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-    candidate = clipboard.wait_for_text()
-
-    if not candidate:
-        logger.warning('Cannot register from clipboard: clipboard is empty')
-        return False, None
-
-    candidate = candidate.strip()
-    if not candidate:
-        logger.warning('Cannot register from clipboard: clipboard contains only whitespace')
-        return False, None
-
-    # Add the entry
-    success, _ = add_entry(reading, candidate)
-    return success, candidate if success else None
-
-
 def main():
     """
     Main entry point for standalone execution.
