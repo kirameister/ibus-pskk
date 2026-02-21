@@ -1007,36 +1007,6 @@ class HenkanProcessor:
         """
         return self._selected_bunsetsu_index
 
-    def get_bunsetsu_info(self, index):
-        """
-        Get information about a specific bunsetsu.
-
-        Args:
-            index: Bunsetsu index
-
-        Returns:
-            dict or None: Dictionary with 'text', 'label', 'candidates',
-                         'selected_index', 'is_passthrough', or None if invalid
-        """
-        if not self._bunsetsu_mode:
-            return None
-        if index < 0 or index >= len(self._bunsetsu_candidates):
-            return None
-
-        bunsetsu_list, _ = self._bunsetsu_predictions[self._bunsetsu_prediction_index]
-        text, label = bunsetsu_list[index]
-        candidates = self._bunsetsu_candidates[index]
-        selected_idx = self._bunsetsu_selected_indices[index]
-        is_passthrough = candidates[0].get('passthrough', False) if candidates else False
-
-        return {
-            'text': text,
-            'label': label,
-            'candidates': candidates,
-            'selected_index': selected_idx,
-            'is_passthrough': is_passthrough
-        }
-
     def cycle_bunsetsu_prediction(self):
         """
         Cycle to the next bunsetsu prediction (N-best cycling).
