@@ -529,7 +529,6 @@ class EnginePSKK(IBus.Engine):
         self._henkan_processor = HenkanProcessor(dictionary_files)
 
         # Input mode defaults to 'A' (set in self._mode above)
-        # For debugging, uncomment: self._set_mode('あ')
 
         self.connect('set-cursor-location', self.set_cursor_location_cb)
 
@@ -784,24 +783,9 @@ class EnginePSKK(IBus.Engine):
     # End of Initialization-related definitions
     # =========================================================================
 
-    def _set_mode(self, mode, override=False):
-        '''
-        This is the function to set the IME mode
-        This function is supposed to be called from
-        multiple places.
-        '''
-        self._override = override
-        if self._mode == mode:
-            return False
-        logger.debug(f'_set_mode({mode})')
-        self._commit_string()
-        self._mode = mode
-        self._preedit_string = ''
-        #self._update_preedit()
-        #self._update_lookup_table()
-        self._update_input_mode()
-        return True
-
+    # =========================================================================
+    # GUI-related definitions
+    # =========================================================================
     def _show_about_dialog(self):
         if self._about_dialog:
           self._about_dialog.present()
@@ -884,12 +868,14 @@ class EnginePSKK(IBus.Engine):
             return
         elif prop_name.startswith('InputMode.'):
             if state == IBus.PropState.CHECKED:
-                # At this point, we only support direct input and Hiragana. Nothing else..
+                # We only support direct input and Hiragana. Nothing else..
                 mode = {
                     'InputMode.Alphanumeric': 'A',
                     'InputMode.Hiragana': 'あ',
                 }.get(prop_name, 'A')
-                self._set_mode(mode, True)
+                self._commit_string()
+                self._mode = mode
+                self._update_input_mode()
 
 
     def about_response_callback(self, dialog, response):
