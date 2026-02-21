@@ -1,4 +1,4 @@
-q# PSKK
+# PSKK
 
 IME, the final frontier.
 
