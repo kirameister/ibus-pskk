@@ -530,8 +530,6 @@ class EnginePSKK(IBus.Engine):
 
         # Input mode defaults to 'A' (set in self._mode above)
 
-        self.connect('set-cursor-location', self.set_cursor_location_cb)
-
         self._about_dialog = None
         self._settings_panel = None
         self._conversion_model_panel = None
@@ -904,17 +902,6 @@ class EnginePSKK(IBus.Engine):
             self._input_mode_hira_prop.set_state(IBus.PropState.CHECKED)
         self.update_property(self._input_mode_alpha_prop)
         self.update_property(self._input_mode_hira_prop)
-
-    def set_cursor_location_cb(self, engine, x, y, w, h):
-        """
-        This function (presumably) detects the location of (new) position
-        of mouse pointer..
-        This would most likely be helpful when detecting a "pause" in the
-        typing.. (i.e., typing intervened by mouse move)
-        ...It seems taht this function is called periodically. It may be an idea to store the position of the mouse pointer and commit(?) the hiragana only with pointer-position value mismatch?
-        """
-        logger.debug(f'set_cursor_location_cb({x}, {y}, {w}, {h})')
-        #self._update_lookup_table()
 
     # =========================================================================
     # KEY EVENT PROCESSING
