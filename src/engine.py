@@ -464,6 +464,9 @@ class EnginePSKK(IBus.Engine):
     '''
     __gtype_name__ = 'EnginePSKK'
 
+    # =========================================================================
+    # Initialization-related definitions
+    # =========================================================================
     def __init__(self):
         super().__init__()
         # setting the initial input mode
@@ -526,7 +529,7 @@ class EnginePSKK(IBus.Engine):
         self._henkan_processor = HenkanProcessor(dictionary_files)
 
         # Input mode defaults to 'A' (set in self._mode above)
-        # For debugging, uncomment: self.set_mode('あ')
+        # For debugging, uncomment: self._set_mode('あ')
 
         self.connect('set-cursor-location', self.set_cursor_location_cb)
 
@@ -689,8 +692,6 @@ class EnginePSKK(IBus.Engine):
         logger.debug('_init_input_mode_props() -- end')
         return props
 
-
-
     def _load_kanchoku_layout(self):
         """
         Purpose of this function is to load the kanchoku (漢直) layout
@@ -742,7 +743,6 @@ class EnginePSKK(IBus.Engine):
 
         return return_dict
 
-
     def _load_configs(self):
         '''
         This function loads the necessary (and optional) configs from the config JSON file
@@ -776,8 +776,11 @@ class EnginePSKK(IBus.Engine):
         logger.info(f'logging_level: {level}')
         logging.getLogger().setLevel(NAME_TO_LOGGING_LEVEL[level])
         return level
+    # =========================================================================
+    # End of Initialization-related definitions
+    # =========================================================================
 
-    def set_mode(self, mode, override=False):
+    def _set_mode(self, mode, override=False):
         '''
         This is the function to set the IME mode
         This function is supposed to be called from
@@ -786,30 +789,14 @@ class EnginePSKK(IBus.Engine):
         self._override = override
         if self._mode == mode:
             return False
-        logger.debug(f'set_mode({mode})')
-        self._preedit_string = ''
-        self._commit()
+        logger.debug(f'_set_mode({mode})')
+        self._commit_string()
         self._mode = mode
+        self._preedit_string = ''
         #self._update_preedit()
         #self._update_lookup_table()
         self._update_input_mode()
         return True
-
-    def _commit(self):
-        pass
-        """
-        current = self._dict.current()
-        if current:
-            self._dict.confirm(''.join(self._shrunk))
-            self._dict.reset()
-            self._lookup_table.clear()
-        text = self._previous_text + current
-        self._previous_text = ''
-        #self._update_preedit()
-        if text:
-            logger.debug(f'_commit(): "{text}"')
-            self.commit_text(IBus.Text.new_from_string(text))
-        """
 
     def _show_about_dialog(self):
         if self._about_dialog:
@@ -873,7 +860,6 @@ class EnginePSKK(IBus.Engine):
 
         return False  # Don't repeat this idle callback
 
-
     def do_property_activate(self, prop_name, state):
         logger.info(f'property_activate({prop_name}, {state})')
         if prop_name == 'Settings':
@@ -899,7 +885,7 @@ class EnginePSKK(IBus.Engine):
                     'InputMode.Alphanumeric': 'A',
                     'InputMode.Hiragana': 'あ',
                 }.get(prop_name, 'A')
-                self.set_mode(mode, True)
+                self._set_mode(mode, True)
 
 
     def about_response_callback(self, dialog, response):
