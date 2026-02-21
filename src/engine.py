@@ -671,24 +671,28 @@ class EnginePSKK(IBus.Engine):
         '''
         logger.debug('_init_input_mode_props()')
         props = IBus.PropList()
-        props.append(IBus.Property(key='InputMode.Alphanumeric',
-                                   prop_type=IBus.PropType.RADIO,
-                                   label=IBus.Text.new_from_string("Alphanumeric (A)"),
-                                   icon=None,
-                                   tooltip=None,
-                                   sensitive=True,
-                                   visible=True,
-                                   state=IBus.PropState.CHECKED,
-                                   sub_props=None))
-        props.append(IBus.Property(key='InputMode.Hiragana',
-                                   prop_type=IBus.PropType.RADIO,
-                                   label=IBus.Text.new_from_string("Hiragana (あ)"),
-                                   icon=None,
-                                   tooltip=None,
-                                   sensitive=True,
-                                   visible=True,
-                                   state=IBus.PropState.UNCHECKED,
-                                   sub_props=None))
+        self._input_mode_alpha_prop = IBus.Property(
+            key='InputMode.Alphanumeric',
+            prop_type=IBus.PropType.RADIO,
+            label=IBus.Text.new_from_string("Alphanumeric (A)"),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.CHECKED,
+            sub_props=None)
+        props.append(self._input_mode_alpha_prop)
+        self._input_mode_hira_prop = IBus.Property(
+            key='InputMode.Hiragana',
+            prop_type=IBus.PropType.RADIO,
+            label=IBus.Text.new_from_string("Hiragana (あ)"),
+            icon=None,
+            tooltip=None,
+            sensitive=True,
+            visible=True,
+            state=IBus.PropState.UNCHECKED,
+            sub_props=None)
+        props.append(self._input_mode_hira_prop)
         logger.debug('_init_input_mode_props() -- end')
         return props
 
@@ -905,6 +909,15 @@ class EnginePSKK(IBus.Engine):
         self._input_mode_prop.set_symbol(IBus.Text.new_from_string(self._mode))
         self._input_mode_prop.set_label(IBus.Text.new_from_string("Input mode (" + self._mode + ")"))
         self.update_property(self._input_mode_prop)
+        # Update sub-property radio button states so menu selection reflects current mode
+        if self._mode == 'A':
+            self._input_mode_alpha_prop.set_state(IBus.PropState.CHECKED)
+            self._input_mode_hira_prop.set_state(IBus.PropState.UNCHECKED)
+        else:
+            self._input_mode_alpha_prop.set_state(IBus.PropState.UNCHECKED)
+            self._input_mode_hira_prop.set_state(IBus.PropState.CHECKED)
+        self.update_property(self._input_mode_alpha_prop)
+        self.update_property(self._input_mode_hira_prop)
 
     def set_cursor_location_cb(self, engine, x, y, w, h):
         """
