@@ -1397,7 +1397,7 @@ class SettingsPanel(Gtk.Window):
 
         # ListBox for keybinding rows
         self.keybinding_listbox = Gtk.ListBox()
-        self.keybinding_listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.keybinding_listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.keybinding_scroll.add(self.keybinding_listbox)
 
         box.pack_start(self.keybinding_scroll, True, True, 0)
@@ -1451,6 +1451,12 @@ class SettingsPanel(Gtk.Window):
         key_button.connect("clicked", self._on_keybinding_key_clicked)
         self.keybinding_key_size_group.add_widget(key_button)
         row_box.pack_start(key_button, False, False, 0)
+
+        # Per-row remove button (right next to key button)
+        remove_btn = Gtk.Button(label="✕")
+        remove_btn.set_tooltip_text("Remove this keybinding")
+        remove_btn.connect("clicked", self._on_row_remove_clicked)
+        row_box.pack_start(remove_btn, False, False, 0)
 
         # Spacer to push content left (matches header layout)
         row_box.pack_start(Gtk.Label(label=""), True, True, 0)
@@ -1506,12 +1512,22 @@ class SettingsPanel(Gtk.Window):
         self.keybinding_listbox.add(row)
 
     def on_remove_keybinding(self, button):
-        """Remove the selected (last) keybinding row."""
-        children = self.keybinding_listbox.get_children()
-        if children:
-            # Remove the last row (or could implement selection-based removal)
-            last_row = children[-1]
-            self.keybinding_listbox.remove(last_row)
+        """Remove the selected keybinding row, or last row if none selected."""
+        selected_row = self.keybinding_listbox.get_selected_row()
+        if selected_row:
+            self.keybinding_listbox.remove(selected_row)
+        else:
+            # Fallback: remove the last row if nothing is selected
+            children = self.keybinding_listbox.get_children()
+            if children:
+                last_row = children[-1]
+                self.keybinding_listbox.remove(last_row)
+
+    def _on_row_remove_clicked(self, button):
+        """Remove the keybinding row containing this button."""
+        # Navigate up: button -> row_box -> ListBoxRow
+        row = button.get_parent().get_parent()
+        self.keybinding_listbox.remove(row)
 
 
     def load_settings_to_ui(self):
