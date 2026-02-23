@@ -130,13 +130,28 @@ import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
+import gettext
 import json
+import locale
 import os
 import logging
 logger = logging.getLogger(__name__)
 
 import util
 import user_dictionary_editor
+
+# i18n setup
+DOMAIN = util.get_package_name()
+LOCALE_DIR = util.get_localedir()
+
+try:
+    locale.bindtextdomain(DOMAIN, LOCALE_DIR)
+except AttributeError:
+    pass  # locale.bindtextdomain may not exist on some systems
+
+gettext.bindtextdomain(DOMAIN, LOCALE_DIR)
+gettext.textdomain(DOMAIN)
+_ = gettext.gettext
 
 
 class SettingsPanel(Gtk.Window):
@@ -236,7 +251,7 @@ class SettingsPanel(Gtk.Window):
             5. Shows any configuration warnings to user
                設定の警告があればユーザーに表示
         """
-        super().__init__(title="IBus-PSKK Settings")
+        super().__init__(title=_("IBus-PSKK Settings"))
 
         self.set_default_size(800, 600)
         self.set_border_width(10)
@@ -679,24 +694,24 @@ class SettingsPanel(Gtk.Window):
         main_box.pack_start(notebook, True, True, 0)
         
         # Create tabs
-        notebook.append_page(self.create_general_tab(), Gtk.Label(label="General"))
-        notebook.append_page(self.create_key_configs_tab(), Gtk.Label(label="Key Configs"))
-        notebook.append_page(self.create_system_dictionary_tab(), Gtk.Label(label="System Dictionary"))
-        notebook.append_page(self.create_user_dictionary_tab(), Gtk.Label(label="User Dictionary"))
-        notebook.append_page(self.create_ext_dictionary_tab(), Gtk.Label(label="Ext-Dictionary"))
-        notebook.append_page(self.create_murenso_tab(), Gtk.Label(label="無連想配列"))
+        notebook.append_page(self.create_general_tab(), Gtk.Label(label=_("General")))
+        notebook.append_page(self.create_key_configs_tab(), Gtk.Label(label=_("Key Configs")))
+        notebook.append_page(self.create_system_dictionary_tab(), Gtk.Label(label=_("System Dictionary")))
+        notebook.append_page(self.create_user_dictionary_tab(), Gtk.Label(label=_("User Dictionary")))
+        notebook.append_page(self.create_ext_dictionary_tab(), Gtk.Label(label=_("Ext-Dictionary")))
+        notebook.append_page(self.create_murenso_tab(), Gtk.Label(label=_("無連想配列")))
         
         # Button box
         button_box = Gtk.Box(spacing=6)
         main_box.pack_start(button_box, False, False, 0)
         
         # Save button
-        save_button = Gtk.Button(label="Save Settings")
+        save_button = Gtk.Button(label=_("Save Settings"))
         save_button.connect("clicked", self.on_save_clicked)
         button_box.pack_end(save_button, False, False, 0)
-        
+
         # Close button
-        close_button = Gtk.Button(label="Close")
+        close_button = Gtk.Button(label=_("Close"))
         close_button.connect("clicked", lambda x: self.destroy())
         button_box.pack_end(close_button, False, False, 0)
 
@@ -1343,18 +1358,18 @@ class SettingsPanel(Gtk.Window):
         # Define available keybinding actions
         # Format: (action_id, display_label)
         self.keybinding_actions = [
-            ("enable_hiragana_key", "Enable Hiragana Mode"),
-            ("disable_hiragana_key", "Disable Hiragana Mode"),
-            ("forced_preedit_trigger_key", "Forced Preedit Trigger"),
-            ("to_katakana", "Convert to Katakana"),
-            ("to_hiragana", "Convert to Hiragana"),
-            ("to_ascii", "Convert to ASCII"),
-            ("to_zenkaku", "Convert to Zenkaku"),
-            ("kanchoku_bunsetsu_marker", "Kanchoku/Bunsetsu Marker"),
-            ("kanchoku_pure_trigger_key", "Pure Kanchoku Trigger"),
-            ("bunsetsu_prediction_cycle_key", "Bunsetsu Prediction Cycle"),
-            ("user_dictionary_editor_trigger", "User Dictionary Editor"),
-            ("force_commit_key", "Force Commit"),
+            ("enable_hiragana_key", _("Enable Hiragana Mode")),
+            ("disable_hiragana_key", _("Disable Hiragana Mode")),
+            ("forced_preedit_trigger_key", _("Forced Preedit Trigger")),
+            ("to_katakana", _("Convert to Katakana")),
+            ("to_hiragana", _("Convert to Hiragana")),
+            ("to_ascii", _("Convert to ASCII")),
+            ("to_zenkaku", _("Convert to Zenkaku")),
+            ("kanchoku_bunsetsu_marker", _("Kanchoku/Bunsetsu Marker")),
+            ("kanchoku_pure_trigger_key", _("Pure Kanchoku Trigger")),
+            ("bunsetsu_prediction_cycle_key", _("Bunsetsu Prediction Cycle")),
+            ("user_dictionary_editor_trigger", _("User Dictionary Editor")),
+            ("force_commit_key", _("Force Commit")),
         ]
 
         # Size groups for consistent column widths across all rows
@@ -1364,8 +1379,8 @@ class SettingsPanel(Gtk.Window):
         # Info label
         info_label = Gtk.Label()
         info_label.set_markup(
-            "<small>Configure keybindings for various actions. "
-            "Multiple keys can be assigned to the same action.</small>"
+            "<small>" + _("Configure keybindings for various actions. "
+            "Multiple keys can be assigned to the same action.") + "</small>"
         )
         info_label.set_xalign(0)
         info_label.set_line_wrap(True)
@@ -1375,10 +1390,10 @@ class SettingsPanel(Gtk.Window):
         header_box = Gtk.Box(spacing=6)
         header_box.set_margin_start(6)
         header_box.set_margin_end(6)
-        action_header = Gtk.Label(label="Action")
+        action_header = Gtk.Label(label=_("Action"))
         action_header.set_xalign(0)
         action_header.set_size_request(200, -1)  # Minimum width for action column
-        key_header = Gtk.Label(label="Key")
+        key_header = Gtk.Label(label=_("Key"))
         key_header.set_xalign(0)
         key_header.set_size_request(150, -1)  # Minimum width for key column
         self.keybinding_action_size_group.add_widget(action_header)
@@ -1405,11 +1420,11 @@ class SettingsPanel(Gtk.Window):
         # Button box for Add/Remove
         btn_box = Gtk.Box(spacing=6)
 
-        add_btn = Gtk.Button(label="Add")
+        add_btn = Gtk.Button(label=_("Add"))
         add_btn.connect("clicked", self.on_add_keybinding)
         btn_box.pack_start(add_btn, False, False, 0)
 
-        remove_btn = Gtk.Button(label="Remove")
+        remove_btn = Gtk.Button(label=_("Remove"))
         remove_btn.connect("clicked", self.on_remove_keybinding)
         btn_box.pack_start(remove_btn, False, False, 0)
 
@@ -1447,14 +1462,14 @@ class SettingsPanel(Gtk.Window):
         row_box.pack_start(action_combo, False, False, 0)
 
         # Key capture button
-        key_button = Gtk.Button(label=key_value if key_value else "Not Set")
+        key_button = Gtk.Button(label=key_value if key_value else _("Not Set"))
         key_button.connect("clicked", self._on_keybinding_key_clicked)
         self.keybinding_key_size_group.add_widget(key_button)
         row_box.pack_start(key_button, False, False, 0)
 
         # Per-row remove button (right next to key button)
         remove_btn = Gtk.Button(label="✕")
-        remove_btn.set_tooltip_text("Remove this keybinding")
+        remove_btn.set_tooltip_text(_("Remove this keybinding"))
         remove_btn.connect("clicked", self._on_row_remove_clicked)
         row_box.pack_start(remove_btn, False, False, 0)
 

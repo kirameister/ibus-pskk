@@ -1,0 +1,132 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ibus-pskk contributors
+# This file is distributed under the same license as the ibus-pskk package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ibus-pskk\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-23 22:16+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/settings_panel.py:254
+msgid "IBus-PSKK Settings"
+msgstr ""
+
+#: src/settings_panel.py:697
+msgid "General"
+msgstr ""
+
+#: src/settings_panel.py:698
+msgid "Key Configs"
+msgstr ""
+
+#: src/settings_panel.py:699
+msgid "System Dictionary"
+msgstr ""
+
+#: src/settings_panel.py:700
+msgid "User Dictionary"
+msgstr ""
+
+#: src/settings_panel.py:701
+msgid "Ext-Dictionary"
+msgstr ""
+
+#: src/settings_panel.py:702
+msgid "無連想配列"
+msgstr ""
+
+#: src/settings_panel.py:709
+msgid "Save Settings"
+msgstr ""
+
+#: src/settings_panel.py:714
+msgid "Close"
+msgstr ""
+
+#: src/settings_panel.py:1361
+msgid "Enable Hiragana Mode"
+msgstr ""
+
+#: src/settings_panel.py:1362
+msgid "Disable Hiragana Mode"
+msgstr ""
+
+#: src/settings_panel.py:1363
+msgid "Forced Preedit Trigger"
+msgstr ""
+
+#: src/settings_panel.py:1364
+msgid "Convert to Katakana"
+msgstr ""
+
+#: src/settings_panel.py:1365
+msgid "Convert to Hiragana"
+msgstr ""
+
+#: src/settings_panel.py:1366
+msgid "Convert to ASCII"
+msgstr ""
+
+#: src/settings_panel.py:1367
+msgid "Convert to Zenkaku"
+msgstr ""
+
+#: src/settings_panel.py:1368
+msgid "Kanchoku/Bunsetsu Marker"
+msgstr ""
+
+#: src/settings_panel.py:1369
+msgid "Pure Kanchoku Trigger"
+msgstr ""
+
+#: src/settings_panel.py:1370
+msgid "Bunsetsu Prediction Cycle"
+msgstr ""
+
+#: src/settings_panel.py:1371
+msgid "User Dictionary Editor"
+msgstr ""
+
+#: src/settings_panel.py:1372
+msgid "Force Commit"
+msgstr ""
+
+#: src/settings_panel.py:1382
+msgid ""
+"Configure keybindings for various actions. Multiple keys can be assigned to "
+"the same action."
+msgstr ""
+
+#: src/settings_panel.py:1393
+msgid "Action"
+msgstr ""
+
+#: src/settings_panel.py:1396
+msgid "Key"
+msgstr ""
+
+#: src/settings_panel.py:1423
+msgid "Add"
+msgstr ""
+
+#: src/settings_panel.py:1427
+msgid "Remove"
+msgstr ""
+
+#: src/settings_panel.py:1465
+msgid "Not Set"
+msgstr ""
+
+#: src/settings_panel.py:1472
+msgid "Remove this keybinding"
+msgstr ""

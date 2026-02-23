@@ -1020,7 +1020,7 @@ def get_default_config_path():
 
 
 def get_localedir():
-    return '/usr/local/share/locale'
+    return '/usr/share/locale'
 
 
 def get_user_config_dir():

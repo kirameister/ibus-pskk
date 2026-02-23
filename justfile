@@ -12,6 +12,11 @@ skk_dict_dir := "data/skk_dict"
 skk_dict_base_url := "https://raw.githubusercontent.com/skk-dev/dict/master"
 skk_dict_files := "SKK-JISYO.L SKK-JISYO.M SKK-JISYO.ML SKK-JISYO.S"
 
+# i18n settings
+locale_dir := "locales"
+domain := "ibus-pskk"
+locale_install_dir := "/usr/share/locale"
+
 
 # Default recipe (runs when you just type 'just')
 default:
@@ -73,8 +78,22 @@ install-files:
     cp data/pskk.xml {{ibus_component_dir}}/
     chmod 644 {{ibus_component_dir}}/pskk.xml
 
+# Install locale files (.mo) to system directory
+install-locales:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for mo_file in {{locale_dir}}/*/LC_MESSAGES/{{domain}}.mo; do
+        if [ -f "$mo_file" ]; then
+            # Extract language code from path (e.g., "ja" from "locales/ja/LC_MESSAGES/...")
+            lang=$(basename $(dirname $(dirname "$mo_file")))
+            mkdir -p {{locale_install_dir}}/$lang/LC_MESSAGES
+            cp "$mo_file" {{locale_install_dir}}/$lang/LC_MESSAGES/{{domain}}.mo
+            echo "Installed $lang locale"
+        fi
+    done
+
 # Full installation
-install: install-deps download-skk-dicts install-files install-schema install-icons setup-user-config
+install: install-deps download-skk-dicts i18n-compile install-files install-locales install-schema install-icons setup-user-config
     chmod 755 {{install_root}}/lib/*
     @echo "Installation complete!"
     @echo "Run 'ibus restart' to activate the IME"
@@ -103,6 +122,8 @@ uninstall:
     glib-compile-schemas {{gschema_dir}}
     rm -f {{icon_dir}}/scalable/apps/ibus-pskk.svg
     gtk-update-icon-cache {{icon_dir}} || true
+    # Remove locale files
+    rm -f {{locale_install_dir}}/*/LC_MESSAGES/{{domain}}.mo
     @echo "Uninstalled. Run 'ibus restart'"
 
 # Restart IBus
@@ -148,6 +169,83 @@ download-skk-dicts-force:
 # Run tests
 test:
     ./venv/bin/pytest tests/
+
+# ============================================================================
+# i18n (Internationalization) recipes
+# ============================================================================
+
+# Extract translatable strings from Python source files to .pot template
+i18n-extract:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p {{locale_dir}}
+    xgettext \
+        --language=Python \
+        --keyword=_ \
+        --keyword=N_ \
+        --output={{locale_dir}}/{{domain}}.pot \
+        --package-name={{domain}} \
+        --copyright-holder="ibus-pskk contributors" \
+        --msgid-bugs-address="" \
+        --from-code=UTF-8 \
+        --add-comments=TRANSLATORS: \
+        src/*.py
+    echo "Extracted strings to {{locale_dir}}/{{domain}}.pot"
+
+# Initialize a new language translation file (usage: just i18n-init ja)
+i18n-init lang:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f "{{locale_dir}}/{{domain}}.pot" ]; then
+        echo "Error: Template file {{locale_dir}}/{{domain}}.pot not found."
+        echo "Run 'just i18n-extract' first."
+        exit 1
+    fi
+    mkdir -p {{locale_dir}}/{{lang}}/LC_MESSAGES
+    if [ -f "{{locale_dir}}/{{lang}}/LC_MESSAGES/{{domain}}.po" ]; then
+        echo "Warning: {{locale_dir}}/{{lang}}/LC_MESSAGES/{{domain}}.po already exists."
+        echo "Use 'just i18n-update' to merge new strings instead."
+        exit 1
+    fi
+    msginit \
+        --input={{locale_dir}}/{{domain}}.pot \
+        --output={{locale_dir}}/{{lang}}/LC_MESSAGES/{{domain}}.po \
+        --locale={{lang}}
+    echo "Created {{locale_dir}}/{{lang}}/LC_MESSAGES/{{domain}}.po"
+
+# Update existing .po files with new strings from .pot template
+i18n-update:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f "{{locale_dir}}/{{domain}}.pot" ]; then
+        echo "Error: Template file {{locale_dir}}/{{domain}}.pot not found."
+        echo "Run 'just i18n-extract' first."
+        exit 1
+    fi
+    for po_file in {{locale_dir}}/*/LC_MESSAGES/{{domain}}.po; do
+        if [ -f "$po_file" ]; then
+            echo "Updating $po_file..."
+            msgmerge --update --backup=none "$po_file" {{locale_dir}}/{{domain}}.pot
+        fi
+    done
+    echo "Updated all .po files"
+
+# Compile all .po files to .mo binary files
+i18n-compile:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for po_file in {{locale_dir}}/*/LC_MESSAGES/{{domain}}.po; do
+        if [ -f "$po_file" ]; then
+            mo_file="${po_file%.po}.mo"
+            echo "Compiling $po_file → $mo_file"
+            msgfmt --output="$mo_file" "$po_file"
+        fi
+    done
+    echo "Compiled all .mo files"
+
+# Full i18n workflow: extract → update → compile
+i18n: i18n-extract i18n-update i18n-compile
+    @echo "i18n workflow complete"
 
 # Setup user config directory in $HOME/.config/ibus-pskk/
 setup-user-config:
