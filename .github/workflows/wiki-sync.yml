@@ -1,0 +1,104 @@
+# Bidirectional sync between docs/ directory and GitHub Wiki
+#
+# - Push to main with changes in docs/ → syncs to Wiki
+# - Edit Wiki via web UI → syncs back to docs/
+#
+# Note: First, you need to create at least one Wiki page manually via GitHub web UI
+# to initialize the Wiki repository.
+
+name: Bidirectional Wiki Sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+  gollum:  # Triggered when Wiki is edited via GitHub web UI
+
+# Prevent concurrent syncs that could cause conflicts
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: false
+
+jobs:
+  # Sync from docs/ to Wiki when pushing to main
+  sync-to-wiki:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          path: main
+
+      - name: Checkout Wiki repo
+        run: |
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
+
+      - name: Sync docs to Wiki
+        run: |
+          # Copy all markdown files from docs/ to wiki/
+          cp main/docs/*.md wiki/ 2>/dev/null || true
+
+          # Copy images/assets if they exist
+          if [ -d "main/docs/assets" ]; then
+            mkdir -p wiki/assets
+            cp -r main/docs/assets/* wiki/assets/
+          fi
+
+      - name: Push to Wiki
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to sync to Wiki"
+          else
+            git commit -m "Sync from docs/ ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))"
+            git push
+            echo "Synced changes to Wiki"
+          fi
+
+  # Sync from Wiki to docs/ when Wiki is edited via web
+  sync-from-wiki:
+    if: github.event_name == 'gollum'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          path: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout Wiki repo
+        run: |
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
+
+      - name: Sync Wiki to docs
+        run: |
+          # Copy markdown files from wiki/ to docs/
+          mkdir -p main/docs
+          cp wiki/*.md main/docs/ 2>/dev/null || true
+
+          # Copy assets if they exist
+          if [ -d "wiki/assets" ]; then
+            mkdir -p main/docs/assets
+            cp -r wiki/assets/* main/docs/assets/
+          fi
+
+      - name: Push to main repo
+        run: |
+          cd main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to sync from Wiki"
+          else
+            git commit -m "Sync from Wiki ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))"
+            git push
+            echo "Synced changes from Wiki"
+          fi
