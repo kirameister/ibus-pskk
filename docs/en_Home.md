@@ -6,10 +6,10 @@ PSKK is an input method engine (IME) for IBus that provides Japanese input with 
 
 ## Quick Links
 
-- [Getting Started](Getting-Started.md) - Installation and basic setup
-- [User Guide](User-Guide.md) - How to use PSKK
-- [Configuration](Configuration.md) - Settings and customization
-- [Developer Guide](Developer-Guide.md) - Technical documentation
+- [Getting Started](en_Getting-Started.md) - Installation and basic setup
+- [User Guide](en_User-Guide.md) - How to use PSKK
+- [Configuration](en_Configuration.md) - Settings and customization
+- [Developer Guide](en_Developer-Guide.md) - Technical documentation
 
 ## Features
 
@@ -33,4 +33,4 @@ If you encounter issues or have questions:
 
 ---
 
-[日本語版](Home-ja.md)
+[日本語版](Home.md)

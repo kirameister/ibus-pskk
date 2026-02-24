@@ -45,9 +45,9 @@ yay -S ibus-pskk
 
 ## Next Steps
 
-- [User Guide](User-Guide.md) - Learn more features
-- [Configuration](Configuration.md) - Customize your setup
+- [User Guide](en_User-Guide.md) - Learn more features
+- [Configuration](en_Configuration.md) - Customize your setup
 
 ---
 
-[日本語版](Getting-Started-ja.md)
+[日本語版](Getting-Started.md)

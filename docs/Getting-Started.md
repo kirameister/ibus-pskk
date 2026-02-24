@@ -58,11 +58,11 @@ yay -S ibus-pskk
 フッ...基礎は身についたようだな...。
 だが、これはまだ序章に過ぎない...。
 
-- [戦闘指南書](User-Guide-ja.md) - より強大な力を求めるならば
-- [魔導書設定](Configuration-ja.md) - 己の力を極限までカスタマイズせよ
+- [戦闘指南書](User-Guide.md) - より強大な力を求めるならば
+- [魔導書設定](Configuration.md) - 己の力を極限までカスタマイズせよ
 
 さあ...闇の深淵へ堕ちるがいい...！
 
 ---
 
-[English version（光の言葉で読む）](Getting-Started.md)
+[English version（光の言葉で読む）](en_Getting-Started.md)

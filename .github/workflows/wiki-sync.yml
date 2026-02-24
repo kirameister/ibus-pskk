@@ -37,8 +37,15 @@ jobs:
 
       - name: Sync docs to Wiki
         run: |
-          # Copy all markdown files from docs/ to wiki/
-          cp main/docs/*.md wiki/ 2>/dev/null || true
+          # Copy markdown files and strip .md from internal links for Wiki compatibility
+          # Wiki uses [text](Page) format, not [text](Page.md)
+          for f in main/docs/*.md; do
+            if [ -f "$f" ]; then
+              # Strip .md suffix from markdown links: [text](file.md) → [text](file)
+              # Only matches internal links (not http://, https://, or # anchors)
+              sed -E 's/\]\(([^):#/]+)\.md\)/](\1)/g' "$f" > "wiki/$(basename "$f")"
+            fi
+          done
 
           # Copy images/assets if they exist
           if [ -d "main/docs/assets" ]; then
@@ -78,9 +85,17 @@ jobs:
 
       - name: Sync Wiki to docs
         run: |
-          # Copy markdown files from wiki/ to docs/
+          # Copy markdown files and add .md to internal links for repo compatibility
+          # Repo uses [text](Page.md) format, not [text](Page)
           mkdir -p main/docs
-          cp wiki/*.md main/docs/ 2>/dev/null || true
+          for f in wiki/*.md; do
+            if [ -f "$f" ]; then
+              # Add .md suffix to internal markdown links: [text](Page) → [text](Page.md)
+              # Matches simple page names (letters, numbers, hyphens, underscores)
+              # Excludes: URLs (http/https), anchors (#), paths with /, already has extension
+              sed -E 's/\]\(([A-Za-z][A-Za-z0-9_-]*)\)/](\1.md)/g' "$f" > "main/docs/$(basename "$f")"
+            fi
+          done
 
           # Copy assets if they exist
           if [ -d "wiki/assets" ]; then
