@@ -7,7 +7,7 @@ IBusという名の古代システムに宿りし、究極の入力メソッド�
 
 ## 禁断の書への道標
 
-- [覚醒の儀式](Getting-Started.md) - インストールという名の封印解除
+- [覚醒の儀式](Getting-Started) - インストールという名の封印解除
 - [戦闘指南書](User-Guide-ja.md) - PSKKの真なる力の使い方
 - [魔導書設定](Configuration-ja.md) - 己の力をカスタマイズせよ
 - [創造神の手引き](Developer-Guide.md) - 深淵を覗く者のための技術文書
@@ -30,7 +30,6 @@ IBusという名の古代システムに宿りし、究極の入力メソッド�
 闇に迷いし時、或いは問いかけがある時は...
 
 - [GitHub Issues](https://github.com/kirameister/ibus-pskk/issues) - 不具合報告と新たなる力の要求
-- [GitHub Discussions](https://github.com/kirameister/ibus-pskk/discussions) - 同志との交信の場
 
 フッ...我を呼ぶがいい...。
 
