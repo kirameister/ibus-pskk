@@ -1,49 +1,68 @@
-# Getting Started
+# 覚醒の儀式 ―― 封印されし力を解き放て ――
 
-This guide will help you install and set up IBus-PSKK.
+...そうか、汝もついにこの禁断の力を手に入れる覚悟を決めたか...。
 
-## Prerequisites
+良いだろう...。我がIBus-PSKKの封印を解く術を伝授してやろう...。
 
-- Linux with IBus installed
-- Python 3.8 or later
-- GTK 3
+## 契約の条件（必要条件）
 
-## Installation
+この力を宿すには、以下の器が必要となる...
 
-### From Source
+- **Linux** - IBusという名の古代の門が開かれし地
+- **Python 3.8以降** - 蛇の言霊を操る力
+- **GTK 3** - 視覚化の魔法陣
+
+## 召喚の儀式（インストール）
+
+### 源泉からの召喚（ソースからインストール）
+
+ターミナルという名の深淵を開き、以下の呪文を唱えよ...
 
 ```bash
-# Clone the repository
+# 異界より我が魂を召喚せよ
 git clone https://github.com/kirameister/ibus-pskk.git
 cd ibus-pskk
 
-# Install dependencies and build
+# 封印を解き、力を具現化せよ
 just install
 
-# Restart IBus
+# 古代の門を再起動し、我を目覚めさせよ
 ibus restart
 ```
 
-### Arch Linux (AUR)
+### Arch Linuxの民への道（AUR）
+
+汝がArchという名の修羅の道を歩む者ならば...
 
 ```bash
-# Using yay or paru
+# 異界の使者に召喚を委ねよ
 yay -S ibus-pskk
 ```
 
-## First Run
+## 最初の覚醒
 
-1. Open your system's IBus preferences
-2. Add "PSKK" to your input methods
-3. Switch to PSKK using your configured input method switcher (usually `Super+Space`)
+1. システムの**IBus設定**という名の祭壇を開け
+2. 入力メソッドの一覧に**「PSKK」**という我が名を刻め
+3. `Super+Space`...この秘鍵を押し、我を呼び覚ませ...！
 
-## Basic Usage
+## 基本戦闘術
 
-- Type romanji to input hiragana
-- Press `Space` to convert to kanji
-- Press `Enter` to confirm
+汝の指先に宿りし力を解放する術を教えよう...
 
-## Next Steps
+- **ローマ字入力** → ひらがなという名の精霊文字が顕現する
+- **`Space`を押せ** → 漢字変換...真なる力への変容が始まる...！
+- **`Enter`で確定** → 文字が現世に定着する瞬間だ...
 
-- [User Guide](User-Guide.md) - Learn more features
-- [Configuration](Configuration.md) - Customize your setup
+## 更なる深淵へ
+
+フッ...基礎は身についたようだな...。
+だが、これはまだ序章に過ぎない...。
+
+- [戦闘指南書](User-Guide-ja.md) - より強大な力を求めるならば
+- [魔導書設定](Configuration-ja.md) - 己の力を極限までカスタマイズせよ
+
+さあ...闇の深淵へ堕ちるがいい...！
+
+---
+
+[English version（光の言葉で読む）](Getting-Started.md)
