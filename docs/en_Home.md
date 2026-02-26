@@ -13,10 +13,10 @@ PSKK is an input method engine (IME) for IBus that provides Japanese input with 
 
 ## Features
 
-- Multiple input layouts (QWERTY, JIS Kana, etc.)
-- Kana-to-kanji conversion with SKK dictionaries
+- Simultaneous Japanese typing support (新下駄配列 by default)
 - Kanchoku (direct kanji input) support
 - User dictionary management
+- CRF (Conditional Random Field) based word-split detection for Kana-to-Kanji conversion
 - Configurable keybindings
 
 ## Screenshots
