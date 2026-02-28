@@ -65,6 +65,7 @@ import crf_core
 from crf_core import (
     JOSHI, JODOUSHI, JOSHI_MAX_LEN, JODOUSHI_MAX_LEN,
     parse_annotated_line, extract_char_features,
+    load_extended_dictionary_as_training_data,
     HAS_CRFSUITE
 )
 
@@ -981,6 +982,18 @@ class ConversionModelPanel(Gtk.Window):
         self._log(f"  Tokens: {total_tokens:,}")
         self._log("")
 
+        # ── Load extended dictionary entries as additional training data ──
+        dict_sentences, dict_stats = load_extended_dictionary_as_training_data()
+        dict_entry_count = dict_stats['dict_entries']
+        if dict_entry_count > 0:
+            self._sentences.extend(dict_sentences)
+            self._log(f"Added {dict_entry_count:,} dictionary entries ({dict_stats['total_tokens']:,} tokens)")
+            # Update stats
+            total_tokens += dict_stats['total_tokens']
+            total_bunsetsu += dict_entry_count  # Each dict entry is one bunsetsu
+            lookup_bunsetsu += dict_entry_count  # All dict entries are lookup
+            self._log("")
+
         # ── Extract features ──
         self._log("Extracting features...")
         feature_start_time = time.time()
@@ -1024,8 +1037,9 @@ class ConversionModelPanel(Gtk.Window):
             self._log(f"WARNING: Failed to save training data: {e}")
 
         # Update stats label
+        dict_info = f" + <b>{dict_entry_count:,}</b> dict entries" if dict_entry_count > 0 else ""
         self.corpus_stats_label.set_markup(
-            f"<b>{len(self._sentences):,}</b> sentences, "
+            f"<b>{len(self._sentences):,}</b> sentences{dict_info}, "
             f"<b>{total_bunsetsu:,}</b> bunsetsu "
             f"(<b>{lookup_bunsetsu:,}</b> lookup, <b>{passthrough_bunsetsu:,}</b> passthrough), "
             f"<b>{total_tokens:,}</b> tokens\n"

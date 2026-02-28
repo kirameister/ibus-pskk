@@ -41,6 +41,7 @@ ARCHITECTURE / アーキテクチャ
 ================================================================================
 """
 
+import json
 import os
 import re
 import time
@@ -468,6 +469,89 @@ def load_corpus(path):
     return sentences, stats
 
 
+def load_extended_dictionary_as_training_data(dict_path=None):
+    """
+    Load extended dictionary entries and convert them to CRF training data.
+    拡張辞書エントリを読み込み、CRF訓練データに変換。
+
+    ============================================================================
+    PURPOSE / 目的
+    ============================================================================
+
+    Kanchoku input allows mixed hiragana+kanji in readings (yomi). For example:
+    漢直入力では読み（yomi）にひらがなと漢字の混合が許可される。例:
+
+        "あさ一" → "朝一" (morning number one)
+
+    The CRF needs to learn that such sequences are cohesive lookup units,
+    not to be split at character type boundaries.
+    CRFはこのようなシーケンスが一体のルックアップ単位であり、
+    文字タイプの境界で分割されるべきではないことを学習する必要がある。
+
+    Each dictionary yomi key becomes a single-bunsetsu "sentence":
+    各辞書のyomiキーは単一文節の「文」になる:
+
+        Input:  {"あさ一": {"朝一": 1}}
+        Output: (['あ', 'さ', '一'], ['B-L', 'I-L', 'I-L'])
+
+    ============================================================================
+
+    Args:
+        dict_path: Path to extended_dictionary.json (default: auto).
+                   extended_dictionary.jsonへのパス（デフォルト: 自動）。
+
+    Returns:
+        Tuple of (sentences, stats) where:
+        (sentences, stats)のタプル:
+            - sentences: List of (tokens, tags) tuples
+            - stats: Dictionary with entry count statistics
+    """
+    if dict_path is None:
+        dict_path = os.path.join(util.get_user_config_dir(), 'extended_dictionary.json')
+
+    sentences = []
+    stats = {
+        'dict_entries': 0,
+        'total_tokens': 0,
+    }
+
+    if not os.path.exists(dict_path):
+        logger.debug(f'Extended dictionary not found: {dict_path}')
+        return sentences, stats
+
+    try:
+        with open(dict_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.error(f'Failed to load extended dictionary: {dict_path} - {e}')
+        return sentences, stats
+
+    if not isinstance(data, dict):
+        logger.warning(f'Invalid extended dictionary format: {dict_path}')
+        return sentences, stats
+
+    # Process each yomi (reading) key
+    for yomi in data.keys():
+        if not yomi or not isinstance(yomi, str):
+            continue
+
+        # Tokenize the yomi (each character becomes a token for Japanese)
+        tokens = util.tokenize_line(yomi)
+        if not tokens:
+            continue
+
+        # All tokens are part of a single lookup bunsetsu
+        # First token: B-L, rest: I-L
+        tags = ['B-L'] + ['I-L'] * (len(tokens) - 1)
+
+        sentences.append((tokens, tags))
+        stats['dict_entries'] += 1
+        stats['total_tokens'] += len(tokens)
+
+    logger.info(f'Loaded {stats["dict_entries"]} entries from extended dictionary')
+    return sentences, stats
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # FEATURE EXTRACTION PIPELINE / 特徴量抽出パイプライン
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -502,6 +586,10 @@ def extract_features(sentences, crf_feature_materials=None, progress_callback=No
 
         if progress_callback and (idx + 1) % 100 == 0:
             progress_callback(idx + 1, total)
+
+    # Final callback to ensure 100% is shown
+    if progress_callback and total % 100 != 0:
+        progress_callback(total, total)
 
     return features
 
@@ -708,7 +796,8 @@ def train_model(sentences, features, model_path=None, params=None, progress_call
         progress_callback(f"Training CRF model with {result.sentence_count:,} sentences, {result.token_count:,} tokens...")
 
     # Create trainer and add data
-    trainer = pycrfsuite.Trainer(verbose=False)
+    # verbose=True shows iteration progress (loss values) during training
+    trainer = pycrfsuite.Trainer(verbose=True)
     for xseq, yseq in zip(X_train, y_train):
         trainer.append(xseq, yseq)
 
@@ -815,7 +904,8 @@ def format_bunsetsu_output(tokens, labels, markup=False):
 # TRAINING PIPELINES / 訓練パイプライン
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def run_feature_extraction(corpus_path, output_path=None, progress_callback=None):
+def run_feature_extraction(corpus_path, output_path=None, progress_callback=None,
+                           feature_progress_callback=None):
     """
     Run feature extraction pipeline: regenerate dictionary features → load corpus → extract → save TSV.
     特徴量抽出パイプラインを実行: 辞書特徴量再生成 → コーパス読み込み → 抽出 → TSV保存。
@@ -839,6 +929,9 @@ def run_feature_extraction(corpus_path, output_path=None, progress_callback=None
                      抽出された特徴量TSVの保存パス（デフォルト: 自動）。
         progress_callback: Optional callback(message) for progress updates.
                            進捗更新用のオプションコールバック(message)。
+        feature_progress_callback: Optional callback(current, total) for feature
+                                   extraction progress.
+                                   特徴量抽出進捗用のオプションコールバック(current, total)。
 
     Returns:
         Tuple of (output_path, stats) where output_path is the path to the
@@ -869,12 +962,28 @@ def run_feature_extraction(corpus_path, output_path=None, progress_callback=None
     if progress_callback:
         progress_callback(f"Loaded {stats['sentence_count']:,} sentences, {stats['total_tokens']:,} tokens")
 
+    # Step 1b: Load extended dictionary entries as additional training data
+    # Each dictionary yomi becomes a single-bunsetsu example (e.g., "あさ一" → B-L I-L I-L)
+    dict_sentences, dict_stats = load_extended_dictionary_as_training_data()
+    if dict_stats['dict_entries'] > 0:
+        sentences.extend(dict_sentences)
+        stats['dict_entries'] = dict_stats['dict_entries']
+        stats['dict_tokens'] = dict_stats['total_tokens']
+        stats['sentence_count'] += dict_stats['dict_entries']
+        stats['total_tokens'] += dict_stats['total_tokens']
+        # All dictionary entries are lookup bunsetsu
+        stats['total_bunsetsu'] += dict_stats['dict_entries']
+        stats['lookup_bunsetsu'] += dict_stats['dict_entries']
+        if progress_callback:
+            progress_callback(f"Added {dict_stats['dict_entries']:,} dictionary entries as training data")
+
     # Step 2: Extract features (using freshly regenerated dictionary features)
     if progress_callback:
         progress_callback("Extracting features...")
 
     crf_feature_materials = util.load_crf_feature_materials()
-    features = extract_features(sentences, crf_feature_materials)
+    features = extract_features(sentences, crf_feature_materials,
+                                progress_callback=feature_progress_callback)
 
     if progress_callback:
         progress_callback("Feature extraction complete")
@@ -935,7 +1044,8 @@ def run_training_from_features(features_path, model_path=None, progress_callback
     return result, stats
 
 
-def run_training_pipeline(corpus_path, model_path=None, progress_callback=None):
+def run_training_pipeline(corpus_path, model_path=None, progress_callback=None,
+                          feature_progress_callback=None):
     """
     Run the complete training pipeline: regenerate dict features → load → extract → train (one-shot).
     完全な訓練パイプラインを実行: 辞書特徴量再生成 → 読み込み → 抽出 → 訓練（ワンショット）。
@@ -961,6 +1071,9 @@ def run_training_pipeline(corpus_path, model_path=None, progress_callback=None):
                     モデルの出力パス（オプション）。
         progress_callback: Optional callback(message) for progress updates.
                            進捗更新用のオプションコールバック(message)。
+        feature_progress_callback: Optional callback(current, total) for feature
+                                   extraction progress.
+                                   特徴量抽出進捗用のオプションコールバック(current, total)。
 
     Returns:
         Tuple of (result, stats) where result is TrainingResult and stats is
@@ -988,12 +1101,28 @@ def run_training_pipeline(corpus_path, model_path=None, progress_callback=None):
     if progress_callback:
         progress_callback(f"Loaded {stats['sentence_count']:,} sentences, {stats['total_tokens']:,} tokens")
 
+    # Step 1b: Load extended dictionary entries as additional training data
+    # Each dictionary yomi becomes a single-bunsetsu example (e.g., "あさ一" → B-L I-L I-L)
+    dict_sentences, dict_stats = load_extended_dictionary_as_training_data()
+    if dict_stats['dict_entries'] > 0:
+        sentences.extend(dict_sentences)
+        stats['dict_entries'] = dict_stats['dict_entries']
+        stats['dict_tokens'] = dict_stats['total_tokens']
+        stats['sentence_count'] += dict_stats['dict_entries']
+        stats['total_tokens'] += dict_stats['total_tokens']
+        # All dictionary entries are lookup bunsetsu
+        stats['total_bunsetsu'] += dict_stats['dict_entries']
+        stats['lookup_bunsetsu'] += dict_stats['dict_entries']
+        if progress_callback:
+            progress_callback(f"Added {dict_stats['dict_entries']:,} dictionary entries as training data")
+
     # Step 2: Extract features (using freshly regenerated dictionary features)
     if progress_callback:
         progress_callback("Extracting features...")
 
     crf_feature_materials = util.load_crf_feature_materials()
-    features = extract_features(sentences, crf_feature_materials)
+    features = extract_features(sentences, crf_feature_materials,
+                                progress_callback=feature_progress_callback)
 
     if progress_callback:
         progress_callback("Feature extraction complete")

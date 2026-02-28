@@ -67,6 +67,62 @@ import crf_core
 import util
 
 
+class ProgressCounter:
+    """
+    Simple progress counter with in-place terminal updates.
+    ターミナルのインプレース更新によるシンプルな進捗カウンター。
+
+    Usage:
+        progress = ProgressCounter("Extracting features", total=1000)
+        for i in range(1000):
+            do_work()
+            progress.update(i + 1)
+        progress.finish()
+    """
+
+    def __init__(self, label, total=None, update_interval=100):
+        """
+        Initialize progress counter.
+
+        Args:
+            label: Description of the operation (e.g., "Extracting features")
+            total: Total count (if known)
+            update_interval: How often to update display (every N items)
+        """
+        self.label = label
+        self.total = total
+        self.update_interval = update_interval
+        self.current = 0
+        self._last_line_length = 0
+
+    def update(self, current):
+        """Update progress display."""
+        self.current = current
+
+        # Only update at intervals to avoid excessive I/O
+        if current % self.update_interval != 0 and current != self.total:
+            return
+
+        if self.total:
+            percent = current * 100 // self.total
+            line = f"\r  {self.label}: {current:,}/{self.total:,} ({percent}%)"
+        else:
+            line = f"\r  {self.label}: {current:,}"
+
+        # Clear previous line if it was longer
+        padding = ' ' * max(0, self._last_line_length - len(line))
+        print(line + padding, end='', flush=True)
+        self._last_line_length = len(line)
+
+    def finish(self, message=None):
+        """Complete progress and move to new line."""
+        if message:
+            padding = ' ' * max(0, self._last_line_length - len(message) - 2)
+            print(f"\r  {message}{padding}")
+        else:
+            print()  # Just move to new line
+
+
 def setup_logging(verbose=False):
     """Configure logging based on verbosity level."""
     level = logging.DEBUG if verbose else logging.INFO
@@ -122,10 +178,21 @@ def cmd_train(args):
         print(f"Training from corpus (one-shot): {corpus_path}")
         print()
 
+        # Create feature progress counter
+        feature_progress = ProgressCounter("Extracting", update_interval=100)
+
+        def feature_progress_callback(current, total):
+            if feature_progress.total is None:
+                feature_progress.total = total
+            feature_progress.update(current)
+            if current == total:
+                feature_progress.finish(f"Extracted {total:,} sentences")
+
         result, stats = crf_core.run_training_pipeline(
             corpus_path,
             model_path=output_path,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            feature_progress_callback=feature_progress_callback
         )
 
         # Skip the features-based training below
@@ -171,6 +238,8 @@ def _print_training_result(result, stats):
             print(f"  Total bunsetsu: {stats['total_bunsetsu']:,}")
             print(f"    Lookup:       {stats['lookup_bunsetsu']:,}")
             print(f"    Passthrough:  {stats['passthrough_bunsetsu']:,}")
+        if 'dict_entries' in stats:
+            print(f"  Dictionary entries added: {stats['dict_entries']:,} ({stats.get('dict_tokens', 0):,} tokens)")
         print()
 
     if result.success:
@@ -268,11 +337,22 @@ def cmd_extract(args):
     print("=" * 60)
     print()
 
+    # Create feature progress counter
+    feature_progress = ProgressCounter("Extracting", update_interval=100)
+
+    def feature_progress_callback(current, total):
+        if feature_progress.total is None:
+            feature_progress.total = total
+        feature_progress.update(current)
+        if current == total:
+            feature_progress.finish(f"Extracted {total:,} sentences")
+
     # Run feature extraction pipeline
     features_path, stats = crf_core.run_feature_extraction(
         corpus_path,
         output_path=output_path,
-        progress_callback=progress_callback
+        progress_callback=progress_callback,
+        feature_progress_callback=feature_progress_callback
     )
 
     print()
@@ -283,6 +363,8 @@ def cmd_extract(args):
     print(f"  Total bunsetsu: {stats['total_bunsetsu']:,}")
     print(f"    Lookup:       {stats['lookup_bunsetsu']:,}")
     print(f"    Passthrough:  {stats['passthrough_bunsetsu']:,}")
+    if 'dict_entries' in stats:
+        print(f"  Dictionary entries added: {stats['dict_entries']:,} ({stats.get('dict_tokens', 0):,} tokens)")
     print()
     print(f"Feature extraction complete!")
     print(f"  Features saved to: {features_path}")
