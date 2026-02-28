@@ -169,16 +169,76 @@ def cmd_train(args):
         features_path = args.features
     elif args.corpus:
         # Corpus provided: one-shot mode (extract + train)
-        corpus_path = args.corpus
+        corpus_paths = args.corpus
 
-        if not os.path.exists(corpus_path):
-            print(f"ERROR: Corpus file not found: {corpus_path}")
-            return 1
+        # Validate all files exist
+        for path in corpus_paths:
+            if not os.path.exists(path):
+                print(f"ERROR: Corpus file not found: {path}")
+                return 1
 
-        print(f"Training from corpus (one-shot): {corpus_path}")
+        if len(corpus_paths) == 1:
+            print(f"Training from corpus (one-shot): {corpus_paths[0]}")
+        else:
+            print(f"Training from {len(corpus_paths)} corpus files (one-shot):")
+            for path in corpus_paths:
+                print(f"  - {path}")
         print()
 
-        # Create feature progress counter
+        # Step 0: Regenerate dictionary features
+        print("Regenerating dictionary features (crf_feature_materials.json)...")
+        materials_path = util.generate_crf_feature_materials()
+        if materials_path:
+            print(f"Dictionary features updated: {materials_path}")
+        else:
+            print("Warning: Failed to regenerate dictionary features, using existing file")
+        print()
+
+        # Step 1: Load corpus file(s)
+        all_sentences = []
+        combined_stats = {
+            'line_count': 0,
+            'sentence_count': 0,
+            'total_tokens': 0,
+            'total_bunsetsu': 0,
+            'lookup_bunsetsu': 0,
+            'passthrough_bunsetsu': 0,
+        }
+
+        for corpus_path in corpus_paths:
+            print(f"Loading corpus: {corpus_path}")
+            sentences, stats = crf_core.load_corpus(corpus_path)
+            all_sentences.extend(sentences)
+
+            combined_stats['line_count'] += stats['line_count']
+            combined_stats['sentence_count'] += stats['sentence_count']
+            combined_stats['total_tokens'] += stats['total_tokens']
+            combined_stats['total_bunsetsu'] += stats['total_bunsetsu']
+            combined_stats['lookup_bunsetsu'] += stats['lookup_bunsetsu']
+            combined_stats['passthrough_bunsetsu'] += stats['passthrough_bunsetsu']
+
+            print(f"  Loaded {stats['sentence_count']:,} sentences, {stats['total_tokens']:,} tokens")
+
+        if len(corpus_paths) > 1:
+            print()
+            print(f"Combined: {combined_stats['sentence_count']:,} sentences, {combined_stats['total_tokens']:,} tokens")
+
+        # Step 1b: Load extended dictionary entries
+        dict_sentences, dict_stats = crf_core.load_extended_dictionary_as_training_data()
+        if dict_stats['dict_entries'] > 0:
+            all_sentences.extend(dict_sentences)
+            combined_stats['dict_entries'] = dict_stats['dict_entries']
+            combined_stats['dict_tokens'] = dict_stats['total_tokens']
+            combined_stats['sentence_count'] += dict_stats['dict_entries']
+            combined_stats['total_tokens'] += dict_stats['total_tokens']
+            combined_stats['total_bunsetsu'] += dict_stats['dict_entries']
+            combined_stats['lookup_bunsetsu'] += dict_stats['dict_entries']
+            print(f"Added {dict_stats['dict_entries']:,} dictionary entries as training data")
+
+        print()
+
+        # Step 2: Extract features
+        print("Extracting features...")
         feature_progress = ProgressCounter("Extracting", update_interval=100)
 
         def feature_progress_callback(current, total):
@@ -188,15 +248,24 @@ def cmd_train(args):
             if current == total:
                 feature_progress.finish(f"Extracted {total:,} sentences")
 
-        result, stats = crf_core.run_training_pipeline(
-            corpus_path,
-            model_path=output_path,
-            progress_callback=progress_callback,
-            feature_progress_callback=feature_progress_callback
-        )
+        crf_feature_materials = util.load_crf_feature_materials()
+        features = crf_core.extract_features(all_sentences, crf_feature_materials,
+                                             progress_callback=feature_progress_callback)
+        print("Feature extraction complete")
+        print()
+
+        # Save TSV for reference
+        tsv_path = os.path.join(util.get_user_config_dir(), 'crf_model_training_data.tsv')
+        crf_core.save_training_data_tsv(all_sentences, features, tsv_path)
+        print(f"Training data saved to: {tsv_path}")
+        print()
+
+        # Step 3: Train model
+        result = crf_core.train_model(all_sentences, features, output_path,
+                                      progress_callback=progress_callback)
 
         # Skip the features-based training below
-        return _print_training_result(result, stats)
+        return _print_training_result(result, combined_stats)
     else:
         # No arguments: use default TSV path
         features_path = os.path.join(util.get_user_config_dir(), 'crf_model_training_data.tsv')
@@ -315,8 +384,8 @@ def cmd_test(args):
 
 def cmd_extract(args):
     """
-    Extract features from a corpus and save to TSV for later training.
-    コーパスから特徴量を抽出し、後の訓練用にTSVに保存。
+    Extract features from corpus file(s) and save to TSV for later training.
+    コーパスファイルから特徴量を抽出し、後の訓練用にTSVに保存。
 
     This is Step 1 of the two-step training workflow:
     これは2ステップ訓練ワークフローのステップ1:
@@ -324,20 +393,79 @@ def cmd_extract(args):
            抽出: コーパス → features.tsv（人間が読める、検査/編集可能）
         2. train --features features.tsv → model.crfsuite
            訓練: --features features.tsv → model.crfsuite
+
+    Multiple corpus files can be provided and will be combined.
+    複数のコーパスファイルを指定でき、結合される。
     """
-    corpus_path = args.corpus
+    corpus_paths = args.corpus
     output_path = args.output
 
-    if not os.path.exists(corpus_path):
-        print(f"ERROR: Corpus file not found: {corpus_path}")
-        return 1
+    # Validate all input files exist
+    for path in corpus_paths:
+        if not os.path.exists(path):
+            print(f"ERROR: Corpus file not found: {path}")
+            return 1
 
     print("=" * 60)
     print("CRF Feature Extraction")
     print("=" * 60)
     print()
 
-    # Create feature progress counter
+    # Step 0: Regenerate dictionary features
+    print("Regenerating dictionary features (crf_feature_materials.json)...")
+    materials_path = util.generate_crf_feature_materials()
+    if materials_path:
+        print(f"Dictionary features updated: {materials_path}")
+    else:
+        print("Warning: Failed to regenerate dictionary features, using existing file")
+    print()
+
+    # Step 1: Load corpus file(s)
+    all_sentences = []
+    combined_stats = {
+        'line_count': 0,
+        'sentence_count': 0,
+        'total_tokens': 0,
+        'total_bunsetsu': 0,
+        'lookup_bunsetsu': 0,
+        'passthrough_bunsetsu': 0,
+    }
+
+    for corpus_path in corpus_paths:
+        print(f"Loading corpus: {corpus_path}")
+        sentences, stats = crf_core.load_corpus(corpus_path)
+        all_sentences.extend(sentences)
+
+        # Accumulate stats
+        combined_stats['line_count'] += stats['line_count']
+        combined_stats['sentence_count'] += stats['sentence_count']
+        combined_stats['total_tokens'] += stats['total_tokens']
+        combined_stats['total_bunsetsu'] += stats['total_bunsetsu']
+        combined_stats['lookup_bunsetsu'] += stats['lookup_bunsetsu']
+        combined_stats['passthrough_bunsetsu'] += stats['passthrough_bunsetsu']
+
+        print(f"  Loaded {stats['sentence_count']:,} sentences, {stats['total_tokens']:,} tokens")
+
+    if len(corpus_paths) > 1:
+        print()
+        print(f"Combined: {combined_stats['sentence_count']:,} sentences, {combined_stats['total_tokens']:,} tokens")
+
+    # Step 1b: Load extended dictionary entries as additional training data
+    dict_sentences, dict_stats = crf_core.load_extended_dictionary_as_training_data()
+    if dict_stats['dict_entries'] > 0:
+        all_sentences.extend(dict_sentences)
+        combined_stats['dict_entries'] = dict_stats['dict_entries']
+        combined_stats['dict_tokens'] = dict_stats['total_tokens']
+        combined_stats['sentence_count'] += dict_stats['dict_entries']
+        combined_stats['total_tokens'] += dict_stats['total_tokens']
+        combined_stats['total_bunsetsu'] += dict_stats['dict_entries']
+        combined_stats['lookup_bunsetsu'] += dict_stats['dict_entries']
+        print(f"Added {dict_stats['dict_entries']:,} dictionary entries as training data")
+
+    print()
+
+    # Step 2: Extract features
+    print("Extracting features...")
     feature_progress = ProgressCounter("Extracting", update_interval=100)
 
     def feature_progress_callback(current, total):
@@ -347,67 +475,107 @@ def cmd_extract(args):
         if current == total:
             feature_progress.finish(f"Extracted {total:,} sentences")
 
-    # Run feature extraction pipeline
-    features_path, stats = crf_core.run_feature_extraction(
-        corpus_path,
-        output_path=output_path,
-        progress_callback=progress_callback,
-        feature_progress_callback=feature_progress_callback
-    )
+    crf_feature_materials = util.load_crf_feature_materials()
+    features = crf_core.extract_features(all_sentences, crf_feature_materials,
+                                         progress_callback=feature_progress_callback)
+    print("Feature extraction complete")
+    print()
+
+    # Step 3: Save to TSV
+    if output_path is None:
+        output_path = os.path.join(util.get_user_config_dir(), 'crf_model_training_data.tsv')
+
+    crf_core.save_training_data_tsv(all_sentences, features, output_path)
+    print(f"Features saved to: {output_path}")
 
     print()
     print("-" * 60)
     print("Corpus Statistics:")
-    print(f"  Sentences:      {stats['sentence_count']:,}")
-    print(f"  Total tokens:   {stats['total_tokens']:,}")
-    print(f"  Total bunsetsu: {stats['total_bunsetsu']:,}")
-    print(f"    Lookup:       {stats['lookup_bunsetsu']:,}")
-    print(f"    Passthrough:  {stats['passthrough_bunsetsu']:,}")
-    if 'dict_entries' in stats:
-        print(f"  Dictionary entries added: {stats['dict_entries']:,} ({stats.get('dict_tokens', 0):,} tokens)")
+    print(f"  Corpus files:   {len(corpus_paths)}")
+    print(f"  Sentences:      {combined_stats['sentence_count']:,}")
+    print(f"  Total tokens:   {combined_stats['total_tokens']:,}")
+    print(f"  Total bunsetsu: {combined_stats['total_bunsetsu']:,}")
+    print(f"    Lookup:       {combined_stats['lookup_bunsetsu']:,}")
+    print(f"    Passthrough:  {combined_stats['passthrough_bunsetsu']:,}")
+    if 'dict_entries' in combined_stats:
+        print(f"  Dictionary entries added: {combined_stats['dict_entries']:,} ({combined_stats.get('dict_tokens', 0):,} tokens)")
     print()
     print(f"Feature extraction complete!")
-    print(f"  Features saved to: {features_path}")
+    print(f"  Features saved to: {output_path}")
     print()
     print("You can inspect/edit the TSV file before training.")
     print("To train a model from these features, run:")
-    print(f"  python crf_train_cli.py train --features {features_path}")
+    print(f"  python crf_train_cli.py train --features {output_path}")
     return 0
 
 
 def cmd_stats(args):
     """
-    Show statistics for a training corpus.
-    訓練コーパスの統計を表示。
+    Show statistics for training corpus file(s).
+    訓練コーパスファイルの統計を表示。
     """
-    corpus_path = args.corpus
+    corpus_paths = args.corpus
 
-    if not os.path.exists(corpus_path):
-        print(f"ERROR: Corpus file not found: {corpus_path}")
-        return 1
+    # Validate all files exist
+    for path in corpus_paths:
+        if not os.path.exists(path):
+            print(f"ERROR: Corpus file not found: {path}")
+            return 1
 
     print("=" * 60)
     print("Corpus Statistics")
     print("=" * 60)
     print()
 
-    sentences, stats = crf_core.load_corpus(corpus_path)
+    all_sentences = []
+    combined_stats = {
+        'line_count': 0,
+        'sentence_count': 0,
+        'total_tokens': 0,
+        'total_bunsetsu': 0,
+        'lookup_bunsetsu': 0,
+        'passthrough_bunsetsu': 0,
+    }
 
-    print(f"File:             {corpus_path}")
-    print(f"Lines:            {stats['line_count']:,}")
-    print(f"Sentences:        {stats['sentence_count']:,}")
-    print(f"Total tokens:     {stats['total_tokens']:,}")
-    print(f"Total bunsetsu:   {stats['total_bunsetsu']:,}")
-    print(f"  Lookup (L):     {stats['lookup_bunsetsu']:,}")
-    print(f"  Passthrough (P):{stats['passthrough_bunsetsu']:,}")
-    print()
+    for corpus_path in corpus_paths:
+        sentences, stats = crf_core.load_corpus(corpus_path)
+        all_sentences.extend(sentences)
+
+        print(f"File:             {corpus_path}")
+        print(f"  Lines:          {stats['line_count']:,}")
+        print(f"  Sentences:      {stats['sentence_count']:,}")
+        print(f"  Total tokens:   {stats['total_tokens']:,}")
+        print(f"  Total bunsetsu: {stats['total_bunsetsu']:,}")
+        print(f"    Lookup (L):   {stats['lookup_bunsetsu']:,}")
+        print(f"    Passthrough:  {stats['passthrough_bunsetsu']:,}")
+        print()
+
+        combined_stats['line_count'] += stats['line_count']
+        combined_stats['sentence_count'] += stats['sentence_count']
+        combined_stats['total_tokens'] += stats['total_tokens']
+        combined_stats['total_bunsetsu'] += stats['total_bunsetsu']
+        combined_stats['lookup_bunsetsu'] += stats['lookup_bunsetsu']
+        combined_stats['passthrough_bunsetsu'] += stats['passthrough_bunsetsu']
+
+    # Show combined stats if multiple files
+    if len(corpus_paths) > 1:
+        print("-" * 60)
+        print("Combined Statistics:")
+        print(f"  Files:          {len(corpus_paths)}")
+        print(f"  Lines:          {combined_stats['line_count']:,}")
+        print(f"  Sentences:      {combined_stats['sentence_count']:,}")
+        print(f"  Total tokens:   {combined_stats['total_tokens']:,}")
+        print(f"  Total bunsetsu: {combined_stats['total_bunsetsu']:,}")
+        print(f"    Lookup (L):   {combined_stats['lookup_bunsetsu']:,}")
+        print(f"    Passthrough:  {combined_stats['passthrough_bunsetsu']:,}")
+        print()
 
     # Show some examples
-    if args.examples and sentences:
+    if args.examples and all_sentences:
         print("-" * 60)
         print("Sample sentences:")
         print()
-        for i, (tokens, tags) in enumerate(sentences[:args.examples]):
+        for i, (tokens, tags) in enumerate(all_sentences[:args.examples]):
             formatted = crf_core.format_bunsetsu_output(tokens, tags, markup=False)
             print(f"  {i+1}. {formatted}")
         print()
@@ -425,9 +593,15 @@ Examples:
   # One-shot training (extract + train in one step)
   python crf_train_cli.py train corpus.txt
 
+  # One-shot training with multiple corpus files
+  python crf_train_cli.py train corpus1.txt corpus2.txt corpus3.txt
+
   # Two-step training workflow:
   # Step 1: Extract features to TSV (inspect/edit if needed)
   python crf_train_cli.py extract corpus.txt
+
+  # Step 1 with multiple files (combined into single TSV)
+  python crf_train_cli.py extract wiki.txt news.txt novels.txt
 
   # Step 2: Train from default TSV (no arguments needed!)
   python crf_train_cli.py train
@@ -452,7 +626,7 @@ For more information, see the documentation in crf_core.py.
 
     # Train command
     train_parser = subparsers.add_parser('train', help='Train a CRF model')
-    train_parser.add_argument('corpus', nargs='?', help='Path to training corpus file (for one-shot training)')
+    train_parser.add_argument('corpus', nargs='*', help='Path(s) to training corpus file(s) (for one-shot training)')
     train_parser.add_argument('-f', '--features', help='Path to pre-extracted features TSV file (for two-step training)')
     train_parser.add_argument('-o', '--output', help='Output model path (default: auto)')
 
@@ -465,13 +639,13 @@ For more information, see the documentation in crf_core.py.
 
     # Extract command
     extract_parser = subparsers.add_parser('extract', help='Extract features from corpus (Step 1 of two-step training)')
-    extract_parser.add_argument('corpus', help='Path to corpus file')
+    extract_parser.add_argument('corpus', nargs='+', help='Path(s) to corpus file(s) - multiple files will be combined')
     extract_parser.add_argument('-o', '--output', default=None,
                                 help='Output TSV file path (default: ~/.config/ibus-pskk/crf_model_training_data.tsv)')
 
     # Stats command
     stats_parser = subparsers.add_parser('stats', help='Show corpus statistics')
-    stats_parser.add_argument('corpus', help='Path to corpus file')
+    stats_parser.add_argument('corpus', nargs='+', help='Path(s) to corpus file(s)')
     stats_parser.add_argument('-e', '--examples', type=int, default=5,
                               help='Number of example sentences to show (default: 5)')
 
