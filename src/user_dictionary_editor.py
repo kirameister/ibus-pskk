@@ -456,9 +456,14 @@ class UserDictionaryEditor(Gtk.Window):
             self.reading_entry.set_text(prefill_reading)
         if prefill_candidate:
             self.candidate_entry.set_text(prefill_candidate)
-            # Focus on add button if both are pre-filled
-            if prefill_reading:
-                self.add_button.grab_focus()
+            # Focus on candidate entry with text selected, so user can
+            # easily replace clipboard content by typing
+            self.candidate_entry.grab_focus()
+            self.candidate_entry.select_region(0, -1)  # Select all text
+        elif prefill_reading:
+            # Reading is pre-filled but not candidate: focus on candidate entry
+            # so user can type the kanji directly
+            self.candidate_entry.grab_focus()
 
         # Populate the list
         self._refresh_list()

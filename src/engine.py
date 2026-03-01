@@ -758,8 +758,28 @@ class EnginePSKK(IBus.Engine):
         self._kanchoku_layout = self._load_kanchoku_layout()
         self._kanchoku_processor = KanchokuProcessor(self._kanchoku_layout)
         # Reload henkan processor with updated dictionary list
+        self._reload_dictionaries()
+
+    def _reload_dictionaries(self):
+        """
+        Reload dictionary files for yomi-to-kanji conversion.
+        辞書ファイルをかな漢字変換用に再読み込み。
+
+        This is called:
+        以下の場合に呼び出される:
+            1. During config reload (_load_configs)
+               設定再読み込み時
+            2. When switching to alphanumeric mode ('A')
+               英数字モード切り替え時
+
+        The second case allows dictionary edits to take effect without
+        restarting the IME - just switch to 'A' mode and back.
+        2番目のケースでは、IMEを再起動せずに辞書編集を反映できる。
+        'A'モードに切り替えて戻るだけでよい。
+        """
         dictionary_files = util.get_dictionary_files(self._config)
         self._henkan_processor = HenkanProcessor(dictionary_files)
+        logger.debug(f'Dictionaries reloaded: {len(dictionary_files)} file(s)')
 
     def _load_logging_level(self, config):
         '''
@@ -1383,6 +1403,7 @@ class EnginePSKK(IBus.Engine):
 
             self._mode = 'A'
             self._update_input_mode()  # Update IBus icon
+            self._reload_dictionaries()  # Reload dictionaries on mode switch
             self._handled_config_keys.add(key_name)
             return True
 
@@ -1672,7 +1693,8 @@ class EnginePSKK(IBus.Engine):
             # If already open, just bring to front and update reading
             self._user_dictionary_editor.present()
             self._user_dictionary_editor.reading_entry.set_text(reading)
-            self._user_dictionary_editor.reading_entry.grab_focus()
+            # Focus on candidate entry so user can type the kanji directly
+            self._user_dictionary_editor.candidate_entry.grab_focus()
             return False
 
         editor = user_dictionary_editor.open_editor(prefill_reading=reading)
