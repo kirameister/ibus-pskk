@@ -1,4 +1,87 @@
 #!/usr/bin/env python3
 """
 https://github.com/ku-nlp/WikipediaAnnotatedCorpus/tree/main
+
+Example KNP format:
+# S-ID:SOME_INFORMATION
+* 1D
++ 1D
+今日 きょう キョウ 名詞 6 普通名詞 1 * 0 * 0 NIL
+は は は 助詞 9 副助詞 2 * 0 * 0 NIL
+、 、 、 特殊 1 読点 2 * 0 * 0 NIL
 """
+
+import argparse
+import glob
+import os
+import sys
+
+
+def process_sentence(sentence:list) -> str:
+    """
+    This function takes a list of sentence annotation and returns
+    a string, which is to be used for CRF model training.
+    """
+
+
+def process_knp_file(filepath):
+    """Process a single .knp file and output morpheme data."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line == "EOS":
+                    continue
+                # Skip metadata, bunsetsu boundaries (*), and tag boundaries (+)
+                if line.startswith(("#", "*", "+")):
+                    continue
+
+                # Print the morpheme line (Surface Reading Base POS ...)
+                print(line)
+    except Exception as e:
+        print(f"Error processing {filepath}: {e}", file=sys.stderr)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Process Wikipedia Annotated Corpus KNP files."
+    )
+    parser.add_argument(
+        "paths",
+        nargs="+",
+        help="Path(s) or wildcard(s) to .knp files (e.g., corpus/*.knp)",
+    )
+
+    args = parser.parse_args()
+
+    # Collect all files matching the paths/wildcards
+    target_files = []
+    for p in args.paths:
+        matches = glob.glob(p)
+        if not matches:
+            # If it's not a wildcard and doesn't exist, we'll catch it in the loop
+            target_files.append(p)
+        else:
+            target_files.extend(matches)
+
+    # Sort and remove duplicates
+    unique_files = sorted(set(target_files))
+
+    processed_any = False
+    for filepath in unique_files:
+        if not filepath.endswith(".knp"):
+            continue
+
+        if not os.path.isfile(filepath):
+            print(f"Warning: File not found or not a file: {filepath}", file=sys.stderr)
+            continue
+
+        process_knp_file(filepath)
+        processed_any = True
+
+    if not processed_any:
+        print("No .knp files were found to process.", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
