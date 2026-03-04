@@ -55,17 +55,17 @@ def main():
     args = parser.parse_args()
 
     # Collect all files matching the paths/wildcards
-    target_files = []
+    source_files = []
     for p in args.paths:
         matches = glob.glob(p)
         if not matches:
             # If it's not a wildcard and doesn't exist, we'll catch it in the loop
-            target_files.append(p)
+            source_files.append(p)
         else:
-            target_files.extend(matches)
+            source_files.extend(matches)
 
     # Sort and remove duplicates
-    unique_files = sorted(set(target_files))
+    unique_files = sorted(set(source_files))
 
     processed_any = False
     for filepath in unique_files:
