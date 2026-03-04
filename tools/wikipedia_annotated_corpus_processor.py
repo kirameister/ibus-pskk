@@ -14,6 +14,7 @@ Example KNP format:
 import argparse
 import glob
 import os
+import re
 import sys
 
 
@@ -35,6 +36,8 @@ def process_sentence(sentence:list) -> str:
         parts = token.split(' ')
         yomi = parts[1]
         pos = parts[3]
+        if re.search('/', yomi):
+            yomi = re.sub('^.*/', '', yomi)
         if pos in ('名詞', '動詞', '形容詞', '副詞'):
             return_list.append(yomi)
             previous_pos = pos
@@ -104,6 +107,7 @@ def main():
             print(f"Warning: File not found or not a file: {filepath}", file=sys.stderr)
             continue
 
+        print(f'Processing {filepath} ...')
         process_knp_file(filepath)
         processed_any = True
 
