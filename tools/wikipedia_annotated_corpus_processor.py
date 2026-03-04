@@ -21,23 +21,51 @@ def process_sentence(sentence:list) -> str:
     """
     This function takes a list of sentence annotation and returns
     a string, which is to be used for CRF model training.
+
+    Example input:
+        今日 きょう キョウ 名詞 6 普通名詞 1 * 0 * 0 NIL
+        は は は 助詞 9 副助詞 2 * 0 * 0 NIL
+
+    Output:
+        きょう _は_
     """
+    return_list = []
+    previous_pos = ""
+    for token in sentence:
+        parts = token.split(' ')
+        yomi = parts[1]
+        pos = parts[3]
+        if pos in ('名詞', '動詞', '形容詞', '副詞'):
+            return_list.append(yomi)
+            previous_pos = pos
+        elif pos == "接尾辞" and previous_pos in ('名詞', '動詞'):
+            return_list[-1] = return_list[-1] + yomi
+            previous_pos = pos
+        else:
+            return_list.append(f'_{yomi}_')
+            previous_pos = pos
+    return " ".join(return_list)
 
 
 def process_knp_file(filepath):
     """Process a single .knp file and output morpheme data."""
     try:
         with open(filepath, "r", encoding="utf-8") as f:
+            sentence = []
             for line in f:
                 line = line.strip()
+                if line.startswith("#"):
+                    if len(sentence) > 0:
+                        process_sentence(sentence)
+                        sentence = []
+                    continue
                 if not line or line == "EOS":
                     continue
                 # Skip metadata, bunsetsu boundaries (*), and tag boundaries (+)
-                if line.startswith(("#", "*", "+")):
+                if line.startswith(("*", "+")):
                     continue
-
                 # Print the morpheme line (Surface Reading Base POS ...)
-                print(line)
+                sentence.append(line)
     except Exception as e:
         print(f"Error processing {filepath}: {e}", file=sys.stderr)
 
