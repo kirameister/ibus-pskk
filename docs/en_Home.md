@@ -2,7 +2,7 @@
 
 Welcome to the IBus-PSKK documentation!
 
-PSKK is an input method engine (IME) for IBus that provides Japanese input with support for various input modes and dictionary-based conversion.
+PSKK (Personaliz(ed|able) SKK) is an input method engine (IME) for IBus that provides Japanese input with support for various input modes and dictionary-based conversion. It aims to be an easy yet effective implementation of a Japanese IME that is highly configurable.
 
 ## Quick Links
 
@@ -19,11 +19,22 @@ PSKK is an input method engine (IME) for IBus that provides Japanese input with 
 - User dictionary management
 - CRF (Conditional Random Field) based word-split detection for Kana-to-Kanji conversion
 - Configurable keybindings
+- SandS (Shift and Space) feature for easy mode switching
+- Dictionary-driven conversion with optional bunsetsu prediction for multi-phrase input
+- System and user dictionary support with on-demand dictionary generation
 
 ## Screenshots
 
 <!-- Add screenshots here -->
 <!-- ![Settings Panel](assets/screenshots/settings-panel.png) -->
+
+## Technical Details
+
+PSKK uses IBus as the input method framework and provides:
+- Customizable keyboard layouts (新下駄配列 by default)
+- CRF-based bunsetsu prediction for improved conversion accuracy
+- Support for both system and user dictionaries
+- On-demand dictionary generation through the IBus settings menu
 
 ## Getting Help
 
