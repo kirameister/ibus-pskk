@@ -40,18 +40,21 @@ def process_sentence(sentence: list) -> str:
         yomi = parts[1]
         pos = parts[3]
         if re.search("/", yomi):
+            # this is a goofy implementation in order to address the multiple yomi in the corpus...
             yomi = re.sub("^.*/", "", yomi)
-        if pos in ("名詞") and previous_pos == "名詞":
+        if pos == "名詞" and previous_pos == "名詞":
+            # this is for covering compound noun
+            return_list[-1] = return_list[-1] + yomi
+        elif pos == "名詞" and previous_pos == "接頭辞":
+            # this is for covering things like 同+州
+            return_list[-1] = re.sub('^_(.*)_$', r'\1', return_list[-1]) + yomi
+        elif pos == "接尾辞" and previous_pos in ("名詞", "動詞"):
             return_list[-1] = return_list[-1] + yomi
         elif pos in ("名詞", "動詞", "形容詞", "副詞"):
             return_list.append(yomi)
-            previous_pos = pos
-        elif pos == "接尾辞" and previous_pos in ("名詞", "動詞"):
-            return_list[-1] = return_list[-1] + yomi
-            previous_pos = pos
         else:
             return_list.append(f"_{yomi}_")
-            previous_pos = pos
+        previous_pos = pos
     return sf_str + '\n' + " ".join(return_list)
 
 
