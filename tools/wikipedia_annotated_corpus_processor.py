@@ -17,6 +17,16 @@ import os
 import re
 import sys
 
+def create_skk_dict_entries(sentence:list) -> list:
+    """
+    This function takes a list of sentence annotation and returns
+    a list containing line from yomi-to-kanji in SKK format
+    """
+    return_list = []
+    previous_pos = ""
+
+    return return_list
+
 
 def process_sentence(sentence: list) -> str:
     """
