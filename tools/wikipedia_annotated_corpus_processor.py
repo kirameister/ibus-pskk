@@ -32,8 +32,11 @@ def process_sentence(sentence: list) -> str:
     """
     return_list = []
     previous_pos = ""
+    sf_str = "#"
     for token in sentence:
         parts = token.split(" ")
+        sf = parts[0]
+        sf_str += ' ' + sf
         yomi = parts[1]
         pos = parts[3]
         if re.search("/", yomi):
@@ -49,7 +52,7 @@ def process_sentence(sentence: list) -> str:
         else:
             return_list.append(f"_{yomi}_")
             previous_pos = pos
-    return " ".join(return_list)
+    return sf_str + '\n' + " ".join(return_list)
 
 
 def process_knp_file(filepath, out_f=sys.stdout):
