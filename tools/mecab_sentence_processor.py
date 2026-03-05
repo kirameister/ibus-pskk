@@ -142,7 +142,7 @@ FILE PROCESSING MODE / ファイル処理モード:
     作成されるファイル:
     • input_mecab_processed.txt  - Tokenized sentences with readings
                                    読み付きトークン化された文
-    • input_extracted_vocab.txt  - Nouns in SKK dictionary format
+    • input_extracted_vocab.skk_dict  - Nouns in SKK dictionary format
                                    SKK辞書形式の名詞
 
 TEST MODE / テストモード:
@@ -224,7 +224,7 @@ def katakana_to_hiragana(text: str) -> str:
             result.append(chr(cp - 0x60))
         else:
             result.append(c)
-    return ''.join(result)
+    return "".join(result)
 
 
 def split_into_sentences(text: str) -> list:
@@ -271,14 +271,14 @@ def split_into_sentences(text: str) -> list:
         文のリスト（空文字列は除外）
     """
     # First split by newlines
-    lines = text.split('\n')
+    lines = text.split("\n")
 
     sentences = []
     for line in lines:
         # Split each line by Japanese sentence-ending punctuation
         # Keep the punctuation with the sentence by using a lookbehind pattern
         # Pattern: split after 。！？ (and full-width variants)
-        parts = re.split(r'(?<=[。！？．])', line)
+        parts = re.split(r"(?<=[。！？．])", line)
 
         for part in parts:
             stripped = part.strip()
@@ -337,11 +337,7 @@ def run_mecab(sentence: str) -> str:
     """
     try:
         result = subprocess.run(
-            ['mecab'],
-            input=sentence,
-            capture_output=True,
-            text=True,
-            check=True
+            ["mecab"], input=sentence, capture_output=True, text=True, check=True
         )
         return result.stdout
     except FileNotFoundError:
@@ -401,21 +397,21 @@ def extract_nouns_from_mecab(mecab_output: str) -> list:
     """
     nouns = []
 
-    for line in mecab_output.split('\n'):
+    for line in mecab_output.split("\n"):
         # Skip empty lines and EOS marker
-        if not line or line == 'EOS':
+        if not line or line == "EOS":
             continue
 
         # Split by tab: surface \t features
-        parts = line.split('\t')
+        parts = line.split("\t")
         if len(parts) != 2:
             continue
 
         surface = parts[0]
-        features = parts[1].split(',')
+        features = parts[1].split(",")
 
         # Check if it's a noun (1st field is 名詞)
-        if len(features) < 1 or features[0] != '名詞':
+        if len(features) < 1 or features[0] != "名詞":
             continue
 
         # Get yomi from 8th field (index 7)
@@ -425,7 +421,7 @@ def extract_nouns_from_mecab(mecab_output: str) -> list:
         yomi_katakana = features[7]
 
         # Skip if yomi is empty or contains asterisk (unknown)
-        if not yomi_katakana or yomi_katakana == '*':
+        if not yomi_katakana or yomi_katakana == "*":
             continue
 
         # Convert katakana yomi to hiragana
@@ -484,10 +480,10 @@ def apply_sentence_transformations(sentence: str) -> str:
         変換された文（助詞マーカー付きの読み）
     """
     # Consider joshi 助詞 as a special-case => marker
-    sentence = re.sub(r'(\S+/助詞/\S+(?=[ ]|$))', r'_\1', sentence)
+    sentence = re.sub(r"(\S+/助詞/\S+(?=[ ]|$))", r"_\1", sentence)
     # Remove POS tags, keeping only yomi
     # Pattern matches: word/POS1/POS2 followed by space or end of string
-    result = re.sub(r'(\S+)/\S+/\S+(?=[ ]|$)', r'\1', sentence)
+    result = re.sub(r"(\S+)/\S+/\S+(?=[ ]|$)", r"\1", sentence)
     return result
 
 
@@ -537,29 +533,29 @@ def postprocess_mecab_output(mecab_output: str, sentence: str) -> str:
     """
     tokens = []
 
-    for line in mecab_output.split('\n'):
+    for line in mecab_output.split("\n"):
         # Skip empty lines
         if not line:
             continue
 
         # EOS marks end of sentence - finalize and return
-        if line == 'EOS':
+        if line == "EOS":
             break
 
         # Split by tab: surface \t features
-        parts = line.split('\t')
+        parts = line.split("\t")
         if len(parts) != 2:
             continue
 
         surface = parts[0]
-        features = parts[1].split(',')
+        features = parts[1].split(",")
 
         # Get POS1 (index 0) and POS2 (index 1)
-        pos1 = features[0] if len(features) > 0 else '*'
-        pos2 = features[1] if len(features) > 1 else '*'
+        pos1 = features[0] if len(features) > 0 else "*"
+        pos2 = features[1] if len(features) > 1 else "*"
 
         # Get yomi from 8th field (index 7)
-        if len(features) >= 8 and features[7] != '*':
+        if len(features) >= 8 and features[7] != "*":
             yomi = katakana_to_hiragana(features[7])
         else:
             # Fallback to surface if yomi not available
@@ -570,7 +566,7 @@ def postprocess_mecab_output(mecab_output: str, sentence: str) -> str:
         tokens.append(token)
 
     # Join tokens with spaces
-    joined = ' '.join(tokens)
+    joined = " ".join(tokens)
 
     # Apply sentence transformations
     result = apply_sentence_transformations(joined)
@@ -642,7 +638,7 @@ def process_file(input_path: str) -> tuple:
          Full processed output with original sentences
          元の文を含む完全な処理済み出力
 
-       • FILENAME_extracted_vocab.txt
+       • FILENAME_extracted_vocab.skk_dict
          Extracted nouns in SKK format
          SKK形式で抽出された名詞
 
@@ -656,7 +652,7 @@ def process_file(input_path: str) -> tuple:
         /path/to/novel.txt
             ↓
         /path/to/novel_mecab_processed.txt
-        /path/to/novel_extracted_vocab.txt
+        /path/to/novel_extracted_vocab.skk_dict
 
     Args:
         input_path: 入力テキストファイルのパス
@@ -666,20 +662,22 @@ def process_file(input_path: str) -> tuple:
         (mecab出力パス, 語彙出力パス) のタプル
     """
     # Read input file
-    encodings = ['utf-8', 'shift_jis', 'euc-jp']
+    encodings = ["utf-8", "shift_jis", "euc-jp"]
     content = None
 
     for encoding in encodings:
         try:
-            with open(input_path, 'r', encoding=encoding) as f:
+            with open(input_path, "r", encoding=encoding) as f:
                 content = f.read()
             break
         except UnicodeDecodeError:
             continue
 
     if content is None:
-        print(f"Error: Could not read {input_path} with any supported encoding.",
-              file=sys.stderr)
+        print(
+            f"Error: Could not read {input_path} with any supported encoding.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Split into sentences
@@ -691,7 +689,7 @@ def process_file(input_path: str) -> tuple:
     all_nouns = []  # Collect all extracted nouns
 
     for i, sentence in enumerate(sentences):
-        print(f"  Processing sentence {i + 1}/{len(sentences)}...", end='\r')
+        print(f"  Processing sentence {i + 1}/{len(sentences)}...", end="\r")
 
         mecab_output = run_mecab(sentence)
         processed = postprocess_mecab_output(mecab_output, sentence)
@@ -710,8 +708,8 @@ def process_file(input_path: str) -> tuple:
     input_basename = os.path.basename(input_path)
 
     # Remove extension
-    if '.' in input_basename:
-        name_without_ext = input_basename.rsplit('.', 1)[0]
+    if "." in input_basename:
+        name_without_ext = input_basename.rsplit(".", 1)[0]
     else:
         name_without_ext = input_basename
 
@@ -719,18 +717,18 @@ def process_file(input_path: str) -> tuple:
     mecab_output_filename = f"{name_without_ext}_mecab_processed.txt"
     mecab_output_path = os.path.join(input_dir, mecab_output_filename)
 
-    with open(mecab_output_path, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(results))
+    with open(mecab_output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(results))
 
     # Extracted vocabulary in SKK format
-    vocab_output_filename = f"{name_without_ext}_extracted_vocab.txt"
+    vocab_output_filename = f"{name_without_ext}_extracted_vocab.skk_dict"
     vocab_output_path = os.path.join(input_dir, vocab_output_filename)
 
     # Format nouns as SKK entries (keep duplicates as requested)
     skk_entries = [format_skk_entry(yomi, surface) for yomi, surface in all_nouns]
 
-    with open(vocab_output_path, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(skk_entries))
+    with open(vocab_output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(skk_entries))
 
     print(f"Extracted {len(all_nouns)} noun(s)")
 
@@ -798,23 +796,23 @@ def test_sentence(sentence: str, verbose: bool = False):
 
     # Build intermediate yomi/POS1/POS2 format (before transformation)
     tokens = []
-    for line in mecab_output.split('\n'):
-        if not line or line == 'EOS':
+    for line in mecab_output.split("\n"):
+        if not line or line == "EOS":
             continue
-        parts = line.split('\t')
+        parts = line.split("\t")
         if len(parts) != 2:
             continue
         surface = parts[0]
-        features = parts[1].split(',')
-        pos1 = features[0] if len(features) > 0 else '*'
-        pos2 = features[1] if len(features) > 1 else '*'
-        if len(features) >= 8 and features[7] != '*':
+        features = parts[1].split(",")
+        pos1 = features[0] if len(features) > 0 else "*"
+        pos2 = features[1] if len(features) > 1 else "*"
+        if len(features) >= 8 and features[7] != "*":
             yomi = katakana_to_hiragana(features[7])
         else:
             yomi = surface
         tokens.append(f"{yomi}/{pos1}/{pos2}")
 
-    intermediate = ' '.join(tokens)
+    intermediate = " ".join(tokens)
 
     if verbose:
         print("=== Intermediate (yomi/POS1/POS2) ===")
@@ -830,23 +828,22 @@ def test_sentence(sentence: str, verbose: bool = False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Process a text file through MeCab sentence by sentence.'
+        description="Process a text file through MeCab sentence by sentence."
     )
     parser.add_argument(
-        'input_file',
-        nargs='?',
-        default=None,
-        help='Path to input text file'
+        "input_file", nargs="?", default=None, help="Path to input text file"
     )
     parser.add_argument(
-        '-t', '--test',
-        metavar='SENTENCE',
-        help='Test mode: process a single sentence and print result to stdout'
+        "-t",
+        "--test",
+        metavar="SENTENCE",
+        help="Test mode: process a single sentence and print result to stdout",
     )
     parser.add_argument(
-        '-v', '--verbose',
-        action='store_true',
-        help='Verbose output (show intermediate processing steps in test mode)'
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Verbose output (show intermediate processing steps in test mode)",
     )
     args = parser.parse_args()
 
@@ -873,5 +870,5 @@ def main():
     print(f"Vocabulary:   {vocab_path}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
