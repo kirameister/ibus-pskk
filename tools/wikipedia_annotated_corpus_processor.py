@@ -38,7 +38,9 @@ def process_sentence(sentence: list) -> str:
         pos = parts[3]
         if re.search("/", yomi):
             yomi = re.sub("^.*/", "", yomi)
-        if pos in ("名詞", "動詞", "形容詞", "副詞"):
+        if pos in ("名詞") and previous_pos == "名詞":
+            return_list[-1] = return_list[-1] + yomi
+        elif pos in ("名詞", "動詞", "形容詞", "副詞"):
             return_list.append(yomi)
             previous_pos = pos
         elif pos == "接尾辞" and previous_pos in ("名詞", "動詞"):
