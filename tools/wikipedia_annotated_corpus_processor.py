@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
-https://github.com/ku-nlp/WikipediaAnnotatedCorpus/tree/main
+wikipedia_annotated_corpus_processor.py - Process Wikipedia Annotated Corpus KNP files
+
+This script processes .knp files from the Wikipedia Annotated Corpus and
+outputs tokenized sentences with readings, suitable for CRF training.
+
+Source: https://github.com/ku-nlp/WikipediaAnnotatedCorpus/tree/main
+
+USAGE:
+    python wikipedia_annotated_corpus_processor.py input.knp
+    python wikipedia_annotated_corpus_processor.py corpus/*.knp -o output.txt
 
 Example KNP format:
 # S-ID:SOME_INFORMATION
@@ -17,7 +26,8 @@ import os
 import re
 import sys
 
-def create_skk_dict_entries(sentence:list) -> list:
+
+def create_skk_dict_entries(sentence: list) -> list:
     """
     This function takes a list of sentence annotation and returns
     a list containing line from yomi-to-kanji in SKK format
@@ -46,7 +56,7 @@ def process_sentence(sentence: list) -> str:
     for token in sentence:
         parts = token.split(" ")
         sf = parts[0]
-        sf_str += ' ' + sf
+        sf_str += " " + sf
         yomi = parts[1]
         pos = parts[3]
         if re.search("/", yomi):
@@ -57,7 +67,7 @@ def process_sentence(sentence: list) -> str:
             return_list[-1] = return_list[-1] + yomi
         elif pos == "名詞" and previous_pos == "接頭辞":
             # this is for covering things like 同+州
-            return_list[-1] = re.sub('^_(.*)_$', r'\1', return_list[-1]) + yomi
+            return_list[-1] = re.sub("^_(.*)_$", r"\1", return_list[-1]) + yomi
         elif pos == "接尾辞" and previous_pos in ("名詞", "動詞"):
             return_list[-1] = return_list[-1] + yomi
         elif pos in ("名詞", "動詞", "形容詞", "副詞"):
@@ -65,7 +75,7 @@ def process_sentence(sentence: list) -> str:
         else:
             return_list.append(f"_{yomi}_")
         previous_pos = pos
-    return sf_str + '\n' + " ".join(return_list)
+    return sf_str + "\n" + " ".join(return_list)
 
 
 def process_knp_file(filepath, out_f=sys.stdout):
@@ -138,7 +148,10 @@ def main():
                 continue
 
             if not os.path.isfile(filepath):
-                print(f"Warning: File not found or not a file: {filepath}", file=sys.stderr)
+                print(
+                    f"Warning: File not found or not a file: {filepath}",
+                    file=sys.stderr,
+                )
                 continue
 
             print(f"Processing {filepath} ...", file=sys.stderr)
