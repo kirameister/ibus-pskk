@@ -31,9 +31,30 @@ def create_skk_dict_entries(sentence: list) -> list:
     """
     This function takes a list of sentence annotation and returns
     a list containing line from yomi-to-kanji in SKK format
+
+    In terms of the retrieval of yomi-to-kanji is done in greedy manner. 
+    That is, for example, if we have:
+        第 だい 第 接頭辞
+        2 に 2 名詞
+        位 い 位 接尾辞
+        の の の 助詞
+    ... the following would be retrieved (without the comment at the tail):
+        だい /第/
+        だいに /第2/
+        だいにい /第2位/
+        だいにいの /第2位の/ # this is for easier typing
+        に /2/
+        にい /2位/
+        にいの /2位の/ # this is for easier typing
+        # please note that we do not add 接尾辞+助詞 combinaion
     """
     return_list = []
     previous_pos = ""
+    previous_parts = dict()
+    for token in sentence:
+        parts = token.split(" ")
+        sf = parts[0]
+        yomi = parts[1]
 
     return return_list
 
