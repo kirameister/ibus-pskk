@@ -50,11 +50,12 @@ def create_skk_dict_entries(sentence: list) -> list:
     """
     return_list = []
     previous_pos = ""
-    previous_parts = dict()
+    previous_parts = dict() # dict instead of set because we'd store both yomi and kanji of previous token(s)
     for token in sentence:
         parts = token.split(" ")
         sf = parts[0]
         yomi = parts[1]
+        pos = parts[3]
 
     return return_list
 
