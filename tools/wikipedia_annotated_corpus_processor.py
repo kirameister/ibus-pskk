@@ -26,6 +26,8 @@ import os
 import re
 import sys
 
+DEVNULL = open(os.devnull, "w")
+
 
 def create_skk_dict_entries(sentence: list) -> list:
     """
@@ -124,7 +126,7 @@ def process_sentence(sentence: list) -> str:
     return sf_str + "\n" + " ".join(return_list)
 
 
-def process_knp_file(filepath, out_f=sys.stdout):
+def process_knp_file(filepath, out_f=sys.stdout, out_e=DEVNULL):
     """Process a single .knp file and output morpheme data."""
     try:
         with open(filepath, "r", encoding="utf-8") as f:
@@ -134,11 +136,13 @@ def process_knp_file(filepath, out_f=sys.stdout):
                 if line.startswith("#"):
                     if len(sentence) > 0:
                         out_f.write(process_sentence(sentence) + "\n")
+                        out_e.write("\n".join(create_skk_dict_entries(sentence)) + "\n")
                         sentence = []
                     continue
                 if not line or line == "EOS":
                     if len(sentence) > 0:
                         out_f.write(process_sentence(sentence) + "\n")
+                        out_e.write("\n".join(create_skk_dict_entries(sentence)) + "\n")
                         sentence = []
                     continue
                 # Skip metadata, bunsetsu boundaries (*), and tag boundaries (+)
@@ -163,6 +167,7 @@ def main():
         help="Path(s) or wildcard(s) to .knp files (e.g., corpus/*.knp)",
     )
     parser.add_argument("-o", "--output", help="Output filepath")
+    parser.add_argument("-e", "--extract_dictionary", action='store_true', help="Extract yomi-kanji mappings to .skkdict (-o option required)")
 
     args = parser.parse_args()
 
@@ -180,9 +185,11 @@ def main():
     unique_files = sorted(set(source_files))
 
     out_f = sys.stdout
+    out_extracted_dictionary_f = DEVNULL
     if args.output:
         try:
             out_f = open(args.output, "w", encoding="utf-8")
+            out_extracted_dictionary_f = open(args.output + ".skkdict", "w", encoding="utf-8")
         except Exception as e:
             print(f"Error opening output file {args.output}: {e}", file=sys.stderr)
             sys.exit(1)
@@ -201,7 +208,7 @@ def main():
                 continue
 
             print(f"Processing {filepath} ...", file=sys.stderr)
-            process_knp_file(filepath, out_f)
+            process_knp_file(filepath, out_f, out_extracted_dictionary_f)
             processed_any = True
 
         if not processed_any:
@@ -209,6 +216,7 @@ def main():
     finally:
         if out_f is not sys.stdout:
             out_f.close()
+            out_extracted_dictionary_f.close()
 
 
 if __name__ == "__main__":
