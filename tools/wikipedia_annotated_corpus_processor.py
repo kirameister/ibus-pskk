@@ -54,9 +54,33 @@ def create_skk_dict_entries(sentence: list) -> list:
     for token in sentence:
         parts = token.split(" ")
         sf = parts[0]
-        yomi = parts[1]
         pos = parts[3]
-
+        yomis = parts[1].split("/") # please note that we'd like to take care of multiple yomi if present
+        # first do the append as part of the return list
+        if pos == "名詞" and previous_pos == "名詞": # compound noun..
+            for prev_yomi, prev_sf in previous_parts.items():
+                for yomi in yomis:
+                    return_list.append(f'{prev_yomi}{yomi} /{prev_sf}{sf}/')
+        elif pos == "名詞" and previous_pos == "接頭辞":
+            for prev_yomi, prev_sf in previous_parts.items():
+                for yomi in yomis:
+                    return_list.append(f'{prev_yomi}{yomi} /{prev_sf}{sf}/')
+        elif pos == "接尾辞" and previous_pos in ("名詞", "動詞"):
+            for prev_yomi, prev_sf in previous_parts.items():
+                for yomi in yomis:
+                    return_list.append(f'{prev_yomi}{yomi} /{prev_sf}{sf}/')
+        # second, do the simple append
+        if pos in ("名詞", "動詞", "形容詞", "副詞"):
+            for yomi in yomis:
+                return_list.append(f'{yomi} /{sf}/')
+        # ...and do the previous_parts updates..
+        previous_parts_to_update = dict()
+        if pos in ("名詞", "形容詞", "副詞", "接頭辞"):
+            for prev_yomi, prev_sf in previous_parts.items():
+                for yomi in yomis:
+                    previous_parts_to_update[f"{prev_yomi}{yomi}"] = f"{prev_sf}{sf}"
+        previous_parts = previous_parts_to_update
+        previous_pos = pos
     return return_list
 
 
