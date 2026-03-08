@@ -77,16 +77,18 @@ def create_skk_dict_entries(sentence: list) -> list:
         # second, do the simple append
         if pos in ("名詞", "動詞", "形容詞", "副詞"):
             for yomi in yomis:
-                if not re.search('[^\u3041-\u3096]', yomi):
+                if not re.search('[^\u3041-\u3096]', yomi) and yomi != sf:
                     return_list.append(f'{yomi} /{sf}/')
         # ...and do the previous_parts updates..
         previous_parts_to_update = dict()
         if pos in ("名詞", "形容詞", "副詞", "接頭辞"):
             for prev_yomi, prev_sf in previous_parts.items():
                 for yomi in yomis:
-                    previous_parts_to_update[f"{prev_yomi}{yomi}"] = f"{prev_sf}{sf}"
+                    if yomi != sf:
+                        previous_parts_to_update[f"{prev_yomi}{yomi}"] = f"{prev_sf}{sf}"
             for yomi in yomis:
-                previous_parts_to_update[yomi] = sf
+                if yomi != sf:
+                    previous_parts_to_update[yomi] = sf
         previous_parts = previous_parts_to_update
         previous_pos = pos
     return return_list
