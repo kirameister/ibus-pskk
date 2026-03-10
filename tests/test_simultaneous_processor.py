@@ -7,7 +7,7 @@ import sys
 from unittest.mock import patch, PropertyMock
 
 # Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from simultaneous_processor import SimultaneousInputProcessor
 
@@ -19,23 +19,17 @@ class TestBuildSimultaneousMap:
         """Test that empty layout data results in empty map"""
         processor = SimultaneousInputProcessor([])
         # Should not crash, simultaneous_map should not be set (or empty)
-        assert (
-            not hasattr(processor, "simultaneous_map")
-            or processor.simultaneous_map == []
-        )
+        assert not hasattr(processor, 'simultaneous_map') or processor.simultaneous_map == []
 
     def test_none_layout_data(self):
         """Test that None layout data is handled gracefully"""
         processor = SimultaneousInputProcessor(None)
-        assert (
-            not hasattr(processor, "simultaneous_map")
-            or processor.simultaneous_map is None
-        )
+        assert not hasattr(processor, 'simultaneous_map') or processor.simultaneous_map is None
 
     def test_single_char_entries(self):
         """Test layout with single-character entries"""
         layout = [
-            ["a", "あ", ""],  # input, output, pending
+            ["a", "あ", ""],       # input, output, pending
             ["i", "い", ""],
             ["u", "う", ""],
         ]
@@ -58,9 +52,9 @@ class TestBuildSimultaneousMap:
 
         # Should have 3 buckets (for length 1, 2, 3)
         assert len(processor.simultaneous_map) == 3
-        assert "a" in processor.simultaneous_map[0]  # length-1
-        assert "ka" in processor.simultaneous_map[1]  # length-2
-        assert "kya" in processor.simultaneous_map[2]  # length-3
+        assert "a" in processor.simultaneous_map[0]      # length-1
+        assert "ka" in processor.simultaneous_map[1]     # length-2
+        assert "kya" in processor.simultaneous_map[2]    # length-3
 
     def test_simultaneous_entry_with_timing(self):
         """Test that simultaneous entries store simul_limit_ms correctly"""
@@ -122,7 +116,7 @@ class TestGetLayoutOutput:
             ["k", "", "k"],
             ["ka", "か", ""],
             ["jk", "じゅ", "", 50],  # simultaneous: j+k within 50ms
-            ["df", "だ", "", 50],  # simultaneous: d+f within 50ms
+            ["df", "だ", "", 50],    # simultaneous: d+f within 50ms
         ]
 
     def test_key_release_returns_pending_unchanged(self, simple_romaji_layout):
@@ -177,10 +171,10 @@ class TestGetLayoutOutput:
         processor = SimultaneousInputProcessor(simultaneous_layout)
 
         # Mock time to simulate fast typing (within 50ms)
-        with patch("time.perf_counter") as mock_time:
+        with patch('time.perf_counter') as mock_time:
             # First key press at t=0
             mock_time.return_value = 0.0
-            processor.get_layout_output("", "j", is_pressed=True)
+            processor.previous_typed_timestamp = 0.0
 
             # Second key press at t=0.030 (30ms later, within 50ms limit)
             mock_time.return_value = 0.030
@@ -194,10 +188,10 @@ class TestGetLayoutOutput:
         processor = SimultaneousInputProcessor(simultaneous_layout)
 
         # Mock time to simulate slow typing (>50ms)
-        with patch("time.perf_counter") as mock_time:
+        with patch('time.perf_counter') as mock_time:
             # First key press at t=0
             mock_time.return_value = 0.0
-            processor.get_layout_output("", "j", is_pressed=True)
+            processor.previous_typed_timestamp = 0.0
 
             # Second key press at t=0.100 (100ms later, exceeds 50ms limit)
             mock_time.return_value = 0.100
@@ -324,9 +318,9 @@ class TestEdgeCases:
     def test_pending_preserved_through_chain(self):
         """Test that entry's pending value is returned correctly"""
         layout = [
-            ["k", "", "k"],  # k waits, pending="k"
-            ["ka", "か", ""],  # ka outputs, pending=""
-            ["ky", "", "ky"],  # ky waits, pending="ky"
+            ["k", "", "k"],      # k waits, pending="k"
+            ["ka", "か", ""],    # ka outputs, pending=""
+            ["ky", "", "ky"],   # ky waits, pending="ky"
         ]
         processor = SimultaneousInputProcessor(layout)
 

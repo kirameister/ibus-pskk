@@ -169,15 +169,12 @@ class SimultaneousInputProcessor:
             タイムスタンプは大きな負のオフセットで初期化される。これにより
             最初のキーストロークが誤って同時入力の一部として扱われない。
         """
-        self.layout_data = layout_data  # this is raw-loaded data
-        self.max_simul_limit_ms = 0  # this is to identify the max limit of simul-typing -- passed this limit, there is no simul-typing
+        self.layout_data = layout_data # this is raw-loaded data
+        self.max_simul_limit_ms = 0 # this is to identify the max limit of simul-typing -- passed this limit, there is no simul-typing
 
         self._build_simultaneous_map()
         # Initialize timestamp with offset so first keystroke won't be treated as simultaneous
-        self.previous_typed_timestamp = time.perf_counter() - (
-            self.max_simul_limit_ms * 1000
-        )
-        self._simultaneous_chain_len = 0
+        self.previous_typed_timestamp = time.perf_counter() - (self.max_simul_limit_ms * 1000)
 
     def _build_simultaneous_map(self):
         """
@@ -247,20 +244,16 @@ class SimultaneousInputProcessor:
             input_len = len(l[0])
             input_str = l[0]
             if input_len == 0:
-                logger.warning("input str len == 0 detected; skipping..")
+                logger.warning('input str len == 0 detected; skipping..')
                 continue
             list_values = dict()
             list_values["output"] = str(l[1])
             list_values["pending"] = str(l[2])
-            if (
-                len(l) == 4 and type(l[3]) == int
-            ):  # this entry is about simultaneous input
+            if len(l) == 4 and type(l[3]) == int:  # this entry is about simultaneous input
                 self.max_simul_limit_ms = max(l[3], self.max_simul_limit_ms)
                 list_values["simul_limit_ms"] = l[3]
             else:
-                list_values["simul_limit_ms"] = (
-                    None  # None value in this case means that the layout has nothing to do with simul-typing; it works like normal romaji input
-                )
+                list_values["simul_limit_ms"] = None # None value in this case means that the layout has nothing to do with simul-typing; it works like normal romaji input
             self.simultaneous_map[input_len - 1][input_str] = list_values
 
     def simultaneous_reset(self):
@@ -286,7 +279,6 @@ class SimultaneousInputProcessor:
                                                      "j"と組み合わされない
         """
         self.previous_typed_timestamp -= (self.max_simul_limit_ms) * 1000
-        self._simultaneous_chain_len = 0
 
     def get_layout_output(self, past_pending, input_char, is_pressed):
         """
@@ -363,16 +355,6 @@ class SimultaneousInputProcessor:
         current_time = time.perf_counter()
         time_diff_ms = (current_time - self.previous_typed_timestamp) * 1000
 
-        # Reset chain if timeout has passed since last stroke
-        if time_diff_ms > self.max_simul_limit_ms:
-            self._simultaneous_chain_len = 0
-
-        # Ensure chain length is consistent with actual pending buffer length
-        # (Handles cases where preedit was modified externally, e.g. backspace)
-        self._simultaneous_chain_len = min(
-            self._simultaneous_chain_len, len(past_pending)
-        )
-
         # ============================================================
         # LOOKUP STRATEGY: Try longest key first, then fall back to shorter keys
         # ============================================================
@@ -420,38 +402,21 @@ class SimultaneousInputProcessor:
 
             if simul_limit and simul_limit > 0:
                 # This is a SIMULTANEOUS entry - must be typed within time limit
-                # and must be part of the current active simultaneous chain
-                if (
-                    time_diff_ms < simul_limit
-                    and tail_len <= self._simultaneous_chain_len
-                ):
+                if time_diff_ms < simul_limit:
                     # Within time window - use this simultaneous combo
                     # Prepend dropped_prefix to output so we don't lose those chars
                     self.previous_typed_timestamp = current_time
-                    output_str = dropped_prefix + entry["output"]
-                    pending_str = entry["pending"]
-                    # New chain length is the part produced by this match
-                    self._simultaneous_chain_len = len(entry["output"]) + len(
-                        entry["pending"]
-                    )
-                    return output_str, pending_str
+                    return dropped_prefix + entry['output'], entry['pending']
                 else:
-                    # Timed out or chain broken - don't use this entry, try shorter key
+                    # Timed out - don't use this entry, try shorter key
                     continue
             else:
                 # This is a REGULAR romaji entry (no timing requirement)
                 # Prepend dropped_prefix to output so we don't lose those chars
                 self.previous_typed_timestamp = current_time
-                output_str = dropped_prefix + entry["output"]
-                pending_str = entry["pending"]
-                # Even for regular rules, update chain length to allow subsequent chording
-                self._simultaneous_chain_len = len(entry["output"]) + len(
-                    entry["pending"]
-                )
-                return output_str, pending_str
+                return dropped_prefix + entry["output"], entry["pending"]
 
         # No match found at any length - return everything as output, clear pending
         self.previous_typed_timestamp = current_time
-        # The character produced by this stroke is fresh for the next one
-        self._simultaneous_chain_len = len(input_char)
         return past_pending + input_char, None
+
