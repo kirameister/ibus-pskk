@@ -506,6 +506,7 @@ class EnginePSKK(IBus.Engine):
         self._preedit_string = ''    # Display buffer (can be hiragana, katakana, ascii, or zenkaku)
         self._preedit_hiragana = ''  # Source of truth: hiragana output from simul_processor
         self._preedit_ascii = ''     # Source of truth: raw ASCII input characters
+        self._preedit_pending = ''   # Currently pending string -- should not be part of hiragana
         self._converted = False  # Set True after Ctrl+K/J/L; next char input auto-commits
 
         # This property is for confirming the kanji-kana converted string
@@ -1207,6 +1208,7 @@ class EnginePSKK(IBus.Engine):
         # Update hiragana buffer (source of truth for to_katakana/to_hiragana)
         # output includes accumulated hiragana via dropped_prefix mechanism
         self._preedit_hiragana = output if output else ''
+        self._preedit_pending = pending if pending else ''
 
         # Build display buffer: hiragana output + pending ASCII
         new_preedit = self._preedit_hiragana + (pending if pending else '')
