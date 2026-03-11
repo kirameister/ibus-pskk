@@ -507,7 +507,6 @@ class EnginePSKK(IBus.Engine):
         self._preedit_hiragana = ''  # Source of truth: hiragana output from simul_processor
         self._preedit_ascii = ''     # Source of truth: raw ASCII input characters
         self._converted = False  # Set True after Ctrl+K/J/L; next char input auto-commits
-        self._previous_text = ''
 
         # This property is for confirming the kanji-kana converted string
         # LookupTable.new(page_size, cursor_pos, cursor_visible, round)
