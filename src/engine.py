@@ -1200,18 +1200,33 @@ class EnginePSKK(IBus.Engine):
         # Get output from simultaneous processor
         # Pass current display buffer (hiragana + pending) for lookup
         output, pending = self._simul_processor.get_layout_output(
-            self._preedit_string, input_char, is_pressed
+            self._preedit_pending, input_char, is_pressed
         )
 
         logger.debug(f'Processor result: output="{output}", pending="{pending}"')
 
         # Update hiragana buffer (source of truth for to_katakana/to_hiragana)
         # output includes accumulated hiragana via dropped_prefix mechanism
-        self._preedit_hiragana = output if output else ''
-        self._preedit_pending = pending if pending else ''
+        if output:
+            if pending:
+                # both output and pending is returned => we'll simply append the output
+                self._preedit_hiragana = self._preedit_hiragana + output
+                self._preedit_pending = pending
+            else:
+                # output is returned, but not pending => simply append the output
+                self._preedit_hiragana = self._preedit_hiragana + output
+                self._preedit_pending = ''
+        else:
+            if pending:
+                # only the pending is returned => keep hiragana and update pending 
+                self._preedit_pending = pending
+            else:
+                # neither output nor pending returned => move the pending to hiragana
+                self._preedit_hiragana = self._preedit_hiragana + self._preedit_pending
+                self._preedit_pending = ''
 
         # Build display buffer: hiragana output + pending ASCII
-        new_preedit = self._preedit_hiragana + (pending if pending else '')
+        new_preedit = self._preedit_hiragana + self._preedit_pending
         self._preedit_string = new_preedit
         self._update_preedit()
 
@@ -2397,13 +2412,14 @@ class EnginePSKK(IBus.Engine):
 
         # Get output from simultaneous processor
         output, pending = self._simul_processor.get_layout_output(
-            self._preedit_string, input_char, is_pressed
+            self._preedit_pending, input_char, is_pressed
         )
 
         logger.debug(f'Simultaneous processor: output="{output}", pending="{pending}"')
 
         # Update preedit with simultaneous output
-        self._preedit_hiragana = output if output else ''
+        self._preedit_hiragana = self._preedit_hiragana + (output if output else '')
+        self._preedit_pending = pending if pending else ''
         new_preedit = self._preedit_hiragana + (pending if pending else '')
         self._preedit_string = new_preedit
         self._update_preedit()

@@ -350,7 +350,7 @@ class SimultaneousInputProcessor:
         # On key release, reset simultaneous window and return past_pending unchanged
         if not is_pressed:
             self.simultaneous_reset()
-            return past_pending, None
+            return None, None
 
         current_time = time.perf_counter()
         time_diff_ms = (current_time - self.previous_typed_timestamp) * 1000
