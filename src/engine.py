@@ -2418,8 +2418,23 @@ class EnginePSKK(IBus.Engine):
         logger.debug(f'Simultaneous processor: output="{output}", pending="{pending}"')
 
         # Update preedit with simultaneous output
-        self._preedit_hiragana = self._preedit_hiragana + (output if output else '')
-        self._preedit_pending = pending if pending else ''
+        if output:
+            if pending:
+                # both output and pending is returned => we'll simply append the output
+                self._preedit_hiragana = self._preedit_hiragana + output
+                self._preedit_pending = pending
+            else:
+                # output is returned, but not pending => simply append the output
+                self._preedit_hiragana = self._preedit_hiragana + output
+                self._preedit_pending = ''
+        else:
+            if pending:
+                # only the pending is returned => keep hiragana and update pending 
+                self._preedit_pending = pending
+            else:
+                # neither output nor pending returned => move the pending to hiragana
+                self._preedit_hiragana = self._preedit_hiragana + self._preedit_pending
+                self._preedit_pending = ''
         new_preedit = self._preedit_hiragana + (pending if pending else '')
         self._preedit_string = new_preedit
         self._update_preedit()
