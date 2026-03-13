@@ -2435,7 +2435,7 @@ class EnginePSKK(IBus.Engine):
                 # neither output nor pending returned => move the pending to hiragana
                 self._preedit_hiragana = self._preedit_hiragana + self._preedit_pending
                 self._preedit_pending = ''
-        new_preedit = self._preedit_hiragana + (pending if pending else '')
+        new_preedit = self._preedit_hiragana + self._preedit_pending
         self._preedit_string = new_preedit
         self._update_preedit()
 
