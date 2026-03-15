@@ -1103,11 +1103,12 @@ class EnginePSKK(IBus.Engine):
                         return True
                     return False  # Pass through in whole-word mode
 
-            # Arrow keys in IDLE mode: commit preedit and pass through
+            # Arrow keys+ in IDLE mode: commit preedit and pass through
             if keyval in (IBus.KEY_Left, IBus.KEY_KP_Left,
                           IBus.KEY_Right, IBus.KEY_KP_Right,
                           IBus.KEY_Up, IBus.KEY_KP_Up,
-                          IBus.KEY_Down, IBus.KEY_KP_Down):
+                          IBus.KEY_Down, IBus.KEY_KP_Down,
+                          IBus.KEY_Home, IBus.KEY_End):
                 if self._preedit_string:
                     self._commit_string()
                 return False
