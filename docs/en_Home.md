@@ -16,6 +16,7 @@ PSKK (Personaliz(ed|able) SKK) is an input method engine (IME) for IBus that pro
 
 - Simultaneous Japanese typing support (新下駄配列 by default)
 - Kanchoku (direct kanji input) support
+- Kanchoku-obtained Kanji to be part of yomi
 - User dictionary management
 - CRF (Conditional Random Field) based word-split detection for Kana-to-Kanji conversion
 - Configurable keybindings
