@@ -2,7 +2,7 @@
 
 ## What is PSKK?
 
-**PSKK** stands for **Personaliz(ed|able) SKK**. It is an IBus-based Japanese Input Method Engine (IME) designed for users who seek a highly customizable and efficient typing experience. While inspired by the classic SKK (Simple Kana to Kanji conversion) method, PSKK expands upon its foundations by integrating modern techniques and features like Kanchoku (direct Kanji input), simultaneous key processing, and CRF-based phrase segmentation.
+**PSKK** stands for **Personaliz(ed|able) SKK**. It is an Japanese Input Method Engine (IME) designed for users who seek a highly customizable and efficient typing experience. While inspired by the classic SKK (Simple Kana to Kanji conversion) method, PSKK expands upon its foundations by integrating modern techniques and features like Kanchoku (direct Kanji input), simultaneous key processing, and CRF-based phrase segmentation.
 
 ## Design Philosophy
 
