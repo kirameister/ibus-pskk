@@ -11,6 +11,7 @@ The development of PSKK is driven by three core principles:
 1.  **Personalization**: Every aspect of the input experience should be configurable. From key bindings and keyboard layouts to the conversion logic itself, PSKK aims to be "your" personal IME.
 2.  **Efficiency**: By supporting simultaneous key presses and direct Kanji input, PSKK reduces the number of keystrokes required for common Japanese text, enabling faster and more fluid typing.
 3.  **Simplicity in Implementation, Power in Features**: PSKK is implemented in Python for ease of development and extensibility, while utilizing robust libraries like `crfsuite` for advanced features like phrase boundary prediction.
+4.  Do not aim for the **perfect** Kana-to-Kanji conversion: PSKK does not aim for the perfect conversion on sentence basis. Instead, it aims (and intended strength is) to let the end-user take full control over the IME conversion. 
 
 ## Core Features and Technologies
 
