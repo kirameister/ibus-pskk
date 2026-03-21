@@ -8,10 +8,10 @@
 
 The development of PSKK is driven by three core principles:
 
-1.  **Personalization**: Every aspect of the input experience should be configurable. From key bindings and keyboard layouts to the conversion logic itself, PSKK aims to be "your" personal IME.
-2.  **Efficiency**: By supporting simultaneous key presses and direct Kanji input, PSKK reduces the number of keystrokes required for common Japanese text, enabling faster and more fluid typing.
-3.  **Simplicity in Implementation, Power in Features**: PSKK is implemented in Python for ease of development and extensibility, while utilizing robust libraries like `crfsuite` for advanced features like phrase boundary prediction.
-4.  Do not aim for the **perfect** Kana-to-Kanji conversion: PSKK does not aim for the perfect conversion on sentence basis. Instead, it aims (and intended strength is) to let the end-user take full control over the IME conversion. 
+1.  **Control over perfection**: PSKK does not aim for the perfect conversion on sentence basis. Instead, it aims (and intended strength is) to let the end-user take full control over the IME conversion. 
+2.  **Personalization**: Every aspect of the input experience should be configurable. From key bindings and keyboard layouts to the conversion logic itself, PSKK aims to be "your" personal IME.
+3.  **Efficiency**: By supporting simultaneous key presses and direct Kanji input, PSKK reduces the number of keystrokes required for common Japanese text, enabling faster and more fluid typing.
+4.  **Simplicity in Implementation, Power in Features**: PSKK is implemented in Python for ease of development and extensibility, while utilizing robust libraries like `crfsuite` for advanced features like phrase boundary prediction.
 
 ## Core Features and Technologies
 
@@ -22,7 +22,7 @@ Unlike traditional IMEs that rely on complex heuristic-based morphological analy
 PSKK supports direct Kanji input, allowing users to output specific Kanji characters through predefined key combinations (typically two keys held with a marker key). This bypasses the usual Kana-to-Kanji conversion process for frequently used words.
 
 ### 3. Simultaneous Key Input
-The engine supports simultaneous key presses (often called "simultaneous打鍵" in Japanese), which is a key component of specialized Japanese keyboard layouts like **Shin-Geta (新下駄配列)**. This allows for a more ergonomic and rapid input of Kana characters.
+The engine supports simultaneous key presses (often called "同時打鍵" in Japanese), which is a key component of specialized Japanese keyboard layouts like **Shin-Geta (新下駄配列)**. This allows for a more ergonomic and rapid input of Kana characters.
 
 ### 4. SandS (Space and Shift)
 A popular feature among power users, SandS allows the Space key to act as a Shift key when held down, and as a regular Space key when tapped. This minimizes finger movement and enhances typing speed.
@@ -35,6 +35,11 @@ PSKK manages input through a sophisticated state machine, including:
 
 ## Project History
 
-PSKK started as a quest for the "final frontier" of Japanese input methods. It aims to bridge the gap between traditional conversion-heavy IMEs and ultra-specialized direct input methods, providing a platform where users can experiment and find their own optimal typing style.
+PSKK started as an attempt to create a "maintenance-free" IME. This is coming from the concern that the Japanese IME has been under-appreciated and under-invested despite the fact people (who would like to type in Japanese) on daily basis. 
 
-To ensure high conversion accuracy on real-world text, PSKK utilizes training data sourced from diverse corpora, including the **Wikipedia Annotated Corpus** and classic Japanese literature from **Aozora Bunko**. This allows the CRF model to understand natural phrasing and sentence structures, particularly for users who prefer typing longer passages before converting.
+The (most of) existing Japanese IMEs rely on the statistical model for its kana-to-kanji conversion. As natural language is a living entity, such statistical models require constant maintenance. This project got started to address this particular issue by shifting both the maintenance effort and control of the IME to each end user. 
+
+In order to achieve this goal, SKK was selected as a starting point, as it does not rely on any statistical model. In order to compete with the existing Japanese IMEs with statistical model, simultaneous typing and SandS and Kanchoku was implemented. Later, the optional statistical model was introduced, but it was intended to be nothing but a supporting mechanism in case an exact kana-to-kanji conversion wasn't found in the dictionary. 
+
+
+
