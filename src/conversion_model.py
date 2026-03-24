@@ -61,10 +61,8 @@ logger = logging.getLogger(__name__)
 import util
 
 # Import core CRF logic from crf_core module
-import crf_core
 from crf_core import (
-    JOSHI, JODOUSHI, JOSHI_MAX_LEN, JODOUSHI_MAX_LEN,
-    parse_annotated_line, extract_char_features,
+    parse_annotated_line,
     load_extended_dictionary_as_training_data,
     HAS_CRFSUITE
 )
