@@ -4,6 +4,14 @@
 
 **PSKK** stands for **Personaliz(ed|able) SKK**. It is an Japanese Input Method Engine (IME) designed for users who seek a highly customizable and complete control over the typing experience. While inspired by the classic SKK (Simple Kana to Kanji conversion) method, PSKK expands upon its foundations by integrating modern techniques and features like Kanchoku (direct Kanji input), simultaneous key input, and SandS.
 
+## Project History -- How it's emerged
+
+PSKK started as an attempt to create a "maintenance-free" IME. This is coming from the concern that the development of Japanese IME has been under-appreciated and under-invested despite the fact people (who would like to type in Japanese) on daily basis. 
+
+The (most of) existing Japanese IMEs rely on the statistical model for its kana-to-kanji conversion. As natural language is a living entity, such statistical models require constant maintenance. This project got started to address this particular issue by shifting both the maintenance effort and control of the IME to each end user. 
+
+In order to achieve this goal, SKK was selected as a starting point, as it does not rely on any statistical model. In order to compete with the existing Japanese IMEs with statistical model, simultaneous typing and SandS and Kanchoku was implemented. Later, the optional statistical model was introduced, but it was intended to be nothing but a supporting mechanism in case an exact kana-to-kanji conversion wasn't found in the dictionary. 
+
 ## Design Philosophy
 
 The development of PSKK is driven by three core principles:
@@ -32,14 +40,4 @@ PSKK manages input through a sophisticated state machine, including:
 - **Stealth Mode (IDLE)**: Input appears as if already committed, reducing visual distraction.
 - **Bunsetsu Mode**: Explicitly marking text for conversion.
 - **Forced Preedit**: A unique mode that allows mixing Kanchoku-produced Kanji with Kana for subsequent dictionary conversion, enabling flexible input strategies.
-
-## Project History
-
-PSKK started as an attempt to create a "maintenance-free" IME. This is coming from the concern that the Japanese IME has been under-appreciated and under-invested despite the fact people (who would like to type in Japanese) on daily basis. 
-
-The (most of) existing Japanese IMEs rely on the statistical model for its kana-to-kanji conversion. As natural language is a living entity, such statistical models require constant maintenance. This project got started to address this particular issue by shifting both the maintenance effort and control of the IME to each end user. 
-
-In order to achieve this goal, SKK was selected as a starting point, as it does not rely on any statistical model. In order to compete with the existing Japanese IMEs with statistical model, simultaneous typing and SandS and Kanchoku was implemented. Later, the optional statistical model was introduced, but it was intended to be nothing but a supporting mechanism in case an exact kana-to-kanji conversion wasn't found in the dictionary. 
-
-
 
