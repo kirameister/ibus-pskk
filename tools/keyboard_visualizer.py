@@ -2,11 +2,12 @@
 """
 Global Keyboard Visualizer
 - Shows a QWERTY keyboard on screen (bottom center)
-- Highlights keys on press AND release using global hooks (works even when other windows are focused)
-- High contrast theme: black background, white keys, bright yellow highlight on press
+- Highlights keys on press AND release using global hooks
+- High contrast theme: black background, white keys, bright yellow on press
 - Window is resizable by mouse drag; keyboard scales proportionally
-- Requires: pip install pynput
-             sudo apt install python3-tk
+- --on-top   : keep window always on top
+- --no-fkeys : hide F1-F12 row; Esc moves to the left of the number row
+- Requires: pip install pynput  &&  sudo apt install python3-tk
 """
 
 import argparse
@@ -14,10 +15,19 @@ import threading
 import tkinter as tk
 from pynput import keyboard
 
-# ── Layout ───────────────────────────────────────────────────────────────────
-ROWS = [
+# ── Layouts ───────────────────────────────────────────────────────────────────
+ROWS_FULL = [
     ['Esc','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'],
     ['`','1','2','3','4','5','6','7','8','9','0','-','=','Bksp'],
+    ['Tab','Q','W','E','R','T','Y','U','I','O','P','[',']','\\'],
+    ['Caps','A','S','D','F','G','H','J','K','L',';',"'",'Enter'],
+    ['Shift','Z','X','C','V','B','N','M',',','.','/','Shift'],
+    ['Ctrl','Super','Alt','Space','Alt','Ctrl'],
+]
+
+# Esc moves to the left of ` on the number row; F-key row is dropped entirely
+ROWS_COMPACT = [
+    ['Esc','`','1','2','3','4','5','6','7','8','9','0','-','=','Bksp'],
     ['Tab','Q','W','E','R','T','Y','U','I','O','P','[',']','\\'],
     ['Caps','A','S','D','F','G','H','J','K','L',';',"'",'Enter'],
     ['Shift','Z','X','C','V','B','N','M',',','.','/','Shift'],
@@ -30,12 +40,12 @@ WIDE_KEYS = {
 }
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
-BG       = '#0a0a0a'
-KEY_BG   = '#1c1c1c'
-KEY_FG   = '#e8e8e8'
+BG         = '#0a0a0a'
+KEY_BG     = '#1c1c1c'
+KEY_FG     = '#e8e8e8'
 KEY_BORDER = '#444444'
-PRESS_BG = '#ffe600'
-PRESS_FG = '#000000'
+PRESS_BG   = '#ffe600'
+PRESS_FG   = '#000000'
 
 # ── Base key dimensions (reference scale = 1.0) ───────────────────────────────
 KEY_W  = 46
@@ -43,15 +53,12 @@ KEY_H  = 42
 PAD    = 5
 RADIUS = 6
 
-# ── Compute natural board size ────────────────────────────────────────────────
-def _base_board_size():
+def _base_board_size(rows):
     max_rw = max(
         sum(WIDE_KEYS.get(k, 1.0) * KEY_W + PAD for k in row) - PAD
-        for row in ROWS
+        for row in rows
     )
-    return int(max_rw + PAD * 2), int(len(ROWS) * (KEY_H + PAD) + PAD)
-
-BASE_W, BASE_H = _base_board_size()
+    return int(max_rw + PAD * 2), int(len(rows) * (KEY_H + PAD) + PAD)
 
 # ── pynput → label ────────────────────────────────────────────────────────────
 def pynput_to_label(key):
@@ -111,7 +118,7 @@ def rounded_rect(canvas, x1, y1, x2, y2, r, **kw):
 
 # ── App ───────────────────────────────────────────────────────────────────────
 class KeyboardVisualizer:
-    def __init__(self, root, always_on_top=False):
+    def __init__(self, root, always_on_top=False, no_fkeys=False):
         self.root = root
         self.root.title("Keyboard Visualizer")
         self.root.configure(bg=BG)
@@ -120,6 +127,9 @@ class KeyboardVisualizer:
 
         if always_on_top:
             self.root.attributes('-topmost', True)
+
+        self._rows = ROWS_COMPACT if no_fkeys else ROWS_FULL
+        self._base_w, self._base_h = _base_board_size(self._rows)
 
         self.key_widgets: dict[str, list] = {}
         self._pressed: set[str] = set()
@@ -137,10 +147,10 @@ class KeyboardVisualizer:
     def _build_keyboard(self):
         cw = self.canvas.winfo_width()
         ch = self.canvas.winfo_height()
-        if cw < 10: cw = BASE_W
-        if ch < 10: ch = BASE_H
+        if cw < 10: cw = self._base_w
+        if ch < 10: ch = self._base_h
 
-        scale = min(cw / BASE_W, ch / BASE_H)
+        scale = min(cw / self._base_w, ch / self._base_h)
         kw    = KEY_W  * scale
         kh    = KEY_H  * scale
         pad   = max(2, PAD    * scale)
@@ -152,13 +162,13 @@ class KeyboardVisualizer:
         self.key_widgets.clear()
 
         row_data, max_rw = [], 0
-        for row in ROWS:
+        for row in self._rows:
             rw = sum(WIDE_KEYS.get(k, 1.0) * kw + pad for k in row) - pad
             max_rw = max(max_rw, rw)
             row_data.append((row, rw))
 
         board_w = max_rw + pad * 2
-        board_h = len(ROWS) * (kh + pad) + pad
+        board_h = len(self._rows) * (kh + pad) + pad
         ox = (cw - board_w) / 2
         oy = (ch - board_h) / 2
 
@@ -189,9 +199,9 @@ class KeyboardVisualizer:
         self.root.update_idletasks()
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        x  = (sw - BASE_W) // 2
-        y  = sh - BASE_H - 48
-        self.root.geometry(f"{BASE_W}x{BASE_H}+{x}+{y}")
+        x  = (sw - self._base_w) // 2
+        y  = sh - self._base_h - 48
+        self.root.geometry(f"{self._base_w}x{self._base_h}+{x}+{y}")
 
     # ── Key highlight ─────────────────────────────────────────────────────────
     def _set_key(self, label, pressed: bool):
@@ -236,8 +246,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Global Keyboard Visualizer')
     parser.add_argument('--on-top', action='store_true',
                         help='Keep the window always on top of other windows')
+    parser.add_argument('--no-fkeys', action='store_true',
+                        help='Hide F1-F12 row; Esc moves next to the number row')
     args = parser.parse_args()
 
     root = tk.Tk()
-    KeyboardVisualizer(root, always_on_top=args.on_top)
+    KeyboardVisualizer(root, always_on_top=args.on_top, no_fkeys=args.no_fkeys)
     root.mainloop()
