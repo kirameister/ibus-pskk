@@ -8,6 +8,7 @@ Global Keyboard Visualizer
              sudo apt install python3-tk
 """
 
+import argparse
 import tkinter as tk
 from pynput import keyboard
 import threading
@@ -119,11 +120,14 @@ def rounded_rect(canvas, x1, y1, x2, y2, r, **kwargs):
 
 # ── Main App ─────────────────────────────────────────────────────────────────
 class KeyboardVisualizer:
-    def __init__(self, root):
+    def __init__(self, root, always_on_top=False):
         self.root = root
         self.root.title("Keyboard Visualizer")
         self.root.configure(bg=BG)
         self.root.resizable(False, False)
+
+        if always_on_top:
+            self.root.attributes('-topmost', True)
 
         # Map: label → list of (canvas, rect_id, text_id)
         # (some labels like Shift appear more than once)
@@ -222,6 +226,13 @@ class KeyboardVisualizer:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Global Keyboard Visualizer')
+    parser.add_argument(
+        '--on-top', action='store_true',
+        help='Keep the visualizer window always on top of other windows'
+    )
+    args = parser.parse_args()
+
     root = tk.Tk()
-    app = KeyboardVisualizer(root)
+    app = KeyboardVisualizer(root, always_on_top=args.on_top)
     root.mainloop()
