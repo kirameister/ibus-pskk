@@ -26,6 +26,12 @@ PSKK (Personaliz(ed|able) SKK) is an input method engine (IME) for IBus that pro
 
 ## Screenshots
 
+<video src="https://github.com/kirameister/ibus-pskk/raw/refs/heads/main/docs/assets/animations/short_introduction.mp4" controls autoplay loop muted width="800"></video>
+
+https://github.com/kirameister/ibus-pskk/blob/main/docs/assets/animations/short_introduction.mp4 
+
+https://github.com/kirameister/ibus-pskk/raw/refs/heads/main/docs/assets/animations/short_introduction.mp4
+
 <!-- Add screenshots here -->
 <!-- ![Settings Panel](assets/screenshots/settings-panel.png) -->
 
