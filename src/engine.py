@@ -2515,6 +2515,7 @@ class EnginePSKK(IBus.Engine):
         """
         logger.debug(f'Kanchoku output: "{kanji}"')
         self._preedit_string += kanji
+        self._preedit_hiragana += kanji
         self._update_preedit()
 
     # =========================================================================
