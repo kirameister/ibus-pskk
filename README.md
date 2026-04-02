@@ -6,7 +6,7 @@ IME、それは最後のフロンティア。
 
 `PSKK` stands for `Personaliz(ed|able) SKK` and is meant/aimed to provide an easy, but effective, implementation of IME, which is highly configurable.
 
-`PSKK`は「`Personaliz(ed|able) SKK`」の略で、簡単かつ効果的で、高度にカスタマイズ可能なIMEの実装を目指しています。
+`PSKK`は `Personaliz(ed|able) SKK` の略で、簡単かつ効果的で、高度にカスタマイズ可能なIMEの実装を目指しています。
 
 ## Features of `PSKK` / PSKKの特徴
 
