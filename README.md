@@ -4,7 +4,7 @@ IME, the final frontier.
 
 IME、それは最後のフロンティア。
 
-`PSKK` stands for `Personaliz(ed|able) SKK` and is meant/aimed to provide an easy, but effective, implementation of IME, which is highly configurable.
+`PSKK` stands for `Personaliz(ed|able) SKK` and is meant/aimed to provide an easy, but effective, implementation of Japanese IME, which is highly configurable and fully controlled by the end-user.
 
 `PSKK`は `Personaliz(ed|able) SKK` の略で、簡単かつ効果的で、高度にカスタマイズ可能なIMEの実装を目指しています。
 
@@ -29,7 +29,7 @@ Install the following system packages before running `just install`:
 
 1. Run the following commands in the terminal -- ターミナルにて以下のコマンドを入力する:
 ```
-  sudo apt install just python3-venv pip curl git
+  sudo apt install just python3-venv pip curl git gettext
   git clone https://github.com/kirameister/ibus-pskk.git
   cd ibus-pskk
   sudo just install
