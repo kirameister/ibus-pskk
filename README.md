@@ -1,4 +1,4 @@
-# PSKK
+# PSKK (pronounced: "P-S-K-K")
 
 IME, the final frontier.
 
