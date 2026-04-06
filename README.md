@@ -45,3 +45,7 @@ Notes:
 * CRF のモデルをトレーニングすることもできますが、その場合、Mecab をインストールする必要があります。
 * (デフォルトの) CRF モデルはインストール時にインスストールされます。
 * インストール時には辞書を `$HOME` 以下に生成する必要があります。IBus のメニューから `Settings...` を開き、`System Dictionary` と `User Dictionary` のタブから辞書を生成してください。
+
+## Screenshots
+
+![Short Introduction](docs/assets/animations/short_introduction.gif)
